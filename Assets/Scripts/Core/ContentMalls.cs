@@ -25,7 +25,7 @@ namespace WishExtractor.Core
         static readonly double[] FittedScoops =
         {
             // <fitted-scoops> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
-            203300, 8700400, 29663400, 117892300, 235027100, 546179600,
+            2583300, 366894100, 1131659300, 3490524100, 4893765200, 8594697700,
             // </fitted-scoops>
         };
 

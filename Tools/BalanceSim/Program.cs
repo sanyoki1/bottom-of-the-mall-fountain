@@ -33,6 +33,9 @@ static class Program
                 double wEV = 0, wW = 0, rEV = 0, rW = 0;
                 foreach (var w in m.Wishes) { double k = Balance.WishRarityWeight[(int)w.Rarity]; wEV += k * w.BaseValue * Balance.WishValueScale; wW += k; }
                 foreach (var r in m.Relics) { double k = Balance.RelicRarityWeight[(int)r.Rarity]; rEV += k * r.BaseValue * Balance.RelicValueScale; rW += k; }
+                double cv = 0, tv = 0;
+                foreach (var it in m.Items) { tv += it.Weight * it.Value; if (it.Shape == ItemShape.Coin || it.Shape == ItemShape.Chip) cv += it.Weight * it.Value; }
+                Console.WriteLine($"{m.Id,-12} coin-shaped loot (sorted) {cv / Math.Max(1e-12, tv) * 100:0}%  wonder: {m.Wonder?.Name}");
                 Console.WriteLine($"{m.Id,-12} loot EV/scoop {m.BaseEV * m.ValueScale:0.0000} (Crestview $ {m.BaseEV:0.0000}), wish EV ${wEV / wW * m.ValueScale:0.00}, relic EV ${rEV / rW * m.ValueScale:0.00}, " +
                                   $"crust {m.CrustScoops:0} scoops, bounds {string.Join("/", m.Bounds.Select(b => Fmt.Num(b)))}, LP {m.LuckyPennies}, value scale {m.ValueScale}");
             }
@@ -104,6 +107,9 @@ static class Program
     /// </summary>
     static int Fit(bool apply)
     {
+        // each candidate crust is judged by the mean over a few seeds (one seed's luck with finds and
+        // relics swings a mall by ±15%); the chain carries on from the first seed's run
+        var seeds = (Environment.GetEnvironmentVariable("BOT_FIT_SEEDS") ?? "1234,42,7").Split(',').Select(int.Parse).ToArray();
         var fitted = new double[Content.Malls.Length];
         var bot = new Bot(new SaveData(), 1234, "engaged");
         var start = Clone(bot.Sim.Snapshot());
@@ -111,14 +117,21 @@ static class Program
         {
             var mall = Content.Malls[m];
             double target = TargetHours[m];
-            double lo = Math.Log(3000), hi = Math.Log(1e12), best = mall.CrustScoops;
+            double lo = Math.Log(3000), hi = Math.Log(1e16), best = mall.CrustScoops;
             for (int iter = 0; iter < 14; iter++)
             {
                 double mid = (lo + hi) / 2;
                 Content.SetCrust(mall, Math.Exp(mid));
-                var trial = new Bot(Clone(start), 1234, "engaged");
-                double h = trial.PlayMall(target * 2.2);
-                Console.WriteLine($"  {mall.Id}: {Math.Exp(mid):0} scoops → {(h < 0 ? "timeout" : h.ToString("0.00") + " h")}");
+                double h = 0;
+                var each = new List<double>();
+                foreach (int sd in seeds)
+                {
+                    double hs = new Bot(Clone(start), sd, "engaged").PlayMall(target * 2.2);
+                    each.Add(hs);
+                    if (hs < 0) { h = -1; break; }
+                    h += hs / seeds.Length;
+                }
+                Console.WriteLine($"  {mall.Id}: {Math.Exp(mid):0} scoops → {(h < 0 ? "timeout" : h.ToString("0.00") + " h")} ({string.Join(" ", each.Select(x => x.ToString("0.00")))})");
                 if (h < 0 || h > target) hi = mid; else lo = mid;
                 best = Math.Exp((lo + hi) / 2);
                 if (h > 0 && Math.Abs(h - target) / target < 0.02) { best = Math.Exp(mid); break; }
@@ -126,7 +139,7 @@ static class Program
             best = Math.Round(best / 100) * 100;
             Content.SetCrust(mall, best);
             fitted[m] = best;
-            var run = new Bot(Clone(start), 1234, "engaged");
+            var run = new Bot(Clone(start), seeds[0], "engaged");
             double hours = run.PlayMall(target * 3);
             Console.WriteLine($"{mall.Name}: {best:0} scoops → {hours:0.00} h (target {target})");
             if (hours < 0) { Console.WriteLine("  did not clear; stopping"); break; }

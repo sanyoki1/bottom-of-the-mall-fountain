@@ -57,7 +57,7 @@ namespace WishExtractor.Core
             Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.5, 12, 0, 3,
                 "Forty push-ups a day, all of them with a shovel. Every swing and every dig rig bites deeper.", "dig_sandshovel");
             // the late-game money sink: always one more level, always a little further down
-            Lv("dig_softener", "Crust Softener", TechBranch.Tools, TechKind.DigPower, 0.10, 5000, 1.9, 60, 1, 3,
+            Lv("dig_softener", "Crust Softener", TechBranch.Tools, TechKind.DigPower, 0.10, 5000, 1.9, 400, 1, 3,
                 "Industrial-strength diet cola, sprayed on the crust every night. It fizzes. It dissolves. It voids the warranty on everything you own.", "dig_jackhammer");
 
             // security: keeping Officer Doug and Chad off your back
@@ -111,10 +111,11 @@ namespace WishExtractor.Core
                 "The COIN-O-MATIC pays more for shiny coins. Nobody knows why. Don't ask it.", "fountain_lights");
             Lv("fountain_patience", "Wish Catcher's Patience", TechBranch.Fountain, TechKind.WishLife, 0.15, 3, 1.8, 6, 3, 1,
                 "Wishes linger a little longer over the water, as if they want to be caught.", "fountain_scrub", true);
-            Lv("fountain_plaques", "Donor Plaques", TechBranch.Fountain, TechKind.ValueMult, 0.07, 60000, 1.9, 60, 4, 1,
+            Lv("fountain_plaques", "Donor Plaques", TechBranch.Fountain, TechKind.ValueMult, 0.07, 60000, 1.9, 400, 4, 1,
                 "A brass plaque for every generous tosser. Nobody reads them. Everybody wants one.", "fountain_golden");
 
             AddFactoryTechs(T);
+            AddWonders(T);
 
             var arr = list.ToArray();
             foreach (var t in arr) TechIndex[t.Id] = t.Index;

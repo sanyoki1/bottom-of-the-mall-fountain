@@ -114,17 +114,16 @@ namespace WishExtractor.Core
                 tossAcc -= 1;
                 if (pendingTosses < Balance.MaxPendingTosses) pendingTosses++;
             }
-            if (pendingTosses > 0)
+            // (as many as are due, so a long tick throws as much as a run of short ones)
+            while (pendingTosses > 0)
             {
                 Shopper best = null;
                 float bestT = -1;
                 foreach (var s in Shoppers)
                     if (s.State == ShopperState.Waiting && s.TossesLeft > 0 && s.Timer > bestT) { best = s; bestT = s.Timer; }
-                if (best != null)
-                {
-                    pendingTosses--;
-                    StartWindUp(best);
-                }
+                if (best == null) break;
+                pendingTosses--;
+                StartWindUp(best);
             }
 
             // the wormhole: other malls' fountains leak into this one
@@ -329,8 +328,14 @@ namespace WishExtractor.Core
             s.PendingType = PickTossType(s.Def);
             var t = Content.Items[s.PendingType];
             int tier = t.Tier >= 0 ? t.Tier : 3 + (int)t.Rarity * 2;
-            s.PendingWish = Rng.NextDouble() < (Balance.WishChanceBase + Balance.WishChancePerTier * tier) * EventMult("wish") ? PickWish() : null;
-            if (s.PendingWish != null) Say(s, "“" + s.PendingWish.Text + "”", 4.5f, true, s.PendingWish.Rarity);
+            // a busy fountain doesn't turn every toss into a wish: they come at most every few seconds
+            bool wishReady = Time - lastWishAt >= Balance.WishGap / EventMult("wish");
+            s.PendingWish = wishReady && Rng.NextDouble() < (Balance.WishChanceBase + Balance.WishChancePerTier * tier) * EventMult("wish") ? PickWish() : null;
+            if (s.PendingWish != null)
+            {
+                lastWishAt = Time;
+                Say(s, "“" + s.PendingWish.Text + "”", 4.5f, true, s.PendingWish.Rarity);
+            }
             else if (Rng.NextDouble() < 0.3) Say(s, Rng.NextDouble() < 0.75 && s.Def.Barks.Length > 0 ? s.Def.Barks[Rng.Next(s.Def.Barks.Length)] : Content.GenericBarks[Rng.Next(Content.GenericBarks.Length)], 3f, false, Rarity.Common);
         }
 
@@ -399,7 +404,7 @@ namespace WishExtractor.Core
             OnToss?.Invoke(s, it);
         }
 
-        double portalAcc;
+        double portalAcc, lastWishAt = -1e9;
         public bool HasPortal => TechLevel("fountain_wormhole") > 0;
 
         void PortalToss()
@@ -442,7 +447,9 @@ namespace WishExtractor.Core
                 : candidates[Rng.Next(candidates.Count)];
         }
 
-        public double WishValue(WishDef def) => def.BaseValue * Balance.WishValueScale * Scale * ValueMult * EventValueMult;
+        /// <summary>A wish pays its story value plus a few seconds of the fountain's steady income, so catching them matters all game.</summary>
+        public double WishValue(WishDef def) =>
+            (def.BaseValue * Balance.WishValueScale * Scale * ValueMult * EventValueMult + Balance.WishIncomeSeconds[(int)def.Rarity] * SteadyIncome) * WishValueMult;
 
         void SpawnWish(WishDef def, float x, float z)
         {

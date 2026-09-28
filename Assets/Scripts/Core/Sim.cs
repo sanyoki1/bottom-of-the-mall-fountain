@@ -114,6 +114,7 @@ namespace WishExtractor.Core
             Mall = Content.Malls[MallDefIndex];
             Loose.Clear();
             looseIndex.Clear();
+            findsLoose = 0;
             ClearCrowd();
             Carried.Clear();
             CarryUsed = 0;
@@ -180,6 +181,8 @@ namespace WishExtractor.Core
             Mall = Content.Malls[MallDefIndex];
             Loose.Clear();
             looseIndex.Clear();
+            findsLoose = 0;
+            ResetFinds();
             ClearCrowd();
             ClearFactory();
             SeedFountain((int)Balance.SeedCoins);
@@ -240,6 +243,26 @@ namespace WishExtractor.Core
         {
             int carry = 0, grab = 0, dig = 0;
             double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1, digMult = 1, relicMult = 1;
+            double findRate = 1, wishValue = 1, frenzyTime = 1;
+            void Apply(TechKind kind, double v, int L)
+            {
+                switch (kind)
+                {
+                    case TechKind.Wishability: wish += v * L; break;
+                    case TechKind.ValueMult: value *= Math.Pow(1 + v, L); break;
+                    case TechKind.TossRate: toss *= Math.Pow(1 + v, L); break;
+                    case TechKind.WalkSpeed: walk *= Math.Pow(1 + v, L); break;
+                    case TechKind.Reach: reach += v * L; break;
+                    case TechKind.GrabRate: grabRate *= Math.Pow(1 + v, L); break;
+                    case TechKind.WishLife: wishLife *= Math.Pow(1 + v, L); break;
+                    case TechKind.CarryBonus: carryBonus *= Math.Pow(1 + v, L); break;
+                    case TechKind.DigPower: digMult *= Math.Pow(1 + v, L); break;
+                    case TechKind.RelicRate: relicMult *= Math.Pow(1 + v, L); break;
+                    case TechKind.FindRate: findRate *= Math.Pow(1 + v, L); break;
+                    case TechKind.WishValue: wishValue *= Math.Pow(1 + v, L); break;
+                    case TechKind.FrenzyTime: frenzyTime *= Math.Pow(1 + v, L); break;
+                }
+            }
             for (int i = 0; i < techLevel.Length; i++)
             {
                 int L = techLevel[i];
@@ -251,19 +274,13 @@ namespace WishExtractor.Core
                     case TechKind.Tool:
                         if (t.Target == "dig") dig = Math.Max(dig, (int)t.Value); else grab = Math.Max(grab, (int)t.Value);
                         break;
-                    case TechKind.Wishability: wish += t.Value * L; break;
-                    case TechKind.ValueMult: value *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.TossRate: toss *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.WalkSpeed: walk *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.Reach: reach += t.Value * L; break;
-                    case TechKind.GrabRate: grabRate *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.WishLife: wishLife *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.CarryBonus: carryBonus *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.DigPower: digMult *= Math.Pow(1 + t.Value, L); break;
-                    case TechKind.RelicRate: relicMult *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.StartCarry: carry = Math.Max(carry, L); break;
+                    default: Apply(t.Kind, t.Value, L); break;
                 }
             }
+            // finished Wonders' permanent perks
+            foreach (var m in Content.Malls)
+                if (m.Wonder != null && S.wonders.Contains(m.Id)) Apply(m.Wonder.PerkKind, m.Wonder.PerkValue, 1);
             CarryTier = Math.Min(carry, Content.Carry.Length - 1);
             GrabTier = Math.Min(grab, Content.GrabTools.Length - 1);
             DigTier = Math.Min(dig, Content.DigTools.Length - 1);
@@ -287,8 +304,11 @@ namespace WishExtractor.Core
             GrabRateMult = grabRate;
             WishLifeMult = wishLife;
             CarryBonusMult = carryBonus;
-            DigMult = digMult;
+            DigMult = digMult * FrenzyMult("dig");
             RelicMult = relicMult;
+            FindRateMult = findRate;
+            WishValueMult = wishValue;
+            FrenzyTimeMult = frenzyTime;
             RecalcFactory();
             OnRecalc?.Invoke();
         }
@@ -308,6 +328,7 @@ namespace WishExtractor.Core
             UpdateFactory(dt);
             UpdateEvent(dt);
             UpdateHazards(dt);
+            UpdateFinds(dt);
 
             earnWindowTime += dt;
             if (earnWindowTime >= 1)
@@ -352,7 +373,13 @@ namespace WishExtractor.Core
         /// <summary>Put an item in the fountain. from = toss origin (airborne) or null (already resting).</summary>
         public LooseItem AddLoose(int type, float x, float z, double value, (float x, float y, float z)? from, bool notify = true)
         {
-            if (Loose.Count >= Balance.MaxLoose) RemoveLooseAt(0);
+            if (Loose.Count >= Balance.MaxLoose)
+            {
+                // the oldest penny dissolves into the crust (never the goldfish or a find)
+                int drop = 0;
+                while (drop < Loose.Count - 1 && Protected(Loose[drop].Type)) drop++;
+                RemoveLooseAt(drop);
+            }
             var it = new LooseItem
             {
                 Uid = ++uid, Type = type, X = x, Z = z, Value = value, Yaw = (float)(Rng.NextDouble() * 360),
@@ -361,6 +388,7 @@ namespace WishExtractor.Core
             if (from.HasValue) { it.FromX = from.Value.x; it.FromY = from.Value.y; it.FromZ = from.Value.z; }
             looseIndex[it.Uid] = Loose.Count;
             Loose.Add(it);
+            if (IsFind(type)) findsLoose++;
             if (notify) OnLooseAdded?.Invoke(it);
             return it;
         }
@@ -378,6 +406,7 @@ namespace WishExtractor.Core
             }
             Loose.RemoveAt(last);
             looseIndex.Remove(it.Uid);
+            if (IsFind(it.Type)) findsLoose--;
         }
 
         // ───────────────────────────── carrying ─────────────────────────────
@@ -420,6 +449,7 @@ namespace WishExtractor.Core
             var it = Loose[i];
             if (it.State == LooseState.Airborne) return false;
             if (IsFish(it.Type)) { ReturnFish(it); return false; }
+            if (IsFind(it.Type)) { OpenFind(it, i); return false; }
             if (!CanCarry(it.Type)) { OnPickupFail?.Invoke(FullLine()); return false; }
             RemoveLooseAt(i);
             AddCarried(it.Type, 1, it.Value);
@@ -441,6 +471,7 @@ namespace WishExtractor.Core
                 var it = Loose[i];
                 if (it.State == LooseState.Airborne) continue;
                 if (IsFish(it.Type)) { ReturnFish(it); continue; }
+                if (IsFind(it.Type)) { OpenFind(it, i); continue; }
                 if (!CanCarry(it.Type)) { full = true; continue; }
                 RemoveLooseAt(i);
                 AddCarried(it.Type, 1, it.Value);
@@ -474,17 +505,32 @@ namespace WishExtractor.Core
                 OnDepositEmpty?.Invoke(Content.EmptyDepositLines[Rng.Next(Content.EmptyDepositLines.Length)]);
                 return 0;
             }
-            double cash = CarriedValue;
             int count = CarriedCount;
+            // the Wonder's next stage takes what it still needs; the rest is counted and paid out
+            int diverted = 0;
+            foreach (var st in Carried)
+            {
+                int took = TakeForWonder(st.Type, st.Count, null);
+                if (took <= 0) continue;
+                st.Value -= st.Value / st.Count * took;
+                st.Count -= took;
+                diverted += took;
+            }
+            LastDepositDiverted = diverted;
+            double cash = CarriedValue;
             Carried.Clear();
             CarryUsed = 0;
             AddCash(cash);
+            TrackSteady(cash);
             S.deposits++;
             S.itemsDeposited += count;
             if (cash > S.biggestDeposit) S.biggestDeposit = cash;
             OnDeposit?.Invoke(cash, count, Content.ReceiptJokes[Rng.Next(Content.ReceiptJokes.Length)]);
             return cash;
         }
+
+        /// <summary>Items the last deposit set aside for the Wonder instead of selling.</summary>
+        public int LastDepositDiverted { get; private set; }
 
         void AddCash(double amount)
         {
@@ -502,6 +548,7 @@ namespace WishExtractor.Core
         public bool TechUnlocked(int i)
         {
             var t = Content.Techs[i];
+            if (t.OnlyMall >= 0 && t.OnlyMall != MallDefIndex) return false;
             if (t.UnlockMall > MallDefIndex && S.maxMallCleared < t.UnlockMall - 1) return false;
             foreach (var r in t.Requires)
                 if (!Content.TechIndex.TryGetValue(r, out int ri) || techLevel[ri] <= 0) return false;
@@ -511,6 +558,7 @@ namespace WishExtractor.Core
         {
             var t = Content.Techs[i];
             double c = TechCost(i);
+            if (t.Branch == TechBranch.Wonder && !WonderGoodsReady(i)) return false;
             return t.LuckyPennies ? S.luckyPennies >= c - 1e-9 : t.WishTokens ? S.wishTokens >= c - 1e-9 : S.cash >= c - 1e-9;
         }
         public bool CanBuyTech(int i) => !TechMaxed(i) && TechUnlocked(i) && CanAfford(i);
@@ -524,8 +572,11 @@ namespace WishExtractor.Core
             else if (td.WishTokens) S.wishTokens -= cost;
             else S.cash -= cost;
             techLevel[i]++;
+            bool wonderDone = td.Branch == TechBranch.Wonder && CompleteWonderStage(td);
             Recalc();
-            OnTechBought?.Invoke(Content.Techs[i]);
+            OnTechBought?.Invoke(td);
+            if (td.Branch == TechBranch.Wonder) OnWonderStage?.Invoke(td);
+            if (wonderDone) OnWonderComplete?.Invoke(Mall);
             return true;
         }
 
@@ -594,6 +645,7 @@ namespace WishExtractor.Core
             S.mallCleared = false;
             S.dug = 0;
             S.maxStratum = 0;
+            S.wonderGoods.Clear();
             Carried.Clear();
             CarryUsed = 0;
             StartRun();

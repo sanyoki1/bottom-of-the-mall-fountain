@@ -28,6 +28,7 @@ namespace WishExtractor.Core
             BuildCoins();
             BuildOddities();
             BuildMallTypes();
+            BuildFinds();
             Items = types.ToArray();
             Carry = BuildCarry();
             GrabTools = BuildGrabTools();

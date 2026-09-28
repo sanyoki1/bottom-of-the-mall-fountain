@@ -143,15 +143,19 @@ namespace WishExtractor.Core
             }
             S.scoops += done;
             int ns = StratumAtDug(S.dug);
-            if (ns > S.maxStratum)
-            {
-                S.maxStratum = ns;
-                OnStratumReached?.Invoke(ns);
-            }
+            if (ns > S.maxStratum) ReachStratum(ns);
             if (S.dug >= total - 1e-9) ClearMall();
             return done;
         }
         double chunkAcc;
+
+        /// <summary>A new layer: tell the view, and from the third layer down each one gives up a find.</summary>
+        void ReachStratum(int s)
+        {
+            S.maxStratum = s;
+            OnStratumReached?.Invoke(s);
+            if (s >= 2 && !S.mallCleared) SpawnFind();
+        }
 
         /// <summary>Weighted pick of a loot kind; valueWeighted favours the valuable ones (sorting).</summary>
         int PickLoot(bool valueWeighted)
@@ -208,7 +212,8 @@ namespace WishExtractor.Core
         {
             ["wash"] = t => t.Cat == ItemCat.Gunk,
             ["sort"] = t => t.Cat == ItemCat.Washed,
-            ["roll"] = t => t.Cat == ItemCat.Coin,
+            // round, flat money: tossed coins and the crust's coins and casino chips (not diamonds)
+            ["roll"] = t => (t.Cat == ItemCat.Coin || t.Cat == ItemCat.Loot) && (t.Shape == ItemShape.Coin || t.Shape == ItemShape.Chip),
             ["bag"] = t => t.Cat == ItemCat.Roll,
             ["pallet"] = t => t.Cat == ItemCat.Bag,
             ["melt"] = t => (t.Cat == ItemCat.Coin && t.Tier >= 7) || t.Id == "ring" || t.Id == "tiara" || t.Id == "trophy" || t.Id == "goldbar",
@@ -298,7 +303,8 @@ namespace WishExtractor.Core
             {
                 if (b.Def.Process != "compress" || b.OutCount >= b.Def.Capacity || PowerRatio < 0.2) continue;
                 double v = w.Value * Balance.CompressorValue;
-                AddTo(b.Out, ref b.OutCount, Content.Type("brick"), v);
+                // items carry base value (hoppers apply the multipliers when they sell), so take them back out
+                AddTo(b.Out, ref b.OutCount, Content.Type("brick"), v / Math.Max(1e-9, ValueMult * EventValueMult));
                 S.wishTokens += w.Tokens * 0.5;
                 S.wishesCompressed++;
                 b.Activity = 1;
@@ -360,6 +366,7 @@ namespace WishExtractor.Core
             S.runCash = 0;
             S.runTime = 0;
             S.cash = 0;
+            S.wonderGoods.Clear();
             for (int i = 0; i < techLevel.Length; i++) if (!Content.Techs[i].Persistent) techLevel[i] = 0;
             Carried.Clear();
             CarryUsed = 0;
@@ -391,13 +398,15 @@ namespace WishExtractor.Core
         public double EventRemaining { get; private set; }
         double eventTimer = 600;
 
+        /// <summary>The mall event's multiplier for an effect, times any frenzy from a find.</summary>
         public double EventMult(string effect)
         {
-            if (!EventActive) return 1;
+            double m = FrenzyMult(effect);
+            if (!EventActive) return m;
             var e = Mall.Event;
-            if (e.Effect == effect) return e.Mult;
-            if (e.Effect == "all" && (effect == "sell" || effect == "toss")) return e.Mult;
-            return 1;
+            if (e.Effect == effect) return m * e.Mult;
+            if (e.Effect == "all" && (effect == "sell" || effect == "toss")) return m * e.Mult;
+            return m;
         }
 
         public double EventValueMult => EventMult("sell");
@@ -445,7 +454,7 @@ namespace WishExtractor.Core
             for (int i = 0; i < 60; i++) { double mid = (lo + hi) / 2; if (FracAtDug(mid) < frac) lo = mid; else hi = mid; }
             S.dug = Math.Min(TotalScoops, hi);
             int s = StratumAtDug(S.dug);
-            if (s > S.maxStratum) { S.maxStratum = s; OnStratumReached?.Invoke(s); }
+            if (s > S.maxStratum) ReachStratum(s);
             if (S.dug >= TotalScoops - 1e-9) ClearMall();
         }
 

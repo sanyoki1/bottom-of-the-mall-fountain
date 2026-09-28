@@ -33,7 +33,7 @@ sealed class Bot
 
     // diagnostics: where the money comes from and goes, per report interval and per mall
     readonly Dictionary<string, double> earnedBy = new Dictionary<string, double>(), spentBy = new Dictionary<string, double>();
-    double lastBuy, longestGap, gapAt, reportDug, reportTime;
+    double lastBuy, longestGap, gapAt, reportDug, reportTime, reportItems;
     void Earn(string k, double v) { earnedBy.TryGetValue(k, out double o); earnedBy[k] = o + v; }
     void Spend(string k, double v)
     {
@@ -59,7 +59,19 @@ sealed class Bot
         Sim.OnWishCaught += (w, cash, tokens, first) => Earn("wishes", cash);
         Sim.OnObjectiveDone += (o, reward) => Earn("objectives", reward);
         Sim.OnFined += fine => Earn("fines", -fine);
+        Sim.OnFindOpened += r =>
+        {
+            findsOpened++;
+            findKinds.TryGetValue(r.Kind, out int c);
+            findKinds[r.Kind] = c + 1;
+            if (r.Kind == "cash") Earn("finds", r.Cash);
+        };
+        Sim.OnWonderStage += t => wonderTimes.Add($"{t.Name} {Fmt.Time(Sim.Time - mallStart)}");
     }
+
+    int findsOpened;
+    readonly Dictionary<string, int> findKinds = new Dictionary<string, int>();
+    readonly List<string> wonderTimes = new List<string>();
 
     static string Split(Dictionary<string, double> d)
     {
@@ -120,6 +132,7 @@ sealed class Bot
         px = KioskX; pz = KioskZ;
         WalkTo(EntryX, EntryZ, false);
         Advance(0.8 + RampLength / Speed(false));
+        OpenFinds();
         int grabs = 0;
         while (Sim.CarryFree > 0 && grabs < 400)
         {
@@ -159,6 +172,25 @@ sealed class Bot
         WalkTo(KioskX, KioskZ, false);
         if (Sim.Carried.Count > 0) { Sim.Deposit(); Advance(1); }
         if (idleShare > 0 && rng.NextDouble() < idleShare) Advance(20 + rng.NextDouble() * 40);
+    }
+
+    /// <summary>Wade over to anything the crust gave up and crack it open (casual players notice some of the time).</summary>
+    void OpenFinds()
+    {
+        if (Sim.FindsWaiting == 0 || (!engaged && rng.NextDouble() < 0.4)) return;
+        foreach (var f in Sim.Loose.Where(l => Sim.IsFind(l.Type) && l.State != LooseState.Airborne).ToList())
+        {
+            float dx = f.X - px, dz = f.Z - pz;
+            double d = Math.Sqrt(dx * dx + dz * dz);
+            double reach = Math.Max(0.6, Sim.Reach - 1.4);
+            if (d > reach)
+            {
+                Advance((d - reach) / Speed(true));
+                px += (float)(dx / d * (d - reach)); pz += (float)(dz / d * (d - reach));
+            }
+            if (Sim.FindLoose(f.Uid) != null) Sim.Pickup(f.Uid);
+            Advance(0.8);
+        }
     }
 
     void Vacuum()
@@ -224,15 +256,23 @@ sealed class Bot
             {
                 if (Sim.TechMaxed(i) || !Sim.TechUnlocked(i)) continue;
                 var t = Content.Techs[i];
+                if (t.Branch == TechBranch.Wonder) continue;   // approved below once its goods are in
                 double c = Sim.TechCost(i);
                 if (t.LuckyPennies) { if (c < lpC) { lpC = c; lp = i; } }
                 else if (t.WishTokens) { if (c < tokC) { tokC = c; tok = i; } }
                 else if (t.MaxLevel == 1) { if (c < rungC) { rungC = c; rung = i; } }
                 else if (c < levC) { levC = c; lev = i; }
             }
+            // the Wonder's next stage, once every good is in, is the next thing to save for
+            int wonder = Sim.WonderNext;
+            if (wonder >= 0 && Sim.TechUnlocked(wonder) && Sim.WonderGoodsReady(wonder))
+            {
+                double wc = Sim.TechCost(wonder);
+                if (rung < 0 || wc <= rungC) { rung = wonder; rungC = wc; }
+            }
             int best = -1;
             if (lp >= 0 && Sim.CanAfford(lp)) best = lp;
-            else if (tok >= 0 && Sim.CanAfford(tok)) best = tok;
+            else if (tok >= 0 && Sim.CanAfford(tok) && Sim.S.wishTokens - tokC >= WonderTokensNeeded()) best = tok;
             else if (rung >= 0 && Sim.CanAfford(rung)) best = rung;
             else if (lev >= 0 && Sim.CanAfford(lev) && (rung < 0 || levC <= 0.25 * rungC)) best = lev;
             if (best < 0) return;
@@ -242,6 +282,29 @@ sealed class Bot
             Spend(bt.Branch.ToString().ToLowerInvariant(), bt.WishTokens || bt.LuckyPennies ? 0 : paid);
             Mark(bt.Id);
         }
+    }
+
+    /// <summary>Wish Tokens the Wonder's next stage still needs (the bot won't spend those elsewhere).</summary>
+    double WonderTokensNeeded()
+    {
+        int w = Sim.WonderNext;
+        if (w < 0) return 0;
+        foreach (var n in Content.Techs[w].Needs) if (n.id == "tokens") return n.count;
+        return 0;
+    }
+
+    /// <summary>What the Wonder's next stage still wants: need id → count missing.</summary>
+    Dictionary<string, int> WonderWants()
+    {
+        var d = new Dictionary<string, int>();
+        int w = Sim.WonderNext;
+        if (w < 0) return d;
+        foreach (var n in Content.Techs[w].Needs)
+        {
+            int left = n.count - Sim.WonderHave(n.id);
+            if (left > 0) d[n.id] = left;
+        }
+        return d;
     }
 
     // ───────────────────────────── the factory ─────────────────────────────
@@ -326,15 +389,19 @@ sealed class Bot
     {
         if (!Sim.BuildUnlocked(D("hopper")) || !Sim.BuildUnlocked(D("gen_hamster"))) return;
         string hopper = Sim.BuildUnlocked(D("hopper2")) && Sim.S.cash > 40000 * Sim.Scale ? "hopper2" : "hopper";
+        var want = WonderWants();
         // coin lines on the east and west; once there's gunk in the water (hand digging), they wash and sort it too
         string coin = BestUnlocked(CoinLadder);
         string sorter = BestUnlocked("proc_pigeons", "proc_sorter");
+        bool tumbler = Sim.BuildUnlocked(D("proc_tumbler"));
         if (coin != null)
             for (int s = 0; s < CoinSlots; s++)
             {
                 if (Rank(lineIntake[s], CoinLadder) > Rank(coin, CoinLadder)) continue;
                 var cst = new List<string>();
-                if (Sim.S.maxStratum >= 1 && sorter != null && Sim.BuildUnlocked(D("proc_tumbler"))) { cst.Add("proc_tumbler"); cst.Add(sorter); }
+                if (Sim.S.maxStratum >= 1 && sorter != null && tumbler) { cst.Add("proc_tumbler"); cst.Add(sorter); }
+                // melt the gold coins and diamonds into bars, unless the Wonder wants them as they are
+                if (Sim.BuildUnlocked(D("proc_melter")) && coin != "intake_skimmer" && !want.ContainsKey("diamond") && !want.ContainsKey("gold")) cst.Add("proc_melter");
                 if (Sim.BuildUnlocked(D("proc_roller")) && coin != "intake_skimmer") cst.Add("proc_roller");
                 var stages = cst.ToArray();
                 string sig = coin + "|" + string.Join(",", stages);
@@ -352,28 +419,74 @@ sealed class Bot
                     if (old != null && TryBuild(PlanLine(s, old, oldStages, "hopper", 10.6f), lines[s])) { lineIntake[s] = old; lineStages[s] = oldStages; lineSig[s] = old + "|" + string.Join(",", oldStages); }
                 }
             }
-        // dig lines (need the tumbler and a sorter to be worth it below the loose layer)
+        // dig lines (need the tumbler and a sorter to be worth it below the loose layer); one change per call
         string dig = BestUnlocked(DigLadder);
-        if (dig != null && sorter != null && Sim.BuildUnlocked(D("proc_tumbler")) && !Sim.MallCleared)
+        if (dig != null && sorter != null && tumbler && !Sim.MallCleared)
+        {
+            int k = 0;
             for (int s = CoinSlots; s < SlotAngles.Length; s++)
             {
-                if (Rank(lineIntake[s], DigLadder) >= Rank(dig, DigLadder) || failed.Contains(s + dig)) continue;
-                var stages = new List<string> { "proc_tumbler", sorter };
-                var plan = PlanLine(s, dig, stages.ToArray(), hopper, 10.6f);
+                var stages = DigStages(k, sorter, want);
+                string sig = dig + "|" + string.Join(",", stages);
+                if (lineSig[s] == sig) { k++; continue; }
+                if (failed.Contains(s + sig)) { if (lineIntake[s] != null) k++; continue; }
+                var plan = PlanLine(s, dig, stages, hopper, 10.6f);
                 double cost = plan.Sum(p => p.d.Cost) * Sim.Scale;
                 if (Sim.S.cash < cost * (lineIntake[s] == null ? 1.1 : 1.6)) break;
                 var old = lineIntake[s];
+                var oldStages = lineStages[s];
                 if (old != null) ClearLine(s);
-                if (TryBuild(plan, lines[s])) { lineIntake[s] = dig; Mark("line " + dig); break; }
-                failed.Add(s + dig);
-                if (old != null)
+                if (TryBuild(plan, lines[s])) { lineIntake[s] = dig; lineSig[s] = sig; lineStages[s] = stages; Mark("line " + dig); break; }
+                failed.Add(s + sig);
+                if (old != null && TryBuild(PlanLine(s, old, oldStages, "hopper", 10.6f), lines[s]))
                 {
-                    // put the old line back (the upgrade didn't fit here)
-                    var back = PlanLine(s, old, stages.ToArray(), "hopper", 10.6f);
-                    if (TryBuild(back, lines[s])) lineIntake[s] = old;
+                    // put the old line back (the new one didn't fit here)
+                    lineIntake[s] = old; lineStages[s] = oldStages; lineSig[s] = old + "|" + string.Join(",", oldStages);
+                    k++;
                 }
             }
+        }
+        EnsureCompressor();
         EnsurePower();
+    }
+
+    /// <summary>
+    /// A dig line washes and sorts, then (once researched) rolls, bags and palletises the crust's
+    /// coins. While the Wonder wants rolls or bags, the first dig lines stop at that stage.
+    /// </summary>
+    string[] DigStages(int k, string sorter, Dictionary<string, int> want)
+    {
+        var st = new List<string> { "proc_tumbler", sorter };
+        int max = !Sim.BuildUnlocked(D("proc_roller")) ? 0 : !Sim.BuildUnlocked(D("proc_bagger")) ? 1 : !Sim.BuildUnlocked(D("proc_pallet")) ? 2 : 3;
+        var roles = new List<int>();
+        if (want.ContainsKey("roll")) roles.Add(1);
+        if (want.ContainsKey("bag")) roles.Add(2);
+        int level = k < roles.Count ? Math.Min(max, roles[k]) : max;
+        if (level >= 1) st.Add("proc_roller");
+        if (level >= 2) st.Add("proc_bagger");
+        if (level >= 3) st.Add("proc_pallet");
+        return st.ToArray();
+    }
+
+    /// <summary>A Wish Compressor (with a hopper on its output) in the yard, once researched.</summary>
+    void EnsureCompressor()
+    {
+        var comp = D("proc_compressor");
+        if (!Sim.BuildUnlocked(comp) || Sim.CountBuilt("proc_compressor") > 0) return;
+        var hop = D("hopper");
+        double cost = (comp.Cost + hop.Cost) * Sim.Scale;
+        if (Sim.S.cash < cost * 1.5) return;
+        for (int z = -27; z <= -21; z += 2)
+            for (int x = 18; x <= 30; x += 2)
+                if (Sim.CanPlace(comp, x, z, 0, out _) && Sim.CanPlace(hop, x, z + 2, 0, out _))
+                {
+                    Sim.Place(comp, x, z, 0);
+                    Sim.Place(hop, x, z + 2, 0);
+                    Spend("build", cost);
+                    Mark("compressor");
+                    Advance(6);
+                    return;
+                }
     }
 
     void EnsurePower()
@@ -407,6 +520,9 @@ sealed class Bot
         failed.Clear();
         earnedBy.Clear();
         spentBy.Clear();
+        findsOpened = 0;
+        findKinds.Clear();
+        wonderTimes.Clear();
         lastBuy = mallStart; longestGap = 0; gapAt = 0;
         reportDug = Sim.S.dug; reportTime = Sim.Time;
         var mall = Sim.Mall;
@@ -422,10 +538,14 @@ sealed class Bot
             {
                 nextReport += ReportEvery;
                 double digRate = (Sim.S.dug - reportDug) / Math.Max(1, Sim.Time - reportTime);
-                reportDug = Sim.S.dug; reportTime = Sim.Time;
+                double itemRate = (Sim.S.hopperItems - reportItems) / Math.Max(1, Sim.Time - reportTime);
+                reportDug = Sim.S.dug; reportTime = Sim.Time; reportItems = Sim.S.hopperItems;
+                if (Environment.GetEnvironmentVariable("BOT_SINKS") != null)
+                    Log.AppendLine($"    sinks: {string.Join(" ", new[] { "dig_softener", "dig_bits", "proc_bonus", "hopper_gold", "fountain_plaques", "fountain_coinpolish", "proc_speed", "intake_firmware", "dig_shoulders" }.Select(id => id.Split('_')[1] + " " + Sim.TechLevel(id)))}, " +
+                                   $"hopper items {itemRate:0.0}/s, avg sold {Fmt.Money(Sim.S.hopperCash / Math.Max(1, Sim.S.hopperItems))}, stratum ×{Sim.CurStratum.ValueMult}, finds {findsOpened}");
                 Log.AppendLine($"  [{mall.Id}] {Fmt.Time(Sim.Time - mallStart)}: cash {Fmt.Money(Sim.S.cash)}, earned {Fmt.Money(Sim.S.runCash)}, dug {Fmt.Num(Sim.S.dug)} ({Fmt.Num(digRate)}/s), depth {Sim.DepthFeet:0.0}/{mall.DepthFeet} ft (stratum {Sim.Stratum}), " +
-                               $"wish {Sim.Wishability:0}, carry {Sim.CarryDef.Name}, rigs {Sim.CountBuilt("dig_rig")}+{Sim.CountBuilt("dig_borer")} (dig ×{Sim.DigMult:0.#}, intake ×{Sim.CatSpeed(BuildCat.Intake):0.#}), machines {Sim.MachinesBuilt}, power {Sim.PowerGen:0}/{Sim.PowerUse:0}, " +
-                               $"hoppers {Fmt.Money(Sim.HopperCashRate * 60)}/min, techs {Sim.TechLevelsOwned}");
+                               $"wish {Sim.Wishability:0}, carry {Sim.CarryDef.Name}, rigs {Sim.CountBuilt("dig_rig")}+{Sim.CountBuilt("dig_borer")} (dig ×{Fmt.Num(Sim.DigMult)}, value ×{Fmt.Num(Sim.ValueMult)}, intake ×{Sim.CatSpeed(BuildCat.Intake):0.#}, proc ×{Sim.CatSpeed(BuildCat.Processing):0.#}), machines {Sim.MachinesBuilt}, power {Sim.PowerGen:0}/{Sim.PowerUse:0}, " +
+                               $"hoppers {Fmt.Money(Sim.HopperCashRate * 60)}/min, steady {Fmt.Money(Sim.SteadyIncome * 60)}/min, techs {Sim.TechLevelsOwned}, wonder {Sim.WonderStagesDone}/{Sim.WonderStageCount}");
             }
         }
         double hours = (Sim.Time - mallStart) / 3600;
@@ -433,6 +553,9 @@ sealed class Bot
             .OrderBy(kv => kv.Value).Take(24).Select(kv => $"{kv.Key} {Fmt.Time(kv.Value)}"));
         Log.AppendLine($"  [{mall.Id}] firsts: {firstsLine}");
         Log.AppendLine($"  [{mall.Id}] earned {Fmt.Money(earnedBy.Values.Sum())}: {Split(earnedBy)} | spent: {Split(spentBy)} | longest gap between purchases {Fmt.Time(longestGap)} (from {Fmt.Time(gapAt)})");
+        Log.AppendLine($"  [{mall.Id}] wonder {Sim.WonderStagesDone}/{Sim.WonderStageCount}: {(wonderTimes.Count > 0 ? string.Join(", ", wonderTimes) : "-")}" +
+                       (Sim.WonderNext >= 0 ? $" | next wants {Sim.WonderNeedsLine(Sim.WonderNext, ", ")}" : "") +
+                       $" | finds {findsOpened} ({string.Join(" ", findKinds.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value))}), lines: {string.Join(" ", Enumerable.Range(0, lines.Length).Where(i => lineIntake[i] != null).Select(i => lineIntake[i].Replace("intake_", "").Replace("dig_", "") + "[" + string.Join(",", (lineStages[i] ?? new string[0]).Select(x => x.Replace("proc_", ""))) + "]"))}");
         if (!Sim.MallCleared) return -1;
         MallTimes.Add((mall.Name, hours));
         return hours;

@@ -63,6 +63,7 @@ namespace WishExtractor.Core
         public int objective;
         public double runTime;
         public List<IdCount> tech = new List<IdCount>();
+        public List<IdCount> wonderGoods = new List<IdCount>();   // goods delivered toward the Wonder's next stage
 
         // the player
         public float px, py = 0.05f, pz = -18f, yaw, pitch;
@@ -85,6 +86,7 @@ namespace WishExtractor.Core
         public List<IdCount> relics = new List<IdCount>();
         public List<string> achievements = new List<string>();
         public List<string> treasures = new List<string>();
+        public List<string> wonders = new List<string>();         // malls whose Wonder was finished (permanent perks)
 
         // stats
         public double itemsPicked, itemsDeposited, deposits, tosses, oddities, scoops, swings;
@@ -92,6 +94,7 @@ namespace WishExtractor.Core
         public double finesPaid, rivalsChased, fishReturned;
         public double built, hopperItems, hopperCash, machinePicked;
         public double washed, sorted, bundles, wishesCompressed;
+        public double findsOpened, frenzies, wonderStages, wonderItems;
         public bool legendaryWish, legendaryRelic, endingSeen;
 
         // settings

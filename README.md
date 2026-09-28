@@ -11,6 +11,14 @@ concrete, find the mall's bottom treasure and sign the next contract. Six malls,
 Officer Doug fines you for wading during mall hours. Chad, a rival diver in a wetsuit, sneaks in to
 pocket your coins. The live goldfish goes back in the water.
 
+Every mall also has a **Wonder**, a three-stage megaproject hung from the skylight over the fountain.
+The Penny Chandelier, the Mirrorball of Tomorrow and the Wheel of Fountain Fortune are three of them.
+Each stage asks for goods (coin rolls, bags, pallets, gold bars, wish bricks, relics, particular
+things the crowd throws in) and pays a bonus; finishing one earns a perk forever. The crust gives up
+**buried finds** (time capsules, strongboxes, lost suitcases) that you crack open for a jackpot, a
+burst of coins, a swarm of wishes or a minute-long frenzy. (The Wonders and finds are in the game
+rules and the balance bot; their visuals are the next step, see `HANDOFF.md`.)
+
 ## Play
 
 - **Windows build:** `Builds/Windows/WishExtractor.exe` (windowed, resizable). Not committed; rebuild it
@@ -41,16 +49,17 @@ Measured with the balance simulator (a bot playing the real game rules, see belo
 
 | Mall | Engaged bot | Casual bot |
 |---|---|---|
-| 1. Crestview Commons | 2h 46m | 4h 02m |
-| 2. Neon Galaxy Mega-Mall | 3h 49m | 4h 29m |
-| 3. Galleria Aurelia | 3h 46m | 4h 29m |
-| 4. Skyport Terminal C | 4h 28m | 5h 20m |
-| 5. The Lucky Lagoon | 5h 01m | 6h 04m |
-| 6. Eternity Plaza | 5h 02m | 6h 17m |
-| **Campaign** | **24h 50m** | **30h 40m** |
+| 1. Crestview Commons | 2h 50m | 3h 51m |
+| 2. Neon Galaxy Mega-Mall | 3h 28m | 3h 54m |
+| 3. Galleria Aurelia | 4h 17m | 4h 01m |
+| 4. Skyport Terminal C | 4h 22m | 4h 27m |
+| 5. The Lucky Lagoon | 5h 05m | 5h 04m |
+| 6. Eternity Plaza | 4h 54m | 4h 41m |
+| **Campaign** | **24h 55m** | **25h 58m** |
 
-Engaged = sprints, catches 80% of wishes, shops like a player working down the terminal. Casual = walks,
-catches 45%, idles after a quarter of its trips. Other seeds give 25.1 h and 25.2 h for the engaged bot.
+Engaged = sprints, catches 80% of wishes, opens every buried find, shops like a player working down the
+terminal and builds what each mall's Wonder needs. Casual = walks, catches 45%, opens 60% of finds, idles
+after a quarter of its trips. Other seeds give 25.2 h and 25.1 h for the engaged bot.
 After the sixth mall the game continues with Remodel contracts (every mall again, bigger and richer).
 
 ## Build

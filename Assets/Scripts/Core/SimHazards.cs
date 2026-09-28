@@ -166,7 +166,8 @@ namespace WishExtractor.Core
             {
                 case RivalState.Away:
                     if (S.tosses < 40 || S.mallCleared) return;
-                    rivalTimer -= dt / RivalFreqMult;
+                    // word gets around when something big surfaces
+                    rivalTimer -= dt / RivalFreqMult * (findsLoose > 0 ? 3 : 1);
                     if (rivalTimer > 0) return;
                     rivalTimer = RandRange(300, 540);
                     int di = Rng.Next(Layout.Doors.Length);
@@ -274,6 +275,7 @@ namespace WishExtractor.Core
             {
                 var it = Loose[i];
                 if (it.State == LooseState.Airborne || IsFish(it.Type)) continue;
+                if (IsFind(it.Type)) return i;   // a find beats everything, wherever it is
                 float dx = it.X - x, dz = it.Z - z;
                 if (dx * dx + dz * dz > within * within) continue;
                 double score = it.Value + 0.001;

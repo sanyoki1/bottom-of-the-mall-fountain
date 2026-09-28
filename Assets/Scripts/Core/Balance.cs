@@ -45,6 +45,8 @@ namespace WishExtractor.Core
         public static readonly double[] WishTokens = { 1, 2, 4, 8, 25 };
         public const float WishReach = 7f;              // catch distance for floating wishes
         public const int MaxActiveWishes = 8;
+        public const double WishGap = 8;                // seconds between tossed wishes (mall events and frenzies shorten it)
+        public static readonly double[] WishIncomeSeconds = { 0.5, 1, 3, 8, 30 };  // a wish also pays this many seconds of steady income
         public static readonly double[] WishRarityWeight = { 60, 25, 10.5, 3.8, 0.7 };
         public const double UndiscoveredBias = 0.6;
 
@@ -62,12 +64,22 @@ namespace WishExtractor.Core
         public const int MaxSwingItems = 24;            // a huge swing drops this many (heavier) chunks instead of flooding the fountain
 
         // ── processing ───────────────────────────────────────────────────────────
+        public const double FactoryStep = 1.0 / 30;     // longest factory step: ticks longer than this are split (tick-length independence)
         public const int RollSize = 50, BagSize = 20, PalletSize = 40;
         public const double RollMult = 1.10, BagMult = 1.15, PalletMult = 1.25, MeltMult = 1.35;
         public const double CompressorValue = 0.6;      // a pressed wish brick is worth this share of the wish
         public const double RelicChance = 0.004;        // per item sorted, × (1 + 0.35 × stratum)
         public const double RelicValueScale = 0.05;
         public static readonly double[] RelicRarityWeight = { 55, 27, 12, 5, 1 };
+
+        // ── buried finds: strongboxes and time capsules the crust gives up ───────────
+        public const double FindMin = 180, FindMax = 360;   // seconds between finds once digging is past the loose layer
+        public const int MaxFinds = 2;                      // at most this many waiting in the water
+        public const double FindCashMin = 1, FindCashMax = 2;     // a jackpot pays this many minutes of steady income
+        public const double FindCoinsMin = 0.5, FindCoinsMax = 1; // a coin burst holds this many minutes of it
+        public const double FindCashFloor = 4;              // ...but at least this × Scale × (1 + deepest stratum)
+        public const double FrenzyTime = 60;                // seconds a find's frenzy lasts
+        public const double SteadyWindow = 300;             // seconds of hopper and kiosk income that finds and wishes scale with
 
         // ── mall events ──────────────────────────────────────────────────────────
         public const double EventMin = 420, EventMax = 780, EventDuration = 60;

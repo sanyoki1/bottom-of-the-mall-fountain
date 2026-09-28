@@ -293,6 +293,14 @@ namespace WishExtractor.Core
         void UpdateFactory(double dt)
         {
             if (Buildings.Count == 0) { PowerGen = PowerUse = 0; PowerRatio = 1; return; }
+            // belts hop one item and machines hand over one item per port per step, so long ticks
+            // (the balance sim's, or a slow frame) are cut into short steps to keep throughput the same
+            int steps = Math.Max(1, (int)Math.Ceiling(dt / Balance.FactoryStep - 1e-9));
+            for (int i = 0; i < steps; i++) FactoryStep(dt / steps);
+        }
+
+        void FactoryStep(double dt)
+        {
             float fdt = (float)dt;
             double gen = 0, use = 0;
             foreach (var b in Buildings)
@@ -427,6 +435,8 @@ namespace WishExtractor.Core
             {
                 b.Acc -= 1;
                 BufTake(b, out int type, out double value);
+                // the Wonder's next stage gets first pick of what arrives
+                if (TakeForWonder(type, 1, b) > 0) { b.Activity = 1; continue; }
                 cash += value * CatRate(Content.Items[type].Cat) * ValueMult * EventValueMult * b.Def.SellMult;
                 n++;
             }
@@ -436,6 +446,7 @@ namespace WishExtractor.Core
             {
                 b.Activity = 1;
                 AddCash(cash);
+                TrackSteady(cash);
                 hopperWindow += cash;
                 S.hopperItems += n;
                 S.hopperCash += cash;
@@ -540,7 +551,7 @@ namespace WishExtractor.Core
             for (int i = 0; i < Loose.Count; i++)
             {
                 var it = Loose[i];
-                if (it.State == LooseState.Airborne || IsFish(it.Type)) continue;
+                if (it.State == LooseState.Airborne || Protected(it.Type)) continue;
                 float dx = it.X - p.x, dz = it.Z - p.z, d2 = dx * dx + dz * dz;
                 if (d2 < bd) { bd = d2; best = i; }
             }
@@ -554,7 +565,7 @@ namespace WishExtractor.Core
             for (int i = 0; i < Loose.Count; i++)
             {
                 var it = Loose[i];
-                if (it.State == LooseState.Airborne || IsFish(it.Type)) continue;
+                if (it.State == LooseState.Airborne || Protected(it.Type)) continue;
                 if (it.Value > bv) { bv = it.Value; best = i; }
             }
             return best;

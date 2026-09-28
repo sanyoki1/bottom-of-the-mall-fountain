@@ -51,6 +51,12 @@ namespace WishExtractor.Core
             A("set_6", "The Whole Museum", "Complete all six relic collections.", s => s.SetsComplete >= 6);
             A("dig_1", "Groundbreaking", "Dig into the crust.", s => s.S.scoops >= 1);
             A("dig_10k", "Excavator", "Dig 10,000 scoops of crust.", s => s.S.scoops >= 1e4);
+            A("find_1", "X Marks the Spot", "Open something the crust gave up.", s => s.S.findsOpened >= 1);
+            A("find_50", "Professional Treasure Hunter", "Open 50 buried finds.", s => s.S.findsOpened >= 50);
+            A("frenzy_1", "Frenzy!", "Set off a frenzy.", s => s.S.frenzies >= 1);
+            A("wonder_stage", "Some Assembly Required", "Finish a stage of a mall's Wonder.", s => s.S.wonderStages >= 1);
+            A("wonder_1", "Wonder of the Mall", "Finish a mall's Wonder.", s => s.S.wonders.Count >= 1);
+            A("wonder_6", "Seven Wonders (Minus One)", "Finish all six Wonders.", s => s.S.wonders.Count >= 6);
             A("fine_1", "Please Exit the Fountain", "Get fined by mall security.", s => s.S.finesPaid >= 1);
             A("rival_1", "Territorial", "Chase off the rival fountain diver.", s => s.S.rivalsChased >= 1);
             A("rival_25", "This Fountain Ain't Big Enough", "Chase off the rival 25 times.", s => s.S.rivalsChased >= 25);
@@ -95,6 +101,8 @@ namespace WishExtractor.Core
             O("sorter", "Sort washed loot (Pigeon Sorter)", "Sorting pays full price, and sometimes turns up a relic.", 20, s => s.S.sorted >= 10 || s.S.mallIndex > 0);
             O("digrig", "Build a Crust Jackhammer Rig", "Let a machine do the digging. Belt its chunks through the tumbler and sorter to a hopper.", 50, s => s.CountBuilt("dig_rig") > 0 || s.S.mallIndex > 0);
             O("relic", "Find a relic", "Sorting machines occasionally turn up lost treasures. They're worth a lot at the kiosk.", 50, s => s.S.relicsFound >= 1);
+            O("wonder1", "Build the first stage of the Penny Chandelier", "The Wonder Plan easel by the kiosk lists what it needs. Hoppers and the COIN-O-MATIC set those goods aside for it; then approve the stage at the easel.", 50,
+                s => s.S.wonderStages >= 1 || s.S.mallIndex > 0);
             O("concrete", "Hit bare concrete", "Clear the whole crust. The mall's bottom treasure is waiting.", 0, s => s.S.mallCleared || s.S.mallIndex > 0);
             O("contract", "Sign the next contract", "Press C (or wait for the contract). You keep Lucky Pennies, relics and the journal.", 0, s => s.S.mallIndex >= 1);
             O("headoffice", "Spend Lucky Pennies at Head Office", "Maintenance Terminal, Head Office tab. Perks last forever.", 0, s => s.S.headOffice.Count > 0 || s.S.mallIndex > 1);

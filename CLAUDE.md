@@ -9,7 +9,7 @@ branch, and the Unity build, tour and uitest can only run on Nico's Windows PC.
 
 | Path | What |
 |---|---|
-| `Assets/Scripts/Core/` | Pure C# rules (no UnityEngine): `Sim.cs` (loose items, carrying, deposits, tech tree, multipliers), `SimCrowd.cs` (shoppers, tosses, wishes), `SimFactory.cs` (build grid, power, belts, intakes, hoppers), `SimCrust.cs` (digging, processing, relics, prestige, mall events), `SimHazards.cs` (Officer Doug, Chad), `Content*.cs` (all content data), `Balance.cs` (tunables), `Layout.cs` (hall positions), `SaveData.cs`, `Fmt.cs`. Compiled by Unity AND by `Tools/BalanceSim`. |
+| `Assets/Scripts/Core/` | Pure C# rules (no UnityEngine): `Sim.cs` (loose items, carrying, deposits, tech tree, multipliers), `SimCrowd.cs` (shoppers, tosses, wishes), `SimFactory.cs` (build grid, power, belts, intakes, hoppers), `SimCrust.cs` (digging, processing, relics, prestige, mall events), `SimHazards.cs` (Officer Doug, Chad), `SimFinds.cs` (buried finds, frenzies, steady income), `SimWonder.cs` (each mall's Wonder), `Content*.cs` (all content data; `ContentWonders.cs` = Wonders and finds), `Balance.cs` (tunables), `Layout.cs` (hall positions), `SaveData.cs`, `Fmt.cs`. Compiled by Unity AND by `Tools/BalanceSim`. |
 | `Assets/Scripts/View/` | `GameView` (orchestrator, crosshair targeting, `Use`), `FirstPerson` (controller, `FPInput`), `Hands`, `ItemRenderer` (instanced loose items), `WorldBuilder` (the hall), `FountainView` (basin, crust heightfield, water, colliders, ramp), `Kiosk`, `Terminal`, `Board`, `Crowd`, `Wishes`, `Hazards`, `Decor`, `FactoryView`, `BuildMode`, `Actors`, `Loot`, `FX`, `BloomFX`, `MeshKit`, `TexKit`, `Mats`, `ViewCommon`. |
 | `Assets/Scripts/UI/` | uGUI built from code: `UIKit`, `HUD`, `Popups`, `Modals`, `TerminalPanel` (MAINT-OS 95), `BuildMenu`. |
 | `Assets/Scripts/Audio/` | `Synth` (procedural SFX + music), `AudioHub`. |
@@ -51,8 +51,9 @@ at 660 s and 420 s). Never kill processes; close a stray player window gracefull
 - **No loops over quantities that grow with the economy.** `DigCrust` works per stratum, not per scoop;
   a rig digs only what its output buffer can take; a hand swing drops at most `Balance.MaxSwingItems` chunks.
 - **After changing any price, rate or multiplier, re-fit:** `dotnet run -c Release --project Tools/BalanceSim -- fit --apply`
-  (rewrites the `<fitted-scoops>` block in `ContentMalls.cs`), then re-run the 40 h engaged report and
-  the casual one; the engaged total must stay ≥ 24 h, and read the "longest gap between purchases".
+  (rewrites the `<fitted-scoops>` block in `ContentMalls.cs`; each candidate is the mean of three seeds),
+  then re-run the 40 h engaged report (a few seeds) and the casual one; the engaged total must stay ≥ 24 h,
+  and read the "longest gap between purchases" and the Wonder stage times.
 - **Levelled multipliers compound.** For the levelled nodes a player is buying at the same time, keep the
   sum of log(effect per level) / log(cost growth) well below 1, or income runs away (it did: ×200 in 40 min).
   Several steep sinks in parallel keep purchases frequent without runaway growth.
@@ -60,4 +61,15 @@ at 660 s and 420 s). Never kill processes; close a stray player window gracefull
   by it in `BuildMalls` so their actual values stay put. Change both together.
 - Upgrade descriptions are flavour only; the terminal generates the effect line from `Kind`/`Value`
   (`TerminalPanel.EffectText`), so numbers never drift from the data. A new `TechKind` needs a case there.
+- **Nothing may depend on tick length.** The balance sim ticks at 0.5 s, the game at ~1/60 s. Anything
+  that moves one thing per tick (belt hops, machine ports, splitters, crowd wind-ups) must loop until done
+  or be sub-stepped (`UpdateFactory` runs in steps of at most `Balance.FactoryStep`). This hid a 5×
+  factory-speed gap between the bot and the game until session 5.
+- **Items carry base value.** Hoppers and the kiosk apply `ValueMult` and the event multipliers once, at
+  sale. Never store an already-multiplied value on an item (wish bricks did, and income exploded).
+- Anything paid in "seconds of income" (wishes, finds) reads `Sim.SteadyIncome`, a 5-minute window of
+  hopper and kiosk sales. Windfalls go through `AddCash` only, so they can't feed back into it.
+- Wonder stages are TechDefs in `TechBranch.Wonder` (hidden from the terminal): `CanAfford` also checks
+  their goods, and goods reaching hoppers or the kiosk are set aside while the next stage wants them.
+  Their times are bound by production rates (items/s), not by crust size, so re-check them after a re-fit.
 - Tech nodes are laid out by `Col`/`Row` per branch; `dotnet run ... -- techs` warns about overlaps.

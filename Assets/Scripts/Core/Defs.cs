@@ -15,7 +15,7 @@ namespace WishExtractor.Core
     }
 
     /// <summary>What an item is, for routing, processing and value rules.</summary>
-    public enum ItemCat { Coin, Oddity, Gunk, Washed, Loot, Relic, Roll, Bag, Bar, Brick, Junk, Pallet }
+    public enum ItemCat { Coin, Oddity, Gunk, Washed, Loot, Relic, Roll, Bag, Bar, Brick, Junk, Pallet, Find }
 
     /// <summary>Every physical thing that can lie in the fountain, sit on a belt or be carried.</summary>
     public sealed class ItemType
@@ -111,6 +111,24 @@ namespace WishExtractor.Core
         public MallEventDef(string name, string effect, double mult, string desc) { Name = name; Effect = effect; Mult = mult; Desc = desc; }
     }
 
+    /// <summary>
+    /// A mall's Wonder: a megaproject hung over the fountain in stages. Each stage is a TechDef in
+    /// TechBranch.Wonder with the goods it needs; finishing the last one earns the permanent perk.
+    /// </summary>
+    public sealed class WonderDef
+    {
+        public string Name;
+        public string Desc;
+        public ItemShape Crown;        // the centrepiece hung at the top
+        public uint CrownColor;
+        public ItemShape Charm;        // what dangles from the rings
+        public uint CharmColor;
+        public TechKind PerkKind;      // permanent bonus once every stage is done
+        public double PerkValue;
+        public string PerkText;
+        public int[] Stages;           // tech indices, in order
+    }
+
     public sealed class MallDef
     {
         public string Id;
@@ -132,6 +150,8 @@ namespace WishExtractor.Core
         public string TreasureDesc;
         public MallEventDef Event;
         public ThemeDef Theme;
+        public WonderDef Wonder;
+        public int[] FindTypes;        // registry index per buried find this mall's crust can turn up
         public double BaseEV;          // computed from Items
         public int[] LootTypes;        // registry index per Items entry
         public int[] GunkTypes;        // registry index per stratum
@@ -216,9 +236,12 @@ namespace WishExtractor.Core
         StartCarry,     // Head Office: start every mall with this carry tier (level = tier)
         StartUnlocks,   // Head Office: start every mall with the basic factory researched
         RivalRepel,     // × (1 - Value) rival diver visits per level
+        FindRate,       // × (1 + Value) buried finds turn up that much more often
+        WishValue,      // × (1 + Value) wish values
+        FrenzyTime,     // × (1 + Value) how long a find's frenzy lasts
     }
 
-    public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice }
+    public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice, Wonder }
 
     /// <summary>A node on the Maintenance Terminal's tech tree. Levelled nodes repeat with growing cost.</summary>
     public sealed class TechDef
@@ -238,6 +261,8 @@ namespace WishExtractor.Core
         public bool Persistent => LuckyPennies;
         public string[] Requires = Array.Empty<string>();
         public int UnlockMall;          // first mall where it can appear
+        public int OnlyMall = -1;       // Wonder stages: the only mall (definition index) where it exists
+        public (string id, int count)[] Needs = Array.Empty<(string, int)>();   // Wonder stages: goods to deliver first
         public int Col, Row;            // layout position in the tree view
         public int Index;
         public double CostAt(int level, double scale)

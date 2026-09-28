@@ -135,7 +135,7 @@ namespace WishExtractor.Core
                 "Update available: 'fixed a bug where robot was sad'.", "unlock_skimmer");
             U("unlock_digrig", "Crust Jackhammer Rig", TechBranch.Intake, "dig_rig", 300, 0, 2, "Dig without swinging. Your shoulders send their thanks.", "unlock_skimmer", "unlock_diesel");
             U("unlock_borer", "Tunnel Borer", TechBranch.Intake, "dig_borer", 90000, 1, 2, "A machine that was built to dig subways. Your fountain is basically a very short subway.", "unlock_digrig", "unlock_fryer");
-            Lv("dig_bits", "Diamond-Tipped Bits", TechBranch.Intake, TechKind.DigPower, null, 0.10, 150000, 1.9, 60, 2, 2,
+            Lv("dig_bits", "Diamond-Tipped Bits", TechBranch.Intake, TechKind.DigPower, null, 0.10, 150000, 1.9, 400, 2, 2,
                 "Every rig re-tipped with diamonds fished out of the fountain. It's called recycling.", "unlock_borer");
             // processing
             U("unlock_tumbler", "Rinse Tumbler", TechBranch.Processing, "proc_tumbler", 30, 0, 0, "Washed gunk is worth 35% of its loot instead of 10%.", "unlock_belts");
@@ -148,7 +148,7 @@ namespace WishExtractor.Core
             U("unlock_compressor", "Wish Compressor", TechBranch.Processing, "proc_compressor", 20000, 1, 2, "No wish goes uncaught. Some go uncaught and then get compressed.", "unlock_tumbler");
             Lv("proc_speed", "Process Engineering", TechBranch.Processing, TechKind.MachineSpeed, "Processing", 0.15, 400, 1.8, 15, 3, 0,
                 "A consultant rearranged the machines. Everything is 15% faster. The consultant charged 40% more.", "unlock_tumbler");
-            Lv("proc_bonus", "Pigeon Performance Bonuses", TechBranch.Processing, TechKind.ValueMult, null, 0.07, 30000, 1.9, 60, 2, 2,
+            Lv("proc_bonus", "Pigeon Performance Bonuses", TechBranch.Processing, TechKind.ValueMult, null, 0.07, 30000, 1.9, 400, 2, 2,
                 "The pigeons unionised. They sort only the good stuff now, and everything is worth a little more for it.", "unlock_sorter");
             // logistics
             U("unlock_belts", "Conveyor Belts", TechBranch.Logistics, "belt", 5, 0, 0, "Move things without walking. Revolutionary.");
@@ -160,7 +160,7 @@ namespace WishExtractor.Core
             Lv("hopper_speed", "Hopper Throughput", TechBranch.Logistics, TechKind.MachineSpeed, "Output", 0.2, 100, 1.9, 10, 2, 1,
                 "Greased the chutes with butter from the pretzel stand.", "unlock_hopper");
             // the late-game value sink, next to its throughput cousin
-            Lv("hopper_gold", "Gold-Plated Chutes", TechBranch.Logistics, TechKind.ValueMult, null, 0.07, 20000, 1.9, 60, 3, 1,
+            Lv("hopper_gold", "Gold-Plated Chutes", TechBranch.Logistics, TechKind.ValueMult, null, 0.07, 20000, 1.9, 400, 3, 1,
                 "Every chute re-plated in 24-karat gold. Coins slide in faster, feel richer and pay out at a premium. Accounting has questions.", "unlock_hopper2");
         }
     }
