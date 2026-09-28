@@ -195,11 +195,11 @@ namespace WishExtractor.View
             SetLayerNoShadow(go);
             fill = f.Build("Fill", container, false).transform;
             SetLayerNoShadow(fill.gameObject);
-            container.localScale = Vector3.one * (tier >= 5 ? 1f : tier == 3 ? 0.62f : 0.8f);
+            container.localScale = Vector3.one * (tier == 8 ? 0.45f : tier >= 5 ? 1f : tier == 3 ? 0.62f : 0.8f);
             container.localPosition = ContainerHome;
         }
 
-        Vector3 ContainerHome => carryTier == 8 ? new Vector3(-0.1f, -0.1f, 0.1f) : carryTier >= 5 ? new Vector3(-0.05f, -0.8f, 1.15f) : new Vector3(-0.26f, -0.32f, 0.52f);
+        Vector3 ContainerHome => carryTier == 8 ? new Vector3(-0.3f, -0.3f, 0.3f) : carryTier >= 5 ? new Vector3(-0.05f, -0.8f, 1.15f) : new Vector3(-0.26f, -0.32f, 0.52f);
 
         // ── the grab tool in your right hand ─────────────────────────────────
 

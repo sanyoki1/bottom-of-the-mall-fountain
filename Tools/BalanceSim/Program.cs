@@ -17,8 +17,42 @@ static class Program
             return 0;
         }
         if (args.Length > 0 && args[0] == "crowd") return Crowd(args.Length > 1 ? double.Parse(args[1]) : 0);
+        if (args.Length > 0 && args[0] == "factory") return Factory();
         return Smoke();
     }
+
+    /// <summary>Build a hamster wheel, a skimmer, four belts and a hopper; watch it run for three minutes.</summary>
+    static int Factory()
+    {
+        var sim = new Sim(new SaveData(), 3);
+        sim.StartRun();
+        foreach (var t in new[] { "unlock_hamster", "unlock_skimmer", "unlock_belts", "unlock_hopper" }) sim.DebugSetTech(t, 1);
+        sim.DebugAddCash(500);
+        BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+        Console.WriteLine(Can(sim, D("gen_hamster"), 12, 3, 0));
+        Console.WriteLine(Can(sim, D("intake_skimmer"), 11, 0, 3));
+        for (int x = 12; x <= 15; x++) Console.WriteLine(Can(sim, D("belt"), x, 0, 1));
+        Console.WriteLine(Can(sim, D("hopper"), 16, 0, 0));
+        Console.WriteLine(Can(sim, D("intake_skimmer"), 11, 0, 1) + " (facing away: should fail)");
+        var ham = sim.Place(D("gen_hamster"), 12, 3, 0);
+        var sk = sim.Place(D("intake_skimmer"), 11, 0, 3);
+        for (int x = 12; x <= 15; x++) sim.Place(D("belt"), x, 0, 1);
+        var hop = sim.Place(D("hopper"), 16, 0, 0);
+        double cash0 = sim.S.cash;
+        for (int step = 0; step < 1800; step++)
+        {
+            sim.Tick(0.1);
+            if (step % 300 == 299)
+                Console.WriteLine($"t={sim.Time:0}s power {sim.PowerGen:0.#}/{sim.PowerUse:0.#} kW, skimmer bot ({sk.BotX:0.0},{sk.BotZ:0.0}) state {sk.BotState} load {sk.BotLoad.Count} buf {sk.BufCount} '{sk.Status}', " +
+                                  $"belt items {sim.Buildings.FindAll(b => b.Def.IsBelt).ConvertAll(b => b.Items.Count).Sum()}, hopper sold {sim.S.hopperItems} for {Fmt.Money(sim.S.hopperCash)}, loose {sim.Loose.Count}");
+        }
+        var snap = sim.Snapshot();
+        var back = new Sim(snap, 4);
+        Console.WriteLine($"save/load: {back.Buildings.Count} buildings (was {sim.Buildings.Count}), belt items {back.Buildings.Sum(b => b.Items.Count)}");
+        return 0;
+    }
+
+    static string Can(Sim sim, BuildDef d, int x, int z, int rot) => sim.CanPlace(d, x, z, rot, out var why) ? $"{d.Id} @({x},{z}) r{rot}: ok" : $"{d.Id} @({x},{z}) r{rot}: NO — {why}";
 
     /// <summary>Watch the crowd for two minutes at a given wishability and print what shoppers are doing.</summary>
     static int Crowd(double wish)

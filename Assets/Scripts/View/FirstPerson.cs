@@ -14,6 +14,10 @@ namespace WishExtractor.View
         public bool PrimaryDown;      // pressed this frame
         public bool Interact;         // pressed this frame
         public int Hotbar;            // 0 = no change, 1..3 = select slot
+        public bool Rotate;           // R: rotate the build ghost
+        public bool Demolish;         // X: toggle demolish mode
+        public int Cycle;             // mouse wheel in build mode: next / previous buildable
+        public bool Catalogue;        // Tab: open the build catalogue
     }
 
     public sealed class FirstPersonController : MonoBehaviour

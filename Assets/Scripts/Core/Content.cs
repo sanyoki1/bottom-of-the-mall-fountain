@@ -10,6 +10,7 @@ namespace WishExtractor.Core
         public static readonly CarryDef[] Carry;
         public static readonly ToolDef[] GrabTools;
         public static readonly ToolDef[] DigTools;
+        public static readonly BuildDef[] Buildables;
         public static readonly TechDef[] Techs;
         public static readonly ArchetypeDef[] Archetypes;
         public static readonly AchievementDef[] Achievements;
@@ -31,6 +32,7 @@ namespace WishExtractor.Core
             Carry = BuildCarry();
             GrabTools = BuildGrabTools();
             DigTools = BuildDigTools();
+            Buildables = BuildBuildables();
             Techs = BuildTechs();
             Archetypes = BuildArchetypes();
             Achievements = BuildAchievements();

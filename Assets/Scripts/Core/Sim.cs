@@ -128,6 +128,7 @@ namespace WishExtractor.Core
                 int type = st.type >= 0 && st.type < S.typeIds.Count ? Content.TypeOrNone(S.typeIds[st.type]) : -1;
                 if (type >= 0 && st.count > 0) AddCarried(type, st.count, st.value);
             }
+            LoadFactory();
             Recalc();
             SeedCrowd();
         }
@@ -166,6 +167,7 @@ namespace WishExtractor.Core
             }
             S.carried.Clear();
             foreach (var st in Carried) S.carried.Add(new SavedStack { type = Slot(st.Type), count = st.Count, value = st.Value });
+            SaveFactory(Slot);
             return S;
         }
 
@@ -176,6 +178,7 @@ namespace WishExtractor.Core
             Loose.Clear();
             looseIndex.Clear();
             ClearCrowd();
+            ClearFactory();
             SeedFountain((int)Balance.SeedCoins);
             Recalc();
             SeedCrowd();
@@ -278,6 +281,7 @@ namespace WishExtractor.Core
             GrabRateMult = grabRate;
             WishLifeMult = wishLife;
             CarryBonusMult = carryBonus;
+            RecalcFactory();
             OnRecalc?.Invoke();
         }
 
@@ -293,6 +297,7 @@ namespace WishExtractor.Core
             UpdateLoose((float)dt);
             UpdateCrowd(dt);
             UpdateWishes(dt);
+            UpdateFactory(dt);
 
             earnWindowTime += dt;
             if (earnWindowTime >= 1)

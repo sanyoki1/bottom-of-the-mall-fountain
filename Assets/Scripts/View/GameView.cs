@@ -8,7 +8,7 @@ using WishExtractor.Core;
 
 namespace WishExtractor.View
 {
-    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board }
+    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board, Building }
 
     public struct Target
     {
@@ -33,7 +33,11 @@ namespace WishExtractor.View
         public FountainBoard Board { get; private set; }
         public TerminalProp Terminal { get; private set; }
         public FountainDecor Decor { get; private set; }
+        public FactoryView Factory { get; private set; }
+        public BuildMode Build { get; private set; }
         bool decorPrimed;
+        float wallDistNow = 999;
+        int hoverBuilding = -1;
         /// <summary>The player pressed E on the Maintenance Terminal.</summary>
         public event Action OpenTerminal;
         Material areaMat;
@@ -106,6 +110,23 @@ namespace WishExtractor.View
                 Fx.Sparks(p, new Color(0.8f, 0.92f, 1f), def.Cat == ItemCat.Coin ? 5 : 16, 2.2f + big, 0.07f, 0.5f);
             };
             Sim.OnTechBought += t => { if (t.Branch == TechBranch.Fountain) { Board.Flash(); FountainCelebrate(); } };
+
+            Factory = new FactoryView();
+            Factory.Init(transform, Ctx);
+            Build = new BuildMode();
+            Build.Init(sim, transform);
+            Build.Denied += why => Message?.Invoke(why);
+            Build.Placed += b =>
+            {
+                var c = FactoryView.WorldCenter(b);
+                Fx.Dust(c + Vector3.up * 0.2f, new Color(0.9f, 0.9f, 0.85f), b.Def.IsBelt ? 2 : 8, 0.8f, 0.6f, 1f);
+                if (!b.Def.IsBelt) Fx.Glint(c + Vector3.up * 1.2f, Color.white, 1.5f, 2, 0.5f);
+            };
+            Sim.OnHopperSold += (b, cash, n) =>
+            {
+                if (UnityEngine.Random.value < 0.25f)
+                    FloatText?.Invoke(FactoryView.WorldCenter(b) + Vector3.up * 2f, "+" + Fmt.Money(cash), new Color(0.55f, 1f, 0.55f), 0.8f);
+            };
             RebuildMall();
         }
 
@@ -142,6 +163,7 @@ namespace WishExtractor.View
             decorPrimed = false;
             Crowd?.Clear();
             WishOrbs?.Clear();
+            Factory?.Clear();
             Cam.backgroundColor = world.FogColor * 0.8f;
             Fountain.Update(0.016f);
         }
@@ -182,9 +204,20 @@ namespace WishExtractor.View
             Sim.S.distance += Player.Moved;
             if (Player.Feet.y < FountainView.BasinFloor - 5) PlacePlayer(new SaveData());
 
+            if (!frozen && input.Hotbar == 3) Build.SetActive(true);
+            if (!frozen && (input.Hotbar == 1 || input.Hotbar == 2)) Build.SetActive(false);
+            if (!frozen && input.Catalogue && !Build.Active) Build.SetActive(true);
+
             UpdateTarget();
             grabCooldown -= dt;
+            Build.Tick(frozen ? default : input, Player.AimRay, wallDistNow, hoverBuilding, frozen);
             if (frozen) return;
+            if (Build.Active)
+            {
+                // in build mode the mouse builds; E still works on the kiosk, terminal, easel and wishes
+                if (input.Interact && Current.Kind != TargetKind.Item && Current.Kind != TargetKind.Building) Use();
+                return;
+            }
             if (input.Interact || input.PrimaryDown) Use();
             else if (input.Primary && Current.Kind == TargetKind.Item && grabCooldown <= 0) Use();
         }
@@ -201,6 +234,18 @@ namespace WishExtractor.View
             int solid = ~((1 << Layers.IgnoreRaycast) | (1 << WishView.Layer));
             bool hitSomething = Physics.Raycast(ray, out var hit, 60f, solid, QueryTriggerInteraction.Ignore);
             if (hitSomething) wallDist = hit.distance;
+            wallDistNow = wallDist;
+            hoverBuilding = -1;
+            if (hitSomething && hit.distance < 14f)
+            {
+                var bct = hit.collider.GetComponent<ClickTarget>();
+                if (bct != null && bct.Kind == "building")
+                {
+                    hoverBuilding = bct.Uid;
+                    // standing on a belt shouldn't hide its items from the build ghost's floor ray
+                    if (Sim.FindBuilding(bct.Uid)?.Def.IsBelt == true) wallDistNow = 999;
+                }
+            }
             // floating wishes first: they're triggers on their own layer, and generous to aim at
             if (Physics.SphereCast(ray, 0.12f, out var wh, Mathf.Min(Balance.WishReach, wallDist), 1 << WishView.Layer, QueryTriggerInteraction.Collide))
             {
@@ -239,7 +284,10 @@ namespace WishExtractor.View
                 var p = Items.PositionOf(it);
                 Items.HighlightUid = it.Uid;
                 Current = new Target { Kind = TargetKind.Item, Uid = it.Uid, Point = p, Distance = Vector3.Distance(ray.origin, p) };
+                return;
             }
+            if (hoverBuilding >= 0 && hit.distance < 8f)
+                Current = new Target { Kind = TargetKind.Building, Uid = hoverBuilding, Point = hit.point, Distance = hit.distance };
         }
 
         /// <summary>Act on the current target (E or left click).</summary>
@@ -318,11 +366,12 @@ namespace WishExtractor.View
             Sim.PlayerZ = feet.z;
             Crowd.Update(dt, time);
             WishOrbs.Update(dt, time);
+            Factory.Update(dt, time);
             Fx.Update(dt);
 
             // hands: bare hands show the top item; containers show how full they are
             Hands.SetCarryTier(Sim.CarryTier);
-            Hands.SetTool(Sim.GrabTier);
+            Hands.SetTool(Build.Active ? 0 : Sim.GrabTier);
             AutoVacuum(dt, feet);
             DetectorGlints(dt, feet);
             if (Sim.CarryTier == 0) Hands.SetHeld(Sim.Carried.Count > 0 ? Sim.Carried[Sim.Carried.Count - 1].Type : -1);
@@ -381,7 +430,7 @@ namespace WishExtractor.View
         void LateUpdate()
         {
             if (Sim == null) return;
-            Items.Render(Cam, Time.time);
+            Items.Render(Cam, Time.time, Factory.DrawBeltItems);
             // area tools: show the scoop circle where you're aiming
             var g = Sim.Grab;
             if (g.Area > 0 && Current.Kind == TargetKind.Item)

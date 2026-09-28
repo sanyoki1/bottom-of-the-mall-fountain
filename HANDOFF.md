@@ -34,6 +34,15 @@ floor-level carts/barrows (`Hands.cs`), area-grab ring, shop-vac auto pickup, de
 decor (`Decor.cs`), wormhole tosses of other malls' loot. Dig tools are defined but not sold until M5.
 uitest 49/49 (buys through the real terminal UI).
 
+**M4 (verified, committed):** the factory. Core `SimFactory.cs` (1 m grid on the hall floor, placement rules
+incl. rim-only intakes that must face the fountain, stepping stones and the entrance kept clear; belts with
+0.25-spaced items that hop cell to cell; splitter; skimmer bot that roams and docks; drain pump; claw
+crane; hoppers that sell; one global power budget with brownout ratio; save/load of buildings, buffers and
+belt items). `ContentBuild.cs`: 11 buildables + 16 Power/Intake/Logistics tech nodes. View: `FactoryView.cs`
+(models, scrolling belts, instanced belt items, bot/hose/claw animation), `BuildMode.cs` (grid ghost with
+`WE/Ghost` shader, R, auto-facing, belt drag, X demolish), `UI/BuildMenu.cs` (Tab catalogue). Headless:
+`dotnet run ... -- factory`. uitest 69/69 builds a working skimmer→belt→hopper line through the real input path.
+
 Session 2 notes (kept for history):
 - Done (session 2):
   - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/

@@ -76,6 +76,8 @@ namespace WishExtractor.Core
             Lv("fountain_patience", "Wish Catcher's Patience", TechBranch.Fountain, TechKind.WishLife, 0.15, 3, 1.8, 6, 3, 1,
                 "Wishes linger a little longer over the water, as if they want to be caught.", "fountain_scrub", true);
 
+            AddFactoryTechs(T);
+
             var arr = list.ToArray();
             foreach (var t in arr) TechIndex[t.Id] = t.Index;
             return arr;

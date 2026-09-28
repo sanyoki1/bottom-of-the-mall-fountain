@@ -92,9 +92,18 @@ namespace WishExtractor.View
             return Quaternion.Euler(tilt, it.Yaw, tilt * 0.4f);
         }
 
-        public void Render(Camera cam, float time)
+        /// <summary>Queue an item that isn't loose in the fountain (on a belt, in a machine) for this frame's draw.</summary>
+        public void AddExtra(int type, Vector3 pos, Quaternion rot)
+        {
+            var b = For(type);
+            if (b.Count == b.M.Length) System.Array.Resize(ref b.M, b.M.Length * 2);
+            b.M[b.Count++] = Matrix4x4.TRS(pos + Vector3.up * b.Lift, rot, Vector3.one * b.Scale);
+        }
+
+        public void Render(Camera cam, float time, System.Action<ItemRenderer> extra = null)
         {
             foreach (var b in batches.Values) b.Count = 0;
+            extra?.Invoke(this);
             var loose = sim.Loose;
             Vector3 camPos = cam.transform.position;
             Drawn = 0;

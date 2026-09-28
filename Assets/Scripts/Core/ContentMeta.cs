@@ -82,6 +82,9 @@ namespace WishExtractor.Core
             O("pail", "Get the Sand Pail", "Twenty coins per trip.", 0.5, s => s.CarryTier >= 2);
             O("toss50", "Watch shoppers toss in 50 things", "The fancier the fountain, the faster they throw.", 0, s => s.S.tosses >= 50);
             O("lights", "Install the coloured lights", "Dimes start flying once the fountain has mood lighting.", 1, s => s.TechLevel("fountain_lights") > 0);
+            O("hamster", "Build a Hamster Wheel", "Research it in the terminal's Power tab, then press 3 for build mode and click on the floor.", 1, s => s.CountBuilt("gen_hamster") > 0);
+            O("skimmer", "Build a Pool Skimmer Bot at the fountain's edge", "Intake tab. The dock has to stand right by the rim; it turns to face the water by itself.", 2, s => s.CountBuilt("intake_skimmer") > 0);
+            O("line", "Belt the skimmer's coins into a Deposit Hopper", "Research Conveyor Belts and Wired Deposit, then drag a belt from the back of the dock to a hopper.", 3, s => s.S.hopperItems >= 1);
             O("net", "Buy the Pool Skimmer Net", "Scoops everything in a small circle. Hold the button and sweep.", 1, s => s.GrabTier >= 2);
             O("bucket", "Upgrade to the Mop Bucket", "Sixty coins per trip. The mop stays in the closet.", 2, s => s.CarryTier >= 3);
             O("neon", "Put up the 'MAKE A WISH' neon", "Quarters at wishability 12, loonies at 20.", 3, s => s.TechLevel("fountain_neon") > 0);

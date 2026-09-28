@@ -26,7 +26,8 @@ namespace WishExtractor.Game
         Popups pops;
         Modals modals;
         TerminalPanel terminal;
-        bool AnyMenu => modals.IsOpen || terminal.IsOpen;
+        BuildMenu buildMenu;
+        bool AnyMenu => modals.IsOpen || terminal.IsOpen || buildMenu.IsOpen;
         bool swallowInput;
         Canvas uiCanvas, popCanvas, modalCanvas;
         float autosave;
@@ -109,6 +110,11 @@ namespace WishExtractor.Game
             terminal.Build(modalCanvas, sim);
             terminal.OnDenied = () => sfx.Play("denied", 0.6f);
             view.OpenTerminal += () => { sfx.Play("ui"); terminal.Open(); };
+            buildMenu = new BuildMenu();
+            buildMenu.Build(modalCanvas, sim);
+            buildMenu.OnPick = d => { sfx.Play("ui"); view.Build.Select(d); };
+            view.Build.Placed += b => sfx.PlayAt(b.Def.IsBelt ? "coin" : "whack", FactoryView.WorldCenter(b), b.Def.IsBelt ? 0.25f : 0.6f, 0.1f, 0.03f, b.Def.IsBelt ? 0.6f : 1f);
+            view.Build.Removed += b => sfx.PlayAt("dig", FactoryView.WorldCenter(b), 0.6f, 0.1f, 0.05f);
 
             sfx = gameObject.AddComponent<AudioHub>();
             sfx.Init(sim.S.musicVol, sim.S.sfxVol);
@@ -127,7 +133,7 @@ namespace WishExtractor.Game
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 200));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 330));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
@@ -256,12 +262,14 @@ namespace WishExtractor.Game
                 s.PrimaryDown = false;
                 s.Look = Vector2.zero;
                 s.Hotbar = 0;
+                s.Rotate = s.Demolish = s.Catalogue = false;
+                s.Cycle = 0;
                 scripted = s;
             }
-            if (input.Hotbar > 0) hud.Slot = input.Hotbar;
+            if (input.Catalogue && !modal && view.Build.SetActive(true)) { buildMenu.Open(); modal = true; }
             view.Step(input, dt, modal);
 
-            hud.Refresh(dt, view.Current, view.Wading, modal);
+            hud.Refresh(dt, view.Current, view.Wading, modal, view.Build);
             pops.Update(dt);
             modals.Update(dt);
             terminal.Update(dt);
@@ -275,6 +283,7 @@ namespace WishExtractor.Game
             if (Input.GetKeyDown(KeyCode.Escape) || (terminal.IsOpen && Input.GetKeyDown(KeyCode.E)))
             {
                 if (terminal.IsOpen) { terminal.Close(); swallowInput = true; }
+                else if (buildMenu.IsOpen) { buildMenu.Close(); swallowInput = true; }
                 else if (modal) { if (modals.OpenName != "intro") modals.Close(); }
                 else modals.OpenSettings();
             }
@@ -311,7 +320,12 @@ namespace WishExtractor.Game
             i.Interact = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.F);
             if (Input.GetKeyDown(KeyCode.Alpha1)) i.Hotbar = 1;
             if (Input.GetKeyDown(KeyCode.Alpha2)) i.Hotbar = 2;
-            if (Input.GetKeyDown(KeyCode.Alpha3)) i.Hotbar = 3;
+            if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.B)) i.Hotbar = 3;
+            i.Rotate = Input.GetKeyDown(KeyCode.R);
+            i.Demolish = Input.GetKeyDown(KeyCode.X);
+            i.Catalogue = Input.GetKeyDown(KeyCode.Tab);
+            float wheel = Input.mouseScrollDelta.y;
+            i.Cycle = wheel > 0.1f ? -1 : wheel < -0.1f ? 1 : 0;
             return i;
         }
 
@@ -406,6 +420,37 @@ namespace WishExtractor.Game
             yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.2f);
         }
 
+        void SetFlag(Action<FPInputBox> set)
+        {
+            var box = new FPInputBox { I = scripted ?? default };
+            set(box);
+            scripted = box.I;
+        }
+
+        /// <summary>Lambdas can't take a struct by ref, so the scripted input rides in a box.</summary>
+        sealed class FPInputBox
+        {
+            public FPInput I;
+            public int Hotbar { set => I.Hotbar = value; }
+            public bool Primary { set => I.Primary = value; }
+            public bool PrimaryDown { set => I.PrimaryDown = value; }
+            public bool Demolish { set => I.Demolish = value; }
+            public bool Catalogue { set => I.Catalogue = value; }
+            public bool Rotate { set => I.Rotate = value; }
+        }
+
+        IEnumerator AimAt(Vector3 p) => LookAtSmooth(p, 0.12f);
+
+        IEnumerator PickFromCatalogue(string id)
+        {
+            SetFlag(i => i.Catalogue = true);
+            yield return null;
+            yield return new WaitForSeconds(0.15f);
+            Check(buildMenu.IsOpen && ClickSelectable(FindButton("Build:" + id)), $"pick {id} from the build catalogue");
+            yield return null;
+            Check(!buildMenu.IsOpen && view.Build.Selected?.Id == id, $"holding {id}");
+        }
+
         IEnumerator GoToTerminal()
         {
             var t = view.Terminal.Root;
@@ -434,7 +479,7 @@ namespace WishExtractor.Game
 
         IEnumerator Tour()
         {
-            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 420));
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 540));
             scripted = default(FPInput);
             yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
@@ -527,6 +572,46 @@ namespace WishExtractor.Game
                 yield return Shot(shot);
             }
 
+            // the factory: three intakes feeding three hoppers, powered by a small zoo of generators
+            foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock || t.Kind == TechKind.BeltSpeed) sim.DebugSetTech(t.Id, 1);
+            BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+            sim.Place(D("intake_skimmer"), 11, 0, 3, true);
+            for (int x = 12; x <= 15; x++) sim.Place(D("belt"), x, 0, 1, true);
+            sim.Place(D("hopper"), 16, 0, 0, true);
+            sim.Place(D("gen_hamster"), 12, 3, 0, true);
+            sim.Place(D("gen_hamster"), 13, 3, 0, true);
+            sim.Place(D("gen_diesel"), 12, 5, 0, true);
+            sim.Place(D("gen_fryer"), 15, 5, 0, true);
+            sim.Place(D("intake_pump"), 8, 8, 2, true);
+            for (int z = 9; z <= 12; z++) sim.Place(D("belt"), 8, z, 0, true);
+            sim.Place(D("hopper"), 8, 13, 0, true);
+            sim.Place(D("intake_claw"), 7, -9, 0, true);
+            for (int z = -10; z >= -12; z--) sim.Place(D("belt"), 7, z, 2, true);
+            sim.Place(D("hopper2"), 7, -14, 0, true);
+            view.Player.Place(new Vector3(16.5f, 0.05f, -5.5f), 0, 0);
+            yield return new WaitForSeconds(6f);
+            yield return LookAtSmooth(new Vector3(11.5f, 0.6f, 2.5f));
+            yield return Shot("13_factory_east");
+            view.Player.Place(new Vector3(2.5f, 0.05f, 13.5f), 0, 0);
+            yield return LookAtSmooth(new Vector3(7.5f, 1f, 9f));
+            yield return Shot("14_factory_pump");
+            view.Player.Place(new Vector3(2.5f, 0.05f, -15.5f), 0, 0);
+            yield return LookAtSmooth(new Vector3(7.5f, 1.5f, -10.5f));
+            yield return Shot("15_factory_claw");
+            Debug.Log($"[TOUR] factory: power {sim.PowerGen:0}/{sim.PowerUse:0} kW, intakes picked {sim.S.machinePicked}, hoppers sold {sim.S.hopperItems} for {Fmt.Money(sim.S.hopperCash)}");
+            view.Build.SetActive(true);
+            view.Build.Select(D("belt"));
+            view.Player.Place(new Vector3(18f, 0.05f, -4f), 0, 0);
+            yield return AimAt(new Vector3(18.5f, 0, -1.5f));
+            yield return Shot("16_build_ghost");
+            view.Build.Select(D("gen_diesel"));
+            yield return AimAt(new Vector3(12.5f, 0, 0.5f));
+            yield return Shot("17_build_invalid");
+            buildMenu.Open();
+            yield return Shot("18_build_catalogue");
+            buildMenu.Close();
+            view.Build.SetActive(false);
+
             // bigger containers (tech the terminal will sell in M3), shown off in the fountain
             sim.DebugSetTech("carry_bucket", 1);
             sim.DebugSetTech("carry_cup", 1);
@@ -584,7 +669,8 @@ namespace WishExtractor.Game
             var p = view.Player.Feet;
             Debug.Log($"[LOADTEST] cash={Fmt.Money(sim.S.cash)} carried={sim.CarriedCount} ({Fmt.Money(sim.CarriedValue)}) loose={sim.Loose.Count} " +
                       $"pos=({p.x:0.0},{p.y:0.0},{p.z:0.0}) yaw={view.Player.Yaw:0} picked={sim.S.itemsPicked} deposits={sim.S.deposits} " +
-                      $"carryTier={sim.CarryTier} objective={sim.S.objective} achievements={sim.AchievementCount}");
+                      $"carryTier={sim.CarryTier} objective={sim.S.objective} achievements={sim.AchievementCount} " +
+                      $"buildings={sim.Buildings.Count} (machines {sim.MachinesBuilt}, belts {sim.BeltsBuilt}) power={sim.PowerGen}/{sim.PowerUse} kW");
             yield return Shot("ui_loadtest");
             Application.Quit();
         }
@@ -810,6 +896,77 @@ namespace WishExtractor.Game
             }
             yield return Shot("ui_wish");
 
+            // ── the factory: hamster wheels, a skimmer bot, a belt line and a hopper, built through build mode ──
+            foreach (var t in new[] { "unlock_hamster", "unlock_skimmer", "unlock_belts", "unlock_hopper" }) sim.DebugSetTech(t, 1);
+            sim.DebugAddCash(300);
+            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f);
+            yield return WalkTo(new Vector3(13.5f, 0, -3.5f), 0.4f);
+            SetFlag(i => i.Hotbar = 3);
+            yield return null;
+            yield return null;
+            Check(view.Build.Active, "3 switches to build mode");
+            yield return PickFromCatalogue("gen_hamster");
+            yield return AimAt(new Vector3(12.5f, 0, 3.5f));
+            Check(view.Build.HasSpot && view.Build.Valid && view.Build.AX == 12 && view.Build.AZ == 3,
+                  $"the ghost snaps to the grid ({view.Build.AX},{view.Build.AZ}) valid={view.Build.Valid} {view.Build.Reason}");
+            yield return Shot("ui_build_ghost");
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("gen_hamster") == 1, "click builds a hamster wheel");
+            yield return AimAt(new Vector3(13.5f, 0, 3.5f));
+            Press(false, true);
+            yield return null;
+            yield return null;
+            yield return PickFromCatalogue("intake_skimmer");
+            yield return AimAt(new Vector3(12.5f, 0, 3.5f));
+            Check(!view.Build.Valid, $"can't build on top of the hamster wheel ({view.Build.Reason})");
+            yield return AimAt(new Vector3(10.9f, 0, 0.5f));
+            Check(view.Build.Valid && view.Build.ARot == 3, $"the skimmer dock turns to face the fountain (rot {view.Build.ARot}, {view.Build.Reason})");
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("intake_skimmer") == 1, "skimmer dock built at the rim");
+            yield return PickFromCatalogue("belt");
+            yield return AimAt(new Vector3(12.5f, 0, 0.5f));
+            SetFlag(i => { i.PrimaryDown = true; i.Primary = true; });
+            yield return null;
+            for (int k = 0; k <= 20; k++)
+            {
+                view.Player.LookAt(new Vector3(Mathf.Lerp(12.5f, 15.5f, k / 20f), 0, 0.5f));
+                SetFlag(i => i.Primary = true);
+                yield return null;
+            }
+            SetFlag(i => i.Primary = false);
+            yield return null;
+            bool line = true;
+            for (int x = 12; x <= 15; x++) { var b = sim.At(x, 0); line &= b != null && b.Def.IsBelt && b.Rot == 1; }
+            Check(line, "dragging lays a straight belt line pointing away from the dock");
+            yield return PickFromCatalogue("hopper");
+            yield return AimAt(new Vector3(17f, 0, 1f));
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("hopper") == 1 && sim.At(16, 0)?.Def.Id == "hopper", "deposit hopper built at the end of the line");
+            Check(sim.PowerGen >= sim.PowerUse && sim.PowerUse > 0, $"power: {sim.PowerGen} kW for {sim.PowerUse} kW");
+            float waitSale = 0;
+            while (sim.S.hopperItems == 0 && waitSale < 80) { waitSale += Time.deltaTime; yield return null; }
+            Check(sim.S.hopperItems > 0 && sim.S.machinePicked > 0, $"the skimmer's coins ride the belts into the hopper and get paid ({sim.S.hopperItems} items, {Fmt.Money(sim.S.hopperCash)}, {waitSale:0}s)");
+            yield return AimAt(new Vector3(12, 0.8f, 1.5f));
+            yield return Shot("ui_factory");
+            SetFlag(i => i.Demolish = true);
+            yield return null;
+            yield return AimAt(new Vector3(13.5f, 0.15f, 0.5f));
+            double cashD = sim.S.cash;
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.At(13, 0) == null && sim.S.cash > cashD, "demolish mode removes a belt and refunds it");
+            SetFlag(i => i.Demolish = true);
+            SetFlag(i => i.Hotbar = 1);
+            yield return null;
+            Check(!view.Build.Active, "1 goes back to grabbing");
+
             // menus
             modals.OpenSettings();
             yield return new WaitForSeconds(0.3f);
@@ -839,8 +996,8 @@ namespace WishExtractor.Game
             view.StorePose(sim.S);
             var snap = JsonUtility.ToJson(sim.Snapshot());
             var back = new Sim(JsonUtility.FromJson<SaveData>(snap));
-            Check(Math.Abs(back.S.cash - sim.S.cash) < 1e-9 && back.Loose.Count == sim.Loose.Count && back.CarryTier == sim.CarryTier,
-                  $"save → load keeps cash, {back.Loose.Count} loose items and the carry tier");
+            Check(Math.Abs(back.S.cash - sim.S.cash) < 1e-9 && back.Loose.Count == sim.Loose.Count && back.CarryTier == sim.CarryTier && back.Buildings.Count == sim.Buildings.Count,
+                  $"save → load keeps cash, {back.Loose.Count} loose items, the carry tier and {back.Buildings.Count} buildings");
             yield return Shot("ui_after_test");
             Debug.Log($"[UITEST] done: {uiPass} passed, {uiFail} failed");
             Save();

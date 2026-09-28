@@ -233,6 +233,39 @@ namespace WishExtractor.Core
         public double CostAt(int level, double scale) => Math.Round(Cost * Math.Pow(CostGrowth, level) * (WishTokens ? 1 : scale), WishTokens ? 0 : 2);
     }
 
+    public enum BuildCat { Power, Intake, Logistics, Processing, Output }
+
+    /// <summary>
+    /// Something you can place in build mode. Footprint is W (local x) by D (local z) one-metre cells;
+    /// local +z is "forward". Ports are local cells plus the side (0 = +z, 1 = +x, 2 = -z, 3 = -x)
+    /// items leave by (outputs) or arrive from (inputs).
+    /// </summary>
+    public sealed class BuildDef
+    {
+        public string Id;
+        public string Name;
+        public string Desc;
+        public BuildCat Cat;
+        public int W = 1, D = 1;
+        public double Cost;
+        public double Power;            // kW: positive generates, negative consumes
+        public double Rate;             // items per second (intakes, hoppers, processors)
+        public int Capacity = 20;       // buffer size
+        public float BeltSpeed;         // belts: cells per second at belt tier 1
+        public bool IsBelt, IsSplitter;
+        public bool RimOnly;            // intakes: must stand at the fountain's edge
+        public float Reach;             // intakes: how far into the basin they work (metres from the rim)
+        public string Intake;           // "skimmer", "pump", "claw"
+        public bool AnySideInput;       // hoppers take items from any side
+        public (int x, int z, int side)[] Inputs = Array.Empty<(int, int, int)>();
+        public (int x, int z, int side)[] Outputs = Array.Empty<(int, int, int)>();
+        public string Tech;             // tech that unlocks it (null = always)
+        public string Process;          // processors (M5): what they turn items into
+        public double SellMult = 1;     // hoppers: value multiplier
+        public uint Color;
+        public int Index;
+    }
+
     public sealed class AchievementDef
     {
         public string Id;

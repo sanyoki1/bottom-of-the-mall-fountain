@@ -95,6 +95,9 @@ namespace WishExtractor.UI
             wishText = UIKit.Label(root, "Wishability", "", 14, Color.white, TextAnchor.UpperLeft, UIKit.Semibold);
             wishText.rectTransform.TL(26, 132, 600, 22);
             Shadowed(wishText);
+            powerText = UIKit.Label(root, "Power", "", 14, Color.white, TextAnchor.UpperLeft, UIKit.Semibold);
+            powerText.rectTransform.TL(26, 154, 700, 22);
+            Shadowed(powerText);
         }
 
         Text wishText;
@@ -175,7 +178,7 @@ namespace WishExtractor.UI
 
         // ───────────────────────────── per-frame ─────────────────────────────
 
-        public void Refresh(float dt, Target target, bool wading, bool frozen)
+        public void Refresh(float dt, Target target, bool wading, bool frozen, BuildMode build)
         {
             // crosshair + prompt
             bool on = target.Kind != TargetKind.None && !frozen;
@@ -184,7 +187,12 @@ namespace WishExtractor.UI
             ring.color = on ? Pal.A(Color.Lerp(Pal.Accent, Color.white, 0.35f), 0.95f) : new Color(1, 1, 1, 0.35f);
             dot.enabled = !frozen;
             ring.enabled = !frozen;
-            prompt.text = frozen ? "" : PromptFor(target);
+            Slot = build.Active ? 3 : 1;
+            prompt.text = frozen ? "" : build.Active ? BuildPrompt(build, target) : PromptFor(target);
+            powerText.text = sim.Buildings.Count > 0 || build.Active
+                ? $"⚡ {sim.PowerGen:0.#} / {sim.PowerUse:0.#} kW" + (sim.PowerRatio < 0.999 ? $"  <color=#FF8FA8>({sim.PowerRatio * 100:0}%)</color>" : "") +
+                  (sim.HopperCashRate > 0.0001 ? $"   ·   hoppers {Fmt.Money(sim.HopperCashRate * 60)}/min" : "")
+                : "";
 
             // wallet
             shownCash = Mathf.Abs((float)(sim.S.cash - shownCash)) < 0.005 ? sim.S.cash : shownCash + (sim.S.cash - shownCash) * (1 - Mathf.Exp(-dt * 10));
@@ -215,7 +223,7 @@ namespace WishExtractor.UI
             // hotbar
             slotName[0].text = sim.Grab.Name;
             slotName[1].text = sim.DigTier > 0 ? sim.DigTool.Name : "—";
-            slotName[2].text = "Build (soon)";
+            slotName[2].text = build.Active ? (build.Demolish ? "DEMOLISH" : build.Selected?.Name ?? "Build") : "Build";
             for (int i = 0; i < 3; i++)
                 slotBg[i].color = i + 1 == Slot ? Pal.A(Pal.Accent, 0.75f) : new Color(0, 0, 0, 0.35f);
 
@@ -226,7 +234,28 @@ namespace WishExtractor.UI
             messageAge += dt;
             message.color = new Color(1, 1, 1, messageAge < 2.6f ? Mathf.Clamp01((2.6f - messageAge) / 0.5f) : 0);
 
-            keysHint.text = frozen ? "" : "WASD move · Shift sprint · Space jump · E / click use · J journal · Esc menu";
+            keysHint.text = frozen ? "" : build.Active
+                ? "Click build · R rotate · Wheel next · Tab catalogue · X demolish · 1 grab mode"
+                : "WASD move · Shift sprint · Space jump · E / click use · 3 build · J journal · Esc menu";
+        }
+
+        Text powerText;
+
+        string BuildPrompt(BuildMode b, Target t)
+        {
+            if (b.Demolish)
+            {
+                var hb = b.HoverBuilding >= 0 ? sim.FindBuilding(b.HoverBuilding) : null;
+                return hb != null
+                    ? $"<color=#FF8FA8><b>[Click]</b> Demolish {hb.Def.Name}</color>  <color=#C8C8C8>(refund {Fmt.Money(hb.Def.Cost * sim.Mall.ValueScale)})</color>"
+                    : "<color=#FF8FA8>DEMOLISH MODE</color>  ·  aim at something you built  ·  X to stop";
+            }
+            var d = b.Selected;
+            if (d == null) return "";
+            string power = d.Power > 0 ? $"+{d.Power:0.#} kW" : d.Power < 0 ? $"{d.Power:0.#} kW" : "";
+            string head = $"<b>{d.Name}</b>  <color=#FFE08A>{Fmt.Money(d.Cost * sim.Mall.ValueScale)}</color>  <color=#9CD8FF>{power}</color>";
+            if (!b.HasSpot) return head + "  ·  <color=#C8C8C8>aim at the floor</color>";
+            return b.Valid ? head + "  ·  <b>[Click]</b> build" + (d.IsBelt ? " (drag for a line)" : "") : head + $"  ·  <color=#FF8FA8>{b.Reason}</color>";
         }
 
         string PromptFor(Target t)
@@ -260,6 +289,15 @@ namespace WishExtractor.UI
                     return sim.CanAfford(i)
                         ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
                         : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
+                }
+                case TargetKind.Building:
+                {
+                    var b = sim.FindBuilding(t.Uid);
+                    if (b == null) return "";
+                    if (b.Def.IsBelt) return $"Conveyor Belt  <color=#C8C8C8>· {b.Items.Count} item{(b.Items.Count == 1 ? "" : "s")} · {sim.BeltSpeedNow(b.Def):0.#} m/s</color>";
+                    string status = string.IsNullOrEmpty(b.Status) ? "<color=#9CFFB0>running</color>" : $"<color=#FF8FA8>{b.Status}</color>";
+                    string buf = b.Def.Cat == BuildCat.Power ? $"+{b.Def.Power * sim.CatSpeed(BuildCat.Power):0.#} kW" : $"holding {b.BufCount}/{b.Def.Capacity}";
+                    return $"{b.Def.Name}  ·  {status}  <color=#C8C8C8>· {buf}</color>  <color=#8A8A8A>(3: build mode, X: demolish)</color>";
                 }
                 case TargetKind.Terminal:
                 {

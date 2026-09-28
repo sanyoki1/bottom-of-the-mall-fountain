@@ -227,6 +227,13 @@ namespace WishExtractor.Core
                 if (ok)
                     foreach (var o in Shoppers)
                         if (o != s && o.State != ShopperState.Leaving && (o.TX - x) * (o.TX - x) + (o.TZ - z) * (o.TZ - z) < 1.1f) { ok = false; break; }
+                if (ok)
+                    foreach (var bl in Buildings)
+                    {
+                        var (bx, bz) = bl.Center;
+                        float rr = bl.Radius + 0.7f;
+                        if ((bx - x) * (bx - x) + (bz - z) * (bz - z) < rr * rr) { ok = false; break; }
+                    }
                 if (ok) { s.TX = x; s.TZ = z; return; }
             }
             float fa = nearDeg + 13;
@@ -281,6 +288,12 @@ namespace WishExtractor.Core
                 vz += s.X / Math.Max(0.01f, r) * tang * 0.6f;
             }
             foreach (var o in Layout.Obstacles) Repel(s, o.x, o.z, o.r + 0.5f, ref vx, ref vz);
+            foreach (var bl in Buildings)
+            {
+                if (bl.Def.IsBelt) continue;   // shoppers step over belts
+                var (bx, bz) = bl.Center;
+                Repel(s, bx, bz, bl.Radius + 0.5f, ref vx, ref vz);
+            }
             Repel(s, PlayerX, PlayerZ, 0.9f, ref vx, ref vz);
             foreach (var o in Shoppers)
                 if (o != s) Repel(s, o.X, o.Z, 0.55f, ref vx, ref vz);

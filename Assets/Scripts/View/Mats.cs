@@ -147,6 +147,14 @@ namespace WishExtractor.View
             return m;
         }
 
+        /// <summary>Translucent build-mode hologram material (own instance, so it can turn red).</summary>
+        public static Material NewGhost(Color c)
+        {
+            var m = new Material(Find("WE/Ghost")) { name = "WE Ghost" };
+            m.SetColor("_Color", c);
+            return m;
+        }
+
         public static Material ScrollCustom(Texture tex, Color color, float speed, float glowAmount)
         {
             var m = new Material(Find("WE/Scroll")) { name = "WE Scroll Custom" };

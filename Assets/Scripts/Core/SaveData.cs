@@ -24,6 +24,23 @@ namespace WishExtractor.Core
     }
 
     [Serializable]
+    public class SavedBuilding
+    {
+        public string id;
+        public int x, z, rot;
+        public List<SavedStack> buf = new List<SavedStack>();
+    }
+
+    [Serializable]
+    public class SavedBeltItem
+    {
+        public int b;             // index into SaveData.buildings
+        public int type;          // index into SaveData.typeIds
+        public float pos;
+        public double value;
+    }
+
+    [Serializable]
     public class SaveData
     {
         public int version = 2;
@@ -58,6 +75,10 @@ namespace WishExtractor.Core
         public List<float> looseZ = new List<float>();
         public List<double> looseValue = new List<double>();
 
+        // the factory
+        public List<SavedBuilding> buildings = new List<SavedBuilding>();
+        public List<SavedBeltItem> beltItems = new List<SavedBeltItem>();
+
         // permanent
         public List<IdCount> headOffice = new List<IdCount>();
         public List<string> wishes = new List<string>();
@@ -69,6 +90,7 @@ namespace WishExtractor.Core
         public double itemsPicked, itemsDeposited, deposits, tosses, oddities, scoops, swings;
         public double wishesCaught, wishesSeen, relicsFound, playTime, biggestDeposit, remodelsDone, distance;
         public double finesPaid, rivalsChased, fishReturned;
+        public double built, hopperItems, hopperCash, machinePicked;
         public bool legendaryWish, legendaryRelic, endingSeen;
 
         // settings
