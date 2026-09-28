@@ -19,9 +19,9 @@ namespace WishExtractor.Core
                 return b;
             }
             // ── power ──
-            B("gen_hamster", "Hamster Wheel", BuildCat.Power, 1, 1, 3, 3, "unlock_hamster", 0xC8A070,
+            B("gen_hamster", "Hamster Wheel", BuildCat.Power, 1, 1, 2, 3, "unlock_hamster", 0xC8A070,
                 "Gerald runs. The lights flicker. Gerald is paid in sunflower seeds and is unionising.");
-            B("gen_diesel", "Diesel Generator", BuildCat.Power, 2, 2, 150, 25, "unlock_diesel", 0xE8C020,
+            B("gen_diesel", "Diesel Generator", BuildCat.Power, 2, 2, 60, 25, "unlock_diesel", 0xE8C020,
                 "Loud, smoky, and technically not allowed indoors. Mall management has been told it's a 'fog machine'.");
             B("gen_fryer", "Fryer-Oil Generator", BuildCat.Power, 2, 2, 2500, 90, "unlock_fryer", 0xE87A2A,
                 "Runs on used food court fryer oil. The whole mall smells like a Tuesday.");
@@ -29,7 +29,7 @@ namespace WishExtractor.Core
                 "A light pipe from the skylight into a very confident box. It works at night. Don't ask.");
 
             // ── intakes: stand at the rim, reach into the fountain, output out the back ──
-            var sk = B("intake_skimmer", "Pool Skimmer Bot", BuildCat.Intake, 1, 2, 15, -3, "unlock_skimmer", 0x39E5D0,
+            var sk = B("intake_skimmer", "Pool Skimmer Bot", BuildCat.Intake, 1, 2, 6, -3, "unlock_skimmer", 0x39E5D0,
                 "A pool-cleaning robot that roams the fountain eating coins, then trundles home to its dock to unload.");
             sk.RimOnly = true; sk.Intake = "skimmer"; sk.Rate = 1.2; sk.Capacity = 12; sk.Reach = 8;
             sk.Outputs = new[] { (0, 0, 2) };
@@ -43,7 +43,7 @@ namespace WishExtractor.Core
             claw.Outputs = new[] { (0, 0, 2) };
 
             // dig rigs: stand at the rim and chew through the crust
-            var rig = B("dig_rig", "Crust Jackhammer Rig", BuildCat.Intake, 2, 2, 1500, -20, "unlock_digrig", 0xE8C020,
+            var rig = B("dig_rig", "Crust Jackhammer Rig", BuildCat.Intake, 2, 2, 250, -20, "unlock_digrig", 0xE8C020,
                 "A jackhammer on a crane arm, pounding the crust from the rim. The food court has filed a noise complaint.");
             rig.RimOnly = true; rig.Intake = "dig"; rig.Rate = 3; rig.Capacity = 60; rig.Reach = 6;
             rig.Outputs = new[] { (0, 0, 2), (1, 0, 2) };
@@ -64,9 +64,9 @@ namespace WishExtractor.Core
                 p.Outputs = outs.ToArray();
                 return p;
             }
-            P("proc_tumbler", "Rinse Tumbler", 2, 2, 400, -8, "wash", 3, 30, "unlock_tumbler", 0x3A7BD5,
+            P("proc_tumbler", "Rinse Tumbler", 2, 2, 25, -8, "wash", 3, 30, "unlock_tumbler", 0x3A7BD5,
                 "A laundromat dryer full of diet cola and gunk. The syrup dissolves. The smell does not.");
-            P("proc_pigeons", "Pigeon Sorter", 2, 2, 900, -4, "sort", 1.5, 30, "unlock_pigeons", 0x8A8F9A,
+            P("proc_pigeons", "Pigeon Sorter", 2, 2, 50, -4, "sort", 1.5, 30, "unlock_pigeons", 0x8A8F9A,
                 "Twelve trained pigeons pick the good stuff out of the wet stuff. They are paid in pretzel crumbs.");
             P("proc_sorter", "Coin Sorter", 2, 2, 12000, -20, "sort", 10, 80, "unlock_sorter", 0xC9CDD2,
                 "A bank-grade coin counter that rattles like a slot machine and sorts faster than the pigeons (don't tell them).");
@@ -93,7 +93,7 @@ namespace WishExtractor.Core
             split.Outputs = new[] { (0, 0, 0), (0, 0, 1), (0, 0, 3) };
 
             // ── output ──
-            var hop = B("hopper", "Deposit Hopper", BuildCat.Output, 2, 2, 20, 0, "unlock_hopper", 0x2E8C7A,
+            var hop = B("hopper", "Deposit Hopper", BuildCat.Output, 2, 2, 8, 0, "unlock_hopper", 0x2E8C7A,
                 "A COIN-O-MATIC with no screen, no receipts and no personality. Wired straight into your account.");
             hop.AnySideInput = true; hop.Rate = 8; hop.Capacity = 100;
             var hop2 = B("hopper2", "Armoured Deposit Hopper", BuildCat.Output, 2, 2, 5000, -10, "unlock_hopper2", 0x5A6470,
@@ -121,23 +121,25 @@ namespace WishExtractor.Core
                 return t;
             }
             // power
-            U("unlock_hamster", "Hamster Wheel Power", TechBranch.Power, "gen_hamster", 10, 0, 0, "Adopt Gerald. Gerald wants to help.");
-            U("unlock_diesel", "Diesel Generator", TechBranch.Power, "gen_diesel", 300, 1, 0, "Proper power, improper fumes.", "unlock_hamster");
+            U("unlock_hamster", "Hamster Wheel Power", TechBranch.Power, "gen_hamster", 6, 0, 0, "Adopt Gerald. Gerald wants to help.");
+            U("unlock_diesel", "Diesel Generator", TechBranch.Power, "gen_diesel", 100, 1, 0, "Proper power, improper fumes.", "unlock_hamster");
             U("unlock_fryer", "Fryer-Oil Generator", TechBranch.Power, "gen_fryer", 4000, 2, 0, "The food court throws out forty litres of oil a day. Not any more.", "unlock_diesel");
             U("unlock_solar", "Skylight Solar", TechBranch.Power, "gen_solar", 50000, 3, 0, "The skylight was always there. You just had to believe in it.", "unlock_fryer");
             Lv("power_overclock", "Overclocked Generators", TechBranch.Power, TechKind.MachineSpeed, "Power", 0.1, 80, 1.9, 15, 0, 1,
                 "Wires, rewired. Fuses, replaced with pennies. Output goes up. So does the risk.", "unlock_hamster");
             // intake
-            U("unlock_skimmer", "Pool Skimmer Bot", TechBranch.Intake, "intake_skimmer", 18, 0, 0, "A second-hand pool robot. It has seen things in pools.", "unlock_hamster");
+            U("unlock_skimmer", "Pool Skimmer Bot", TechBranch.Intake, "intake_skimmer", 10, 0, 0, "A second-hand pool robot. It has seen things in pools.", "unlock_hamster");
             U("unlock_pump", "Fountain Drain Pump", TechBranch.Intake, "intake_pump", 900, 1, 0, "Industrial suction for a commercial fountain.", "unlock_skimmer", "unlock_diesel");
             U("unlock_claw", "Claw Machine Crane", TechBranch.Intake, "intake_claw", 12000, 2, 0, "Bought from the arcade when it closed. Finally, a claw that doesn't cheat.", "unlock_pump");
             Lv("intake_firmware", "Intake Firmware", TechBranch.Intake, TechKind.MachineSpeed, "Intake", 0.15, 60, 1.8, 15, 0, 1,
                 "Update available: 'fixed a bug where robot was sad'.", "unlock_skimmer");
-            U("unlock_digrig", "Crust Jackhammer Rig", TechBranch.Intake, "dig_rig", 1800, 0, 2, "Dig without swinging. Your shoulders send their thanks.", "unlock_skimmer", "unlock_diesel");
+            U("unlock_digrig", "Crust Jackhammer Rig", TechBranch.Intake, "dig_rig", 300, 0, 2, "Dig without swinging. Your shoulders send their thanks.", "unlock_skimmer", "unlock_diesel");
             U("unlock_borer", "Tunnel Borer", TechBranch.Intake, "dig_borer", 90000, 1, 2, "A machine that was built to dig subways. Your fountain is basically a very short subway.", "unlock_digrig", "unlock_fryer");
+            Lv("dig_bits", "Diamond-Tipped Bits", TechBranch.Intake, TechKind.DigPower, null, 0.10, 150000, 1.9, 60, 2, 2,
+                "Every rig re-tipped with diamonds fished out of the fountain. It's called recycling.", "unlock_borer");
             // processing
-            U("unlock_tumbler", "Rinse Tumbler", TechBranch.Processing, "proc_tumbler", 500, 0, 0, "Washed gunk is worth 35% of its loot instead of 10%.", "unlock_belts");
-            U("unlock_pigeons", "Pigeon Sorter", TechBranch.Processing, "proc_pigeons", 1200, 1, 0, "Sorted loot is worth full price, and sometimes it's a relic.", "unlock_tumbler");
+            U("unlock_tumbler", "Rinse Tumbler", TechBranch.Processing, "proc_tumbler", 30, 0, 0, "Washed gunk is worth 35% of its loot instead of 10%.", "unlock_belts");
+            U("unlock_pigeons", "Pigeon Sorter", TechBranch.Processing, "proc_pigeons", 60, 1, 0, "Sorted loot is worth full price, and sometimes it's a relic.", "unlock_tumbler");
             U("unlock_sorter", "Coin Sorter", TechBranch.Processing, "proc_sorter", 15000, 2, 0, "Sorting at the speed of commerce.", "unlock_pigeons");
             U("unlock_roller", "Coin Roller", TechBranch.Processing, "proc_roller", 3500, 0, 1, "Fifty coins per roll: one item on a belt, one slot in your bucket.", "unlock_belts");
             U("unlock_bagger", "Coin Bagger", TechBranch.Processing, "proc_bagger", 50000, 1, 1, "A thousand coins per bag.", "unlock_roller");
@@ -146,15 +148,20 @@ namespace WishExtractor.Core
             U("unlock_compressor", "Wish Compressor", TechBranch.Processing, "proc_compressor", 20000, 1, 2, "No wish goes uncaught. Some go uncaught and then get compressed.", "unlock_tumbler");
             Lv("proc_speed", "Process Engineering", TechBranch.Processing, TechKind.MachineSpeed, "Processing", 0.15, 400, 1.8, 15, 3, 0,
                 "A consultant rearranged the machines. Everything is 15% faster. The consultant charged 40% more.", "unlock_tumbler");
+            Lv("proc_bonus", "Pigeon Performance Bonuses", TechBranch.Processing, TechKind.ValueMult, null, 0.07, 30000, 1.9, 60, 2, 2,
+                "The pigeons unionised. They sort only the good stuff now, and everything is worth a little more for it.", "unlock_sorter");
             // logistics
-            U("unlock_belts", "Conveyor Belts", TechBranch.Logistics, "belt", 8, 0, 0, "Move things without walking. Revolutionary.");
-            U("unlock_hopper", "Wired Deposit", TechBranch.Logistics, "hopper", 20, 1, 0, "Head Office agrees to take deposits from a box. Build hoppers anywhere.", "unlock_belts");
+            U("unlock_belts", "Conveyor Belts", TechBranch.Logistics, "belt", 5, 0, 0, "Move things without walking. Revolutionary.");
+            U("unlock_hopper", "Wired Deposit", TechBranch.Logistics, "hopper", 12, 1, 0, "Head Office agrees to take deposits from a box. Build hoppers anywhere.", "unlock_belts");
             U("unlock_splitter", "Belt Splitter", TechBranch.Logistics, "splitter", 150, 2, 0, "One belt becomes three. Physics is fine with this.", "unlock_belts");
             U("unlock_hopper2", "Armoured Hopper", TechBranch.Logistics, "hopper2", 6000, 3, 0, "For when the regular hopper can't keep up with your success.", "unlock_hopper");
             var fast = Lv("belt_fast", "Fast Belts", TechBranch.Logistics, TechKind.BeltSpeed, null, 1, 600, 1, 1, 0, 1, "Every belt runs twice as fast. The ketchup smell intensifies.", "unlock_belts");
             Lv("belt_express", "Express Belts", TechBranch.Logistics, TechKind.BeltSpeed, null, 2, 20000, 1, 1, 1, 1, "Twice as fast again. Coins arrive slightly warm.", "belt_fast");
             Lv("hopper_speed", "Hopper Throughput", TechBranch.Logistics, TechKind.MachineSpeed, "Output", 0.2, 100, 1.9, 10, 2, 1,
                 "Greased the chutes with butter from the pretzel stand.", "unlock_hopper");
+            // the late-game value sink, next to its throughput cousin
+            Lv("hopper_gold", "Gold-Plated Chutes", TechBranch.Logistics, TechKind.ValueMult, null, 0.07, 20000, 1.9, 60, 3, 1,
+                "Every chute re-plated in 24-karat gold. Coins slide in faster, feel richer and pay out at a premium. Accounting has questions.", "unlock_hopper2");
         }
     }
 }

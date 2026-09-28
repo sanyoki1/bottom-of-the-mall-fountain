@@ -25,7 +25,7 @@ namespace WishExtractor.Core
         static readonly double[] FittedScoops =
         {
             // <fitted-scoops> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
-            0, 0, 0, 0, 0, 0,
+            203300, 8700400, 29663400, 117892300, 235027100, 546179600,
             // </fitted-scoops>
         };
 
@@ -562,11 +562,17 @@ namespace WishExtractor.Core
             // somewhat richer than Crestview (crust ≈ ×1.6 per mall) rather than astronomically richer
             double[] lootScale = { 1, 25, 225, 28, 60, 40 };
             double[] storyScale = { 1, 10, 84, 83, 110, 118 };
+            // Prices and tosses grow modestly from mall to mall (ValueScale). Loot, wishes and relics are
+            // divided by the same factor here because Scale multiplies it back in play, so their actual
+            // values stay where the v1 rescale put them: each mall is Crestview's economy at a bigger
+            // scale, and Head Office perks (not cheaper prices) are what make later malls go faster.
+            double[] valueScale = { 1, 1.5, 2.5, 4, 6.5, 10 };
             for (int m = 0; m < malls.Count; m++)
             {
                 var mall = malls[m];
-                mall.LootScale = lootScale[m];
-                mall.StoryScale = storyScale[m];
+                mall.ValueScale = valueScale[m];
+                mall.LootScale = lootScale[m] * valueScale[m];
+                mall.StoryScale = storyScale[m] * valueScale[m];
                 foreach (var it in mall.Items) it.Value /= mall.LootScale;
                 foreach (var w in mall.Wishes) w.BaseValue /= mall.StoryScale;
                 foreach (var r in mall.Relics) r.BaseValue /= mall.StoryScale;

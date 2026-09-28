@@ -26,6 +26,31 @@ static class Program
             Console.WriteLine($"achievements {Content.Achievements.Length}, objectives {Content.Objectives.Length}, wishes {Content.TotalWishes}, relics {Content.TotalRelics}");
             return 0;
         }
+        if (args.Length > 0 && args[0] == "malls")
+        {
+            foreach (var m in Content.Malls)
+            {
+                double wEV = 0, wW = 0, rEV = 0, rW = 0;
+                foreach (var w in m.Wishes) { double k = Balance.WishRarityWeight[(int)w.Rarity]; wEV += k * w.BaseValue * Balance.WishValueScale; wW += k; }
+                foreach (var r in m.Relics) { double k = Balance.RelicRarityWeight[(int)r.Rarity]; rEV += k * r.BaseValue * Balance.RelicValueScale; rW += k; }
+                Console.WriteLine($"{m.Id,-12} loot EV/scoop {m.BaseEV * m.ValueScale:0.0000} (Crestview $ {m.BaseEV:0.0000}), wish EV ${wEV / wW * m.ValueScale:0.00}, relic EV ${rEV / rW * m.ValueScale:0.00}, " +
+                                  $"crust {m.CrustScoops:0} scoops, bounds {string.Join("/", m.Bounds.Select(b => Fmt.Num(b)))}, LP {m.LuckyPennies}, value scale {m.ValueScale}");
+            }
+            return 0;
+        }
+        if (args.Length > 0 && args[0] == "techs")
+        {
+            // the tech tree as the terminal lays it out: branch, grid cell, price ladder
+            foreach (var g in Content.Techs.GroupBy(t => t.Branch))
+            {
+                Console.WriteLine($"── {g.Key}");
+                foreach (var t in g.OrderBy(t => t.Row).ThenBy(t => t.Col))
+                    Console.WriteLine($"  r{t.Row} c{t.Col}  {t.Id,-22} {t.Kind,-12} {(t.WishTokens ? "tokens" : t.LuckyPennies ? "LP" : "$"),-6} {t.Cost,10:0.##} ×{t.CostGrowth:0.##} max {t.MaxLevel,-3} value {t.Value:0.###}  needs {string.Join(",", t.Requires)}");
+                var clash = g.GroupBy(t => (t.Row, t.Col)).Where(c => c.Count() > 1).ToList();
+                foreach (var c in clash) Console.WriteLine($"  !! overlap at r{c.Key.Row} c{c.Key.Col}: {string.Join(", ", c.Select(t => t.Id))}");
+            }
+            return 0;
+        }
         if (args.Length > 0 && args[0] == "crowd") return Crowd(args.Length > 1 ? double.Parse(args[1]) : 0);
         if (args.Length > 0 && args[0] == "factory") return Factory();
         if (args.Length > 0 && args[0] == "crust") return Crust();
@@ -39,12 +64,19 @@ static class Program
     static int Run(double maxHours, int seed, string profile)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        // BOT_CRUST=a,b,c,... tries other crust sizes (scoops per mall) without editing ContentMalls.cs
+        if (Environment.GetEnvironmentVariable("BOT_CRUST") is string crust)
+        {
+            var sizes = crust.Split(',');
+            for (int m = 0; m < sizes.Length && m < Content.Malls.Length; m++) Content.SetCrust(Content.Malls[m], double.Parse(sizes[m]));
+        }
         var bot = new Bot(new SaveData(), seed, profile);
         if (Environment.GetEnvironmentVariable("BOT_REPORT") is string every) bot.ReportEvery = double.Parse(every);
         var sb = new StringBuilder();
         sb.AppendLine($"Wish Extractor balance run: profile {profile}, seed {seed}, cap {maxHours} h");
         double total = 0;
-        for (int m = 0; m < Content.Malls.Length; m++)
+        int malls = Environment.GetEnvironmentVariable("BOT_MALLS") is string bm ? int.Parse(bm) : Content.Malls.Length;
+        for (int m = 0; m < malls; m++)
         {
             double left = maxHours - total;
             if (left <= 0) break;
@@ -79,7 +111,7 @@ static class Program
         {
             var mall = Content.Malls[m];
             double target = TargetHours[m];
-            double lo = Math.Log(3000), hi = Math.Log(6e7), best = mall.CrustScoops;
+            double lo = Math.Log(3000), hi = Math.Log(1e12), best = mall.CrustScoops;
             for (int iter = 0; iter < 14; iter++)
             {
                 double mid = (lo + hi) / 2;
@@ -91,7 +123,7 @@ static class Program
                 best = Math.Exp((lo + hi) / 2);
                 if (h > 0 && Math.Abs(h - target) / target < 0.02) { best = Math.Exp(mid); break; }
             }
-            best = Math.Round(best, -2);
+            best = Math.Round(best / 100) * 100;
             Content.SetCrust(mall, best);
             fitted[m] = best;
             var run = new Bot(Clone(start), 1234, "engaged");

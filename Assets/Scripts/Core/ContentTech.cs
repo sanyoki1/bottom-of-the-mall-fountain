@@ -54,8 +54,11 @@ namespace WishExtractor.Core
                 var t = T("dig_" + d.Id, d.Name, TechBranch.Tools, TechKind.Tool, i, d.Cost, d.Desc, i > 1 ? new[] { "dig_" + DigTools[i - 1].Id } : new string[0]);
                 t.Target = "dig"; t.Col = i - 1; t.Row = 2;
             }
-            Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.0, 12, 0, 3,
+            Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.5, 12, 0, 3,
                 "Forty push-ups a day, all of them with a shovel. Every swing and every dig rig bites deeper.", "dig_sandshovel");
+            // the late-game money sink: always one more level, always a little further down
+            Lv("dig_softener", "Crust Softener", TechBranch.Tools, TechKind.DigPower, 0.10, 5000, 1.9, 60, 1, 3,
+                "Industrial-strength diet cola, sprayed on the crust every night. It fizzes. It dissolves. It voids the warranty on everything you own.", "dig_jackhammer");
 
             // security: keeping Officer Doug and Chad off your back
             Lv("sec_donuts", "Donut Diplomacy", TechBranch.Security, TechKind.GuardFine, 0.3, 4, 3.5, 3, 0, 0,
@@ -75,11 +78,11 @@ namespace WishExtractor.Core
             H("ho_card", "Company Credit Card", TechKind.StartCash, 25, 2, 1.6, 10, 0, 0, "Head Office fronts you some cash at the start of every contract. Receipts required. Receipts ignored.");
             H("ho_van", "Company Van", TechKind.StartCarry, 1, 3, 2.2, 5, 1, 0, "Start every contract already owning a bigger container. The van smells of mop.");
             H("ho_memory", "Institutional Knowledge", TechKind.StartUnlocks, 0, 8, 1, 1, 2, 0, "Start every contract with the cup, grabber, sandbox shovel, hamster wheel, skimmer, belts and hoppers researched.");
-            H("ho_seniority", "Seniority", TechKind.ValueMult, 0.12, 2, 1.45, 25, 0, 1, "Everything you deposit is worth a bit more. Nobody knows why. It's just how seniority works.");
+            H("ho_seniority", "Seniority", TechKind.ValueMult, 0.08, 2, 1.45, 25, 0, 1, "Everything you deposit is worth a bit more. Nobody knows why. It's just how seniority works.");
             H("ho_sneakers", "Union-Issue Sneakers", TechKind.WalkSpeed, 0.05, 2, 1.6, 8, 1, 1, "Comfortable, regulation grey, and seemingly faster than regular sneakers.");
             H("ho_wishful", "Wishful Thinking", TechKind.Wishability, 3, 3, 1.55, 15, 2, 1, "Head Office runs a billboard campaign: 'Throw Your Money Away (Here)'.");
             H("ho_relics", "Relic Radar", TechKind.RelicRate, 0.25, 4, 1.7, 10, 3, 1, "A dowsing rod that mostly points at relics and occasionally at the food court.");
-            H("ho_digger", "Excavation Grant", TechKind.DigPower, 0.2, 3, 1.6, 15, 3, 0, "Every contract starts with a bigger digging budget and a smaller sense of caution.");
+            H("ho_digger", "Excavation Grant", TechKind.DigPower, 0.1, 3, 1.6, 15, 3, 0, "Every contract starts with a bigger digging budget and a smaller sense of caution.");
 
             // fountain beautification ("wishability"): more shoppers, more tosses, fancier tosses
             void F(string id, string name, double wish, double cost, bool tokens, string desc, string req, int col)
@@ -90,7 +93,7 @@ namespace WishExtractor.Core
             F("fountain_scrub", "Scrub the Grime", 3, 0.50, false, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
             F("fountain_jets", "Fix the Water Jets", 4, 3, false, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
             F("fountain_lights", "Coloured Lights", 5, 15, false, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
-            F("fountain_neon", "'MAKE A WISH' Neon", 6, 80, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
+            F("fountain_neon", "'MAKE A WISH' Neon", 6, 50, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
             F("fountain_cherub", "Cherub Statue", 8, 15, true, "A chubby stone baby who judges everyone's throwing form. Paid for in pure wishes.", "fountain_neon", 4);
             F("fountain_koi", "Koi", 8, 40, true, "Twelve koi, each named after a former mall manager. They are thriving. The managers are not.", "fountain_cherub", 5);
             F("fountain_music", "Mood Music", 10, 2000, false, "Smooth jazz, piped in from a speaker disguised as a rock. The rock is also smooth.", "fountain_koi", 6);
@@ -104,10 +107,12 @@ namespace WishExtractor.Core
                 "Elbow grease, applied one tile at a time. The fountain gets a little more wishable every time.", "fountain_scrub");
             Lv("fountain_mints", "Free Mints by the Fountain", TechBranch.Fountain, TechKind.TossRate, 0.08, 4, 1.85, 15, 1, 1,
                 "Shoppers linger for a free mint, then feel obligated to throw something in.", "fountain_jets");
-            Lv("fountain_coinpolish", "Coin Polish", TechBranch.Fountain, TechKind.ValueMult, 0.10, 8, 1.75, 20, 2, 1,
+            Lv("fountain_coinpolish", "Coin Polish", TechBranch.Fountain, TechKind.ValueMult, 0.10, 8, 2.2, 20, 2, 1,
                 "The COIN-O-MATIC pays more for shiny coins. Nobody knows why. Don't ask it.", "fountain_lights");
             Lv("fountain_patience", "Wish Catcher's Patience", TechBranch.Fountain, TechKind.WishLife, 0.15, 3, 1.8, 6, 3, 1,
                 "Wishes linger a little longer over the water, as if they want to be caught.", "fountain_scrub", true);
+            Lv("fountain_plaques", "Donor Plaques", TechBranch.Fountain, TechKind.ValueMult, 0.07, 60000, 1.9, 60, 4, 1,
+                "A brass plaque for every generous tosser. Nobody reads them. Everybody wants one.", "fountain_golden");
 
             AddFactoryTechs(T);
 

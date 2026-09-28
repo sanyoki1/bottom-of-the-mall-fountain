@@ -137,7 +137,7 @@ namespace WishExtractor.Core
             C("hands", "Bare Hands", 1, 0, "One coin at a time. Choose wisely.");
             C("cup", "Paper Cup", 5, 0.60, "From the food court. Lightly used. Heavily sticky.");
             C("pail", "Sand Pail", 20, 3, "Red plastic. Came free with a kids' meal in 1996.");
-            C("bucket", "Mop Bucket", 60, 15, "Borrowed from the custodial closet. The mop is staying.");
+            C("bucket", "Mop Bucket", 60, 10, "Borrowed from the custodial closet. The mop is staying.");
             C("fanny", "Fanny Pack of Holding", 150, 150, "Bigger on the inside. Smells like 1994.");
             C("barrow", "Wheelbarrow", 500, 1200, "Squeaks on every rotation. You are slower, but richer.", 0.85f);
             C("cart", "Shopping Cart", 2000, 9000, "One wheel only turns left. You cannot jump with a cart. Nobody can.", 0.8f, true);

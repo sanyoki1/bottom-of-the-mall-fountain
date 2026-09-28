@@ -68,44 +68,78 @@ namespace WishExtractor.Core
 
         // ───────────────────────────── digging ─────────────────────────────
 
-        double digAcc;
+        double digAcc;   // a hand swing's fractional scoops, carried to the next swing
+
+        /// <summary>Scoops of crust in one gunk chunk. Stronger digging breaks off bigger chunks, so the
+        /// items per second a line has to carry stay the same while the loot in each one grows.</summary>
+        public double ChunkScoops => Balance.ChunkValue * Math.Max(1, DigMult);
 
         /// <summary>
-        /// Remove crust. Every whole scoop becomes an item handed to sink(type, value): loot straight
-        /// from the loose layer, gunk chunks below it. Returns scoops removed.
+        /// Remove up to the given whole scoops of crust. The loose layer comes up as one loot item per
+        /// scoop; deeper layers as gunk chunks (one per ChunkScoops, each carrying that much loot), all
+        /// handed to sink(type, value). At most maxItems items come out: with merge (hand swings) the
+        /// surplus goes into fewer, heavier chunks; without it (dig rigs) digging stops once the output
+        /// is full, so a backed-up line slows its rig instead of losing loot. Returns scoops removed.
         /// </summary>
-        public double DigCrust(double scoops, Action<int, double> sink)
+        public double DigCrust(double scoops, Action<int, double> sink, int maxItems = int.MaxValue, bool merge = false)
         {
-            if (S.mallCleared || scoops <= 0) return 0;
-            digAcc += scoops;
-            int whole = (int)Math.Floor(digAcc);
-            if (whole <= 0) return 0;
-            digAcc -= whole;
-            double total = TotalScoops;
-            int done = 0;
-            for (int i = 0; i < whole; i++)
+            double whole = Math.Floor(scoops + 1e-9);
+            if (S.mallCleared || whole <= 0 || maxItems <= 0) return 0;
+            double total = TotalScoops, cs = ChunkScoops;
+            double done = 0;
+            int items = 0;
+            bool full = false;
+            // one pass per stratum crossed, so a borer eating millions of scoops a second costs the same as a spoon
+            while (whole > 0 && S.dug < total && !full)
             {
-                if (S.dug >= total) break;
                 int s = StratumAtDug(S.dug);
                 var st = Mall.Strata[s];
-                S.dug = Math.Min(total, S.dug + 1);
-                done++;
+                double next = s + 1 < Mall.Strata.Length ? Math.Min(total, StratumStartDug(s + 1)) : total;
+                double n = Math.Min(whole, Math.Max(1, Math.Ceiling(next - S.dug)));
+                n = Math.Min(n, Math.Ceiling(total - S.dug));
                 if (st.Loose)
                 {
-                    int k = PickLoot(false);
-                    double v = Mall.Items[k].Value * st.ValueMult * Scale;
-                    if (v > 0) sink(Mall.LootTypes[k], v);
+                    // loose coins can't merge, but the layer is small: swings keep them all
+                    int i = 0;
+                    for (; i < n; i++)
+                    {
+                        if (!merge && items >= maxItems) { full = true; break; }
+                        int k = PickLoot(false);
+                        double v = Mall.Items[k].Value * st.ValueMult * Scale;
+                        if (v > 0) { sink(Mall.LootTypes[k], v); items++; }
+                    }
+                    n = i;
                 }
                 else
                 {
-                    // chunks come out every few scoops; each one carries those scoops' worth of loot
-                    chunkAcc += 1;
-                    if (chunkAcc >= Balance.ChunkValue)
+                    int room = Math.Max(0, maxItems - items);
+                    if (!merge)
                     {
-                        chunkAcc -= Balance.ChunkValue;
-                        sink(Mall.GunkTypes[s], Mall.BaseEV * st.ValueMult * Scale * Balance.ChunkValue);
+                        // dig only as far as the chunks that fit
+                        double fit = Math.Ceiling((room + 1) * cs - chunkAcc - 1e-9) - 1;
+                        if (fit < n) { n = Math.Max(0, fit); full = true; }
+                    }
+                    // chunks come out every few scoops; each one carries those scoops' worth of loot
+                    chunkAcc += n;
+                    double chunks = Math.Floor(chunkAcc / cs + 1e-9);
+                    chunkAcc = Math.Max(0, chunkAcc - chunks * cs);
+                    double each = Mall.BaseEV * st.ValueMult * Scale * Balance.CrustDensity * cs;
+                    if (chunks > room && merge && room > 0)
+                    {
+                        // too many for one swing: fewer, heavier chunks carrying the same loot
+                        for (int i = 0; i < room; i++) sink(Mall.GunkTypes[s], each * chunks / room);
+                        items += room;
+                    }
+                    else
+                    {
+                        int emit = (int)Math.Min(chunks, room);
+                        for (int i = 0; i < emit; i++) sink(Mall.GunkTypes[s], each);
+                        items += emit;
                     }
                 }
+                S.dug = Math.Min(total, S.dug + n);
+                whole -= n;
+                done += n;
             }
             S.scoops += done;
             int ns = StratumAtDug(S.dug);
@@ -140,28 +174,32 @@ namespace WishExtractor.Core
             var tool = DigTool;
             if (tool.DigPower <= 0) return 0;
             S.swings++;
-            double scoops = tool.DigPower * DigMult;
-            return DigCrust(scoops, (type, value) =>
+            digAcc += tool.DigPower * DigMult;
+            double take = Math.Floor(digAcc + 1e-9);
+            digAcc = Math.Max(0, digAcc - take);
+            return DigCrust(take, (type, value) =>
             {
                 double a = Rng.NextDouble() * Math.PI * 2, r = Rng.NextDouble() * 0.45;
                 float px = x + (float)(Math.Cos(a) * r), pz = z + (float)(Math.Sin(a) * r);
                 float rr = (float)Math.Sqrt(px * px + pz * pz);
                 if (rr > Balance.LandMaxR + 0.4f) { px *= (Balance.LandMaxR + 0.4f) / rr; pz *= (Balance.LandMaxR + 0.4f) / rr; }
                 AddLoose(type, px, pz, value, null);
-            });
+            }, Balance.MaxSwingItems, true);
         }
 
         void TickDigRig(Building b, double dt, double speed)
         {
             if (S.mallCleared) { b.Status = "Bare concrete!"; b.Activity = 0; return; }
             b.Activity = 1;
-            b.Acc += dt * b.Def.Rate * speed * DigMult;
+            double rate = b.Def.Rate * speed * DigMult;
+            b.Acc += dt * rate;
             if (b.Acc < 1) return;
-            double take = Math.Floor(b.Acc);
-            b.Acc -= take;
             var (sx, sz) = SuctionPoint(b);
             b.LastPickX = sx; b.LastPickZ = sz; b.PickSerial++;
-            DigCrust(take, (type, value) => { if (!BufAdd(b, type, value)) b.Status = "Full: output blocked"; });
+            b.Acc -= DigCrust(b.Acc, (type, value) => BufAdd(b, type, value), b.Def.Capacity - b.BufCount);
+            // a rig whose line can't keep up doesn't bank the digging it couldn't unload
+            b.Acc = Math.Min(b.Acc, Math.Max(1, rate * 0.5));
+            if (b.BufCount >= b.Def.Capacity) b.Status = "Full: output blocked";
         }
 
         // ───────────────────────────── processing ─────────────────────────────

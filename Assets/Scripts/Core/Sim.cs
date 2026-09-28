@@ -187,7 +187,7 @@ namespace WishExtractor.Core
             SeedCrowd();
         }
 
-        static readonly double[] SeedWeights = { 70, 15, 10, 5 };
+        static readonly double[] SeedWeights = { 58, 18, 13, 9, 2 };   // penny, nickel, dime, quarter, the odd loonie
 
         void SeedFountain(int count)
         {

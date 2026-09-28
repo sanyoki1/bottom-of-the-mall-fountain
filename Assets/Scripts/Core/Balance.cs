@@ -15,7 +15,7 @@ namespace WishExtractor.Core
         public const double TossFlight = 1.05;          // seconds a toss spends in the air
         public const double SinkTime = 0.9;             // seconds to sink to the crust
         public const int MaxLoose = 2500;               // oldest pennies dissolve into the crust beyond this
-        public const double SeedCoins = 180;            // loose coins waiting in a fresh fountain
+        public const double SeedCoins = 320;            // loose coins waiting in a fresh fountain (about $21 in Crestview)
 
         // Coin tier curve: tier i is allowed once wishability >= its MinWish; the weight of each allowed tier
         // is exp(-(i - mu)^2 / (2 sigma^2)) with mu = wishability * TierPerWish (+ archetype bias).
@@ -57,7 +57,9 @@ namespace WishExtractor.Core
         public const double GunkRate = 0.10;
         public const double WashedRate = 0.35;
         public const float DigReach = 3.4f;
-        public const double ChunkValue = 1.6;           // a gunk chunk carries this many scoops' worth of sorted loot
+        public const double ChunkValue = 1.6;           // a gunk chunk comes out every this many scoops
+        public const double CrustDensity = 5;           // packed crust holds this many times the loose layer's loot per scoop
+        public const int MaxSwingItems = 24;            // a huge swing drops this many (heavier) chunks instead of flooding the fountain
 
         // ── processing ───────────────────────────────────────────────────────────
         public const int RollSize = 50, BagSize = 20, PalletSize = 40;
