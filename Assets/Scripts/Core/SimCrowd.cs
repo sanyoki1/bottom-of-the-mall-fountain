@@ -127,6 +127,13 @@ namespace WishExtractor.Core
                 }
             }
 
+            // the wormhole: other malls' fountains leak into this one
+            if (HasPortal)
+            {
+                portalAcc += dt * TossRate * Balance.PortalShare;
+                while (portalAcc >= 1) { portalAcc -= 1; PortalToss(); }
+            }
+
             for (int i = Shoppers.Count - 1; i >= 0; i--)
             {
                 var s = Shoppers[i];
@@ -377,6 +384,24 @@ namespace WishExtractor.Core
             S.tosses++;
             if (def.Cat == ItemCat.Oddity) S.oddities++;
             OnToss?.Invoke(s, it);
+        }
+
+        double portalAcc;
+        public bool HasPortal => TechLevel("fountain_wormhole") > 0;
+
+        void PortalToss()
+        {
+            int m = Rng.Next(Content.Malls.Length);
+            if (m == MallDefIndex) m = (m + 1) % Content.Malls.Length;
+            var mall = Content.Malls[m];
+            var good = new List<int>();
+            foreach (int t in mall.LootTypes) if (Content.Items[t].BaseValue > 0) good.Add(t);
+            if (good.Count == 0) return;
+            int type = good[Rng.Next(good.Count)];
+            var (x, z) = RandomLanding();
+            var it = AddLoose(type, x, z, Content.Items[type].BaseValue * Mall.ValueScale, (0f, 7.2f, 0f));
+            S.tosses++;
+            OnToss?.Invoke(null, it);
         }
 
         void Landed(LooseItem it)

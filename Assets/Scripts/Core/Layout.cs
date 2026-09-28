@@ -24,6 +24,8 @@ namespace WishExtractor.Core
             (-17, 10, 1.5f), (17, 10, 1.5f), (-23, -9, 1.5f), (23, -9, 1.5f),
             (KioskX, KioskZ, 1.2f), (TerminalX, TerminalZ, 1.4f), (BoardX, BoardZ, 0.9f),
             (-27, 26.6f, 1f), (-13.5f, 26.6f, 1f), (0, 26.6f, 1f), (13.5f, 26.6f, 1f), (27, 26.6f, 1f),
+            // fountain decor (only there once bought, but it costs nothing to avoid empty floor)
+            (-1.6f, 12.2f, 0.4f), (1.6f, 12.2f, 0.4f), (-10.9f, 4.5f, 0.7f), (11.3f, 5.1f, 1.6f), (-4.2f, -11.4f, 0.9f),
             (-29.5f, -1f, 1.7f), (-29.5f, 3f, 1.7f), (-29.5f, 7f, 1.7f), (-29.5f, 11f, 1.7f), (-29.5f, 15f, 1.7f), (-29.5f, 19f, 1.7f), (-29.5f, 23f, 1.7f),
         };
 

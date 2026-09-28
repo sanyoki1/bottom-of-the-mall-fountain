@@ -207,6 +207,7 @@ namespace WishExtractor.Core
         BeltSpeed,      // belt tier = level
         DepositMult,    // × (1 + Value) for a category (Target = ItemCat name)
         GuardFine,      // × (1 - Value) security fines per level
+        CarryBonus,     // × (1 + Value) carry capacity per level
     }
 
     public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security }

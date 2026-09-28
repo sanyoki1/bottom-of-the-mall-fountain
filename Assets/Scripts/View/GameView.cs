@@ -31,6 +31,13 @@ namespace WishExtractor.View
         public CrowdView Crowd { get; private set; }
         public WishView WishOrbs { get; private set; }
         public FountainBoard Board { get; private set; }
+        public TerminalProp Terminal { get; private set; }
+        public FountainDecor Decor { get; private set; }
+        bool decorPrimed;
+        /// <summary>The player pressed E on the Maintenance Terminal.</summary>
+        public event Action OpenTerminal;
+        Material areaMat;
+        float vacuumAcc, detectAcc;
         public ViewContext Ctx { get; private set; }
         /// <summary>A one-line message for the HUD (e.g. "not enough cash").</summary>
         public event Action<string> Message;
@@ -128,6 +135,11 @@ namespace WishExtractor.View
             Kiosk.Build(mallRoot);
             Board = new FountainBoard();
             Board.Build(mallRoot, Sim);
+            Terminal = new TerminalProp();
+            Terminal.Build(mallRoot);
+            Decor = new FountainDecor();
+            Decor.Build(mallRoot, Ctx);
+            decorPrimed = false;
             Crowd?.Clear();
             WishOrbs?.Clear();
             Cam.backgroundColor = world.FogColor * 0.8f;
@@ -264,6 +276,9 @@ namespace WishExtractor.View
                 case TargetKind.Wish:
                     Sim.CatchWish(Current.Uid);
                     break;
+                case TargetKind.Terminal:
+                    OpenTerminal?.Invoke();
+                    break;
                 case TargetKind.Board:
                 {
                     int i = Sim.NextFountainTech();
@@ -294,6 +309,10 @@ namespace WishExtractor.View
             world.Animate(time, dt);
             Kiosk.Update(dt, time);
             Board.Update(dt);
+            Terminal.Update(dt, Sim);
+            Decor.Sync(Sim, decorPrimed);
+            decorPrimed = true;
+            Decor.Update(dt, time);
             var feet = Player.Feet;
             Sim.PlayerX = feet.x;
             Sim.PlayerZ = feet.z;
@@ -303,6 +322,9 @@ namespace WishExtractor.View
 
             // hands: bare hands show the top item; containers show how full they are
             Hands.SetCarryTier(Sim.CarryTier);
+            Hands.SetTool(Sim.GrabTier);
+            AutoVacuum(dt, feet);
+            DetectorGlints(dt, feet);
             if (Sim.CarryTier == 0) Hands.SetHeld(Sim.Carried.Count > 0 ? Sim.Carried[Sim.Carried.Count - 1].Type : -1);
             else { Hands.SetHeld(-1); Hands.SetFill(Sim.CarryUsed / (float)Mathf.Max(1, Sim.CarryCapacity)); }
             Hands.Update(dt, Player.BobPhase, Player.BobAmount);
@@ -315,10 +337,61 @@ namespace WishExtractor.View
             else Cam.transform.localPosition = Vector3.zero;
         }
 
+        /// <summary>Shop-vac backpack and hopper suit: hoover up anything near your feet.</summary>
+        void AutoVacuum(float dt, Vector3 feet)
+        {
+            float r = Sim.CarryDef.AutoRadius;
+            if (r <= 0 || Sim.CarryFree <= 0) return;
+            vacuumAcc += dt * 14f;
+            if (vacuumAcc < 1) return;
+            int n = (int)vacuumAcc;
+            vacuumAcc -= n;
+            Items.PickArea(feet + Vector3.up * 0.3f, r, feet + Vector3.up * 0.3f, r + 1f, areaPick, n);
+            if (areaPick.Count == 0) return;
+            var first = Sim.FindLoose(areaPick[0]);
+            Vector3 at = first != null ? Items.PositionOf(first) : feet;
+            double before = Sim.CarriedValue;
+            int got = Sim.PickupMany(new List<int>(areaPick));
+            if (got > 0)
+            {
+                Fx.Fly(at, () => Cam.transform.position + Cam.transform.forward * 0.4f - Vector3.up * 0.3f, Loot.Tinted(ItemShape.Coin, new Color(0.78f, 0.48f, 0.26f)), 0.8f, 0.3f, 0.2f);
+                if (UnityEngine.Random.value < 0.3f) PickupFx(at, Sim.CarriedValue - before, got);
+            }
+        }
+
+        /// <summary>The detector magnet (and better) makes valuable things glint, even underwater.</summary>
+        void DetectorGlints(float dt, Vector3 feet)
+        {
+            if (Sim.GrabTier < 4) return;
+            detectAcc += dt * 6;
+            while (detectAcc >= 1)
+            {
+                detectAcc -= 1;
+                if (Sim.Loose.Count == 0) return;
+                var it = Sim.Loose[UnityEngine.Random.Range(0, Sim.Loose.Count)];
+                var def = Content.Items[it.Type];
+                bool rare = def.Cat == ItemCat.Oddity || def.Cat == ItemCat.Relic || (def.Cat == ItemCat.Coin && def.Tier >= 4);
+                if (!rare) continue;
+                var p = Items.PositionOf(it);
+                if ((p - feet).sqrMagnitude > 14f * 14f) continue;
+                Fx.Glint(p + Vector3.up * 0.1f, new Color(0.6f, 0.95f, 1f), 0.6f, 1, 0.05f);
+            }
+        }
+
         void LateUpdate()
         {
             if (Sim == null) return;
             Items.Render(Cam, Time.time);
+            // area tools: show the scoop circle where you're aiming
+            var g = Sim.Grab;
+            if (g.Area > 0 && Current.Kind == TargetKind.Item)
+            {
+                if (areaMat == null) areaMat = Mats.NewGlow(TexKit.Ring, 1.4f, new Color(0.6f, 1f, 0.85f));
+                Vector3 c = Current.Point;
+                c.y = Mathf.Max(Fountain.HeightAt(c.x, c.z), Fountain.WaterY) + 0.03f;
+                var rp = new RenderParams(areaMat) { shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off, receiveShadows = false };
+                Graphics.RenderMesh(rp, FX.Quad, 0, Matrix4x4.TRS(c, Quaternion.identity, Vector3.one * g.Area * 2.3f));
+            }
         }
     }
 }

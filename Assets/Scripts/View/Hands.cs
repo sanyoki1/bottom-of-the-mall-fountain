@@ -122,11 +122,74 @@ namespace WishExtractor.View
                     k.Box(new Vector3(0, 0.1f, 0.05f), new Vector3(0.22f, 0.012f, 0.02f), C(0x39E5D0));
                     f.Box(Vector3.zero, new Vector3(0.001f, 0.001f, 0.001f), C(0xC77B43));
                     break;
-                default: // big stuff: a heaped tray you push along
-                    k.Box(new Vector3(0, 0.05f, 0), new Vector3(0.5f, 0.1f, 0.34f), tier == 5 ? C(0x2F7F4F) : tier == 6 ? C(0xC8CCD2) : C(0x2E6FD6));
-                    k.Box(new Vector3(0, 0.1f, 0), new Vector3(0.46f, 0.02f, 0.3f), C(0x2A2A2A));
-                    f.Ellipsoid(Vector3.zero, new Vector3(0.2f, 0.06f, 0.13f), 4, 10, C(0xC77B43));
+                case 5: // wheelbarrow: tray ahead, wheel at the front, handles coming up to your hands
+                {
+                    Color green = C(0x2F7F4F), steel = C(0x8A8F96), rubber = C(0x1A1A1A);
+                    k.Push(new Vector3(0, 0, 0.15f), Quaternion.Euler(0, 45, 0));
+                    k.Frustum(new Vector3(0, 0.1f, 0), 0.3f, 0.42f, 0.2f, 4, green, false, false);
+                    k.Ring(Vector3.zero, 0, 0.3f, 4, green);
+                    k.Pop();
+                    k.Cylinder(new Vector3(0, -0.12f, 0.62f), Quaternion.Euler(0, 0, 90), 0.12f, 0.07f, 14, rubber);
+                    k.Tube(new Vector3(-0.28f, -0.05f, -0.45f), new Vector3(-0.06f, -0.08f, 0.62f), 0.018f, 6, steel);
+                    k.Tube(new Vector3(0.28f, -0.05f, -0.45f), new Vector3(0.06f, -0.08f, 0.62f), 0.018f, 6, steel);
+                    f.Ellipsoid(Vector3.zero, new Vector3(0.26f, 0.08f, 0.26f), 4, 10, C(0xC77B43));
                     break;
+                }
+                case 6: // shopping cart: a wire basket, a child seat, one wonky wheel
+                {
+                    Color wire = C(0xC8CCD2), red = C(0xD8283A);
+                    for (int i = 0; i <= 6; i++)
+                    {
+                        float x = -0.3f + i * 0.1f;
+                        k.Box(new Vector3(x, 0.12f, 0.1f), new Vector3(0.008f, 0.26f, 0.008f), wire);
+                        k.Box(new Vector3(x, -0.01f, 0.1f), new Vector3(0.008f, 0.008f, 0.8f), wire);
+                    }
+                    for (int j = 0; j <= 5; j++)
+                    {
+                        float z = -0.3f + j * 0.16f;
+                        k.Box(new Vector3(-0.3f, 0.12f, z), new Vector3(0.008f, 0.26f, 0.008f), wire);
+                        k.Box(new Vector3(0.3f, 0.12f, z), new Vector3(0.008f, 0.26f, 0.008f), wire);
+                    }
+                    k.Box(new Vector3(-0.3f, 0.25f, 0.1f), new Vector3(0.015f, 0.015f, 0.82f), wire);
+                    k.Box(new Vector3(0.3f, 0.25f, 0.1f), new Vector3(0.015f, 0.015f, 0.82f), wire);
+                    k.Box(new Vector3(0, 0.25f, 0.5f), new Vector3(0.62f, 0.015f, 0.015f), wire);
+                    k.Box(new Vector3(0, 0.3f, -0.36f), new Vector3(0.66f, 0.04f, 0.04f), red);
+                    k.Box(new Vector3(0, 0.2f, -0.2f), new Vector3(0.5f, 0.012f, 0.2f), red);
+                    f.Ellipsoid(Vector3.zero, new Vector3(0.28f, 0.1f, 0.36f), 4, 10, C(0xC77B43));
+                    break;
+                }
+                case 7: // ride-on floor scrubber: dashboard, steering wheel, hopper
+                {
+                    Color blue = C(0x2E6FD6), dark = C(0x222428);
+                    k.Box(new Vector3(0, -0.1f, 0.35f), new Vector3(0.9f, 0.3f, 0.6f), blue);
+                    k.Box(new Vector3(0, 0.07f, 0.12f), new Vector3(0.5f, 0.06f, 0.2f), dark);
+                    k.Box(new Vector3(0.15f, 0.1f, 0.14f), new Vector3(0.06f, 0.03f, 0.04f), C(0x6CFF9A, 0.9f));
+                    k.Box(new Vector3(-0.1f, 0.1f, 0.14f), new Vector3(0.05f, 0.03f, 0.04f), C(0xFF4040, 0.9f));
+                    k.Push(new Vector3(0, 0.12f, 0.0f), Quaternion.Euler(-55, 0, 0));
+                    k.Torus(Vector3.zero, 0.16f, 0.015f, 18, 4, dark);
+                    k.Box(Vector3.zero, new Vector3(0.3f, 0.02f, 0.02f), dark);
+                    k.Pop();
+                    k.Frustum(new Vector3(0, 0.08f, 0.5f), 0.2f, 0.3f, 0.16f, 12, C(0x3A3A3A), false);
+                    f.Ellipsoid(Vector3.zero, new Vector3(0.25f, 0.08f, 0.25f), 4, 10, C(0xC77B43));
+                    break;
+                }
+                case 8: // shop-vac backpack: all you see is the nozzle and the hose
+                {
+                    Color hose = C(0x3A3A3A), vac = C(0xE8C020);
+                    k.Tube(new Vector3(0.1f, -0.3f, -0.1f), new Vector3(0.05f, -0.02f, 0.2f), 0.035f, 8, hose);
+                    k.Tube(new Vector3(0.05f, -0.02f, 0.2f), new Vector3(0.02f, -0.1f, 0.62f), 0.035f, 8, vac);
+                    k.Frustum(new Vector3(0.02f, -0.12f, 0.68f), 0.06f, 0.035f, 0.08f, 10, vac);
+                    f.Box(Vector3.zero, new Vector3(0.001f, 0.001f, 0.001f), C(0xC77B43));
+                    break;
+                }
+                default: // industrial hopper suit: a funnel on your chest and hazard stripes
+                {
+                    k.Frustum(new Vector3(0, 0.0f, 0.25f), 0.12f, 0.36f, 0.3f, 16, C(0xE8B000), false);
+                    for (int i = 0; i < 6; i++)
+                        k.Box(new Vector3(-0.25f + i * 0.1f, 0.16f, 0.52f), new Vector3(0.05f, 0.02f, 0.02f), C(0x1A1A1A));
+                    f.Ellipsoid(Vector3.zero, new Vector3(0.28f, 0.1f, 0.28f), 4, 10, C(0xC77B43));
+                    break;
+                }
             }
             var go = k.Build("Body", container, false);
             SetLayerNoShadow(go);
@@ -136,7 +199,67 @@ namespace WishExtractor.View
             container.localPosition = ContainerHome;
         }
 
-        Vector3 ContainerHome => carryTier >= 5 ? new Vector3(-0.05f, -0.5f, 0.8f) : new Vector3(-0.26f, -0.32f, 0.52f);
+        Vector3 ContainerHome => carryTier == 8 ? new Vector3(-0.1f, -0.1f, 0.1f) : carryTier >= 5 ? new Vector3(-0.05f, -0.8f, 1.15f) : new Vector3(-0.26f, -0.32f, 0.52f);
+
+        // ── the grab tool in your right hand ─────────────────────────────────
+
+        Transform tool;
+        int toolTier = -1;
+
+        public void SetTool(int tier)
+        {
+            if (tier == toolTier) return;
+            toolTier = tier;
+            if (tool != null) Object.Destroy(tool.gameObject);
+            tool = null;
+            if (tier <= 0) return;
+            tool = new GameObject("Tool").transform;
+            tool.SetParent(hand, false);
+            var k = new MeshKit();
+            Color alu = C(0xB8BEC4), yellow = C(0xFFD000), dark = C(0x2A2A2A);
+            switch (tier)
+            {
+                case 1: // litter grabber
+                    k.Tube(new Vector3(0, 0, 0.02f), new Vector3(0, -0.02f, 0.75f), 0.01f, 6, alu);
+                    k.Box(new Vector3(0, -0.03f, 0.04f), new Vector3(0.03f, 0.06f, 0.05f), yellow);
+                    k.Box(new Vector3(0.018f, -0.03f, 0.78f), new Vector3(0.008f, 0.02f, 0.07f), dark);
+                    k.Box(new Vector3(-0.018f, -0.03f, 0.78f), new Vector3(0.008f, 0.02f, 0.07f), dark);
+                    break;
+                case 2: // pool skimmer net
+                    k.Tube(new Vector3(0, 0, -0.05f), new Vector3(0, -0.05f, 0.95f), 0.012f, 6, C(0x3A7BD5));
+                    k.Push(new Vector3(0, -0.07f, 1.08f), Quaternion.Euler(-70, 0, 0));
+                    k.Torus(Vector3.zero, 0.13f, 0.008f, 16, 3, alu);
+                    k.Push(Vector3.zero, Quaternion.Euler(180, 0, 0));
+                    k.Cone(Vector3.zero, 0.13f, 0.12f, 12, new Color(0.85f, 0.9f, 0.95f, 0));
+                    k.Pop();
+                    k.Pop();
+                    break;
+                case 3: // coin rake
+                    k.Tube(new Vector3(0, 0, -0.05f), new Vector3(0, -0.05f, 0.95f), 0.013f, 6, C(0x8A5A34));
+                    k.Box(new Vector3(0, -0.06f, 0.97f), new Vector3(0.36f, 0.03f, 0.03f), alu);
+                    for (int i = 0; i < 9; i++) k.Box(new Vector3(-0.16f + i * 0.04f, -0.1f, 0.99f), new Vector3(0.008f, 0.07f, 0.008f), alu);
+                    break;
+                case 4: // detector magnet
+                    k.Tube(new Vector3(0, 0, -0.05f), new Vector3(0, -0.06f, 0.85f), 0.012f, 6, dark);
+                    k.Cylinder(new Vector3(0, -0.08f, 0.9f), Quaternion.Euler(-20, 0, 0), 0.11f, 0.02f, 16, C(0x3A3F48));
+                    k.Box(new Vector3(0, 0.03f, 0.25f), new Vector3(0.06f, 0.05f, 0.12f), C(0x3A3F48));
+                    k.Box(new Vector3(0, 0.06f, 0.25f), new Vector3(0.03f, 0.01f, 0.05f), C(0x5AD8FF, 1f));
+                    k.Torus(new Vector3(0, -0.1f, 0.92f), 0.06f, 0.018f, 12, 4, C(0xD8283A));
+                    break;
+                case 5: // reverse leaf blower
+                    k.Box(new Vector3(0, 0.01f, 0.08f), new Vector3(0.09f, 0.11f, 0.18f), C(0xFF7A1A));
+                    k.Tube(new Vector3(0, -0.02f, 0.18f), new Vector3(0, -0.12f, 0.95f), 0.04f, 10, C(0xFF9A3A));
+                    k.Frustum(new Vector3(0, -0.13f, 0.98f), 0.05f, 0.07f, 0.05f, 10, dark);
+                    break;
+                default: // industrial magnet glove
+                    k.Box(new Vector3(0, 0, 0.05f), new Vector3(0.11f, 0.06f, 0.16f), C(0x3A3F48));
+                    for (int i = 0; i < 3; i++) k.Torus(new Vector3(0, 0, 0.0f + i * 0.05f), 0.06f, 0.01f, 12, 3, C(0xE8A020, 0.6f));
+                    k.Sphere(new Vector3(0, 0, 0.14f), 0.035f, 5, 8, C(0x7AE8FF, 1f));
+                    break;
+            }
+            var go = k.Build("Model", tool, false);
+            SetLayerNoShadow(go);
+        }
 
         public void SetFill(float frac)
         {
@@ -175,7 +298,18 @@ namespace WishExtractor.View
             arm.localPosition = basePos + bob + swayOffset + reach;
             arm.localRotation = Quaternion.Euler(8 + g * 25 - p * 10, -12 - g * 8, -8);
             held.localScale = Vector3.one * (1 + heldPop * 0.3f);
-            if (container != null)
+            if (container != null && carryTier >= 5 && carryTier != 8)
+            {
+                // barrows, carts and scrubbers sit on the floor in front of you and follow your heading, not your gaze
+                Vector3 fwd = cam.transform.forward;
+                fwd.y = 0;
+                if (fwd.sqrMagnitude < 1e-4f) fwd = cam.transform.up;
+                fwd.y = 0;
+                fwd.Normalize();
+                container.position = cam.transform.position + fwd * 1.05f + Vector3.down * (1.25f - bob.y) + cam.transform.right * swayOffset.x * 0.5f;
+                container.rotation = Quaternion.LookRotation(fwd);
+            }
+            else if (container != null)
             {
                 container.localPosition = ContainerHome + bob * 1.3f + swayOffset * 1.2f + new Vector3(0.04f, 0.03f, 0) * g;
                 container.localRotation = Quaternion.Euler(-8 + g * 10, 10, 0);

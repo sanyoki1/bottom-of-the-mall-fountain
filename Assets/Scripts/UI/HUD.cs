@@ -261,6 +261,12 @@ namespace WishExtractor.UI
                         ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
                         : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
                 }
+                case TargetKind.Terminal:
+                {
+                    int ready = 0;
+                    for (int i = 0; i < Content.Techs.Length; i++) if (sim.CanBuyTech(i)) ready++;
+                    return "<b>[E]</b> Use the Maintenance Terminal" + (ready > 0 ? $"  <color=#9CFFB0>{ready} upgrade{(ready == 1 ? "" : "s")} affordable</color>" : "");
+                }
                 case TargetKind.Kiosk:
                     return sim.Carried.Count > 0
                         ? $"<b>[E]</b> Deposit {Fmt.Int(sim.CarriedCount)} item{(sim.CarriedCount == 1 ? "" : "s")}  <color=#9CFFB0>{Fmt.Money(sim.CarriedValue)}</color>"

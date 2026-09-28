@@ -220,7 +220,8 @@ namespace WishExtractor.Core
         public CarryDef CarryDef => Content.Carry[CarryTier];
         public ToolDef Grab => Content.GrabTools[GrabTier];
         public ToolDef DigTool => Content.DigTools[DigTier];
-        public int CarryCapacity => CarryDef.Capacity;
+        public double CarryBonusMult { get; private set; } = 1;
+        public int CarryCapacity => Math.Max(1, (int)Math.Floor(CarryDef.Capacity * (CarryTier == 0 ? 1 : CarryBonusMult) + 1e-6));
         public int CarryFree => Math.Max(0, CarryCapacity - CarryUsed);
         public float Reach => Grab.Reach + (float)ReachBonus;
         public double CarriedValue { get { double v = 0; foreach (var s in Carried) v += s.Value * CatRate(s.Def.Cat); return v * ValueMult; } }
@@ -232,7 +233,7 @@ namespace WishExtractor.Core
         public void Recalc()
         {
             int carry = 0, grab = 0, dig = 0;
-            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1;
+            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1;
             for (int i = 0; i < techLevel.Length; i++)
             {
                 int L = techLevel[i];
@@ -251,6 +252,7 @@ namespace WishExtractor.Core
                     case TechKind.Reach: reach += t.Value * L; break;
                     case TechKind.GrabRate: grabRate *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.WishLife: wishLife *= Math.Pow(1 + t.Value, L); break;
+                    case TechKind.CarryBonus: carryBonus *= Math.Pow(1 + t.Value, L); break;
                 }
             }
             CarryTier = Math.Min(carry, Content.Carry.Length - 1);
@@ -275,6 +277,7 @@ namespace WishExtractor.Core
             ReachBonus = reach;
             GrabRateMult = grabRate;
             WishLifeMult = wishLife;
+            CarryBonusMult = carryBonus;
             OnRecalc?.Invoke();
         }
 

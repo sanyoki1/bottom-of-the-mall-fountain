@@ -73,13 +73,20 @@ namespace WishExtractor.Core
 
             O("pick1", "Pick up a coin from the fountain", "Hop over the rim, look at a coin and press E or left-click.", 0, s => s.S.itemsPicked >= 1);
             O("dep1", "Cash it in at the COIN-O-MATIC 3000", "The grimy kiosk by the entrance. Look at it and press E.", 0.05, s => s.S.deposits >= 1);
-            O("scrub", "Approve 'Scrub the Grime'", "The Fountain Improvement Plan on the easel by the rim. A cleaner fountain gets more (and richer) shoppers.", 0.10, s => s.TechLevel("fountain_scrub") > 0);
-            O("dep10", "Make 10 deposits", "One coin per trip. For now.", 0.25, s => s.S.deposits >= 10);
+            O("cup", "Buy a Paper Cup", "At the Maintenance Terminal: the laptop on the folding table by the entrance. Five coins per trip!", 0.10, s => s.CarryTier >= 1);
+            O("scrub", "Approve 'Scrub the Grime'", "The Fountain Improvement Plan on the easel by the rim (or the terminal's Fountain tab). A cleaner fountain gets more, richer shoppers.", 0.10, s => s.TechLevel("fountain_scrub") > 0);
+            O("dep10", "Make 10 deposits", "Trips add up.", 0.25, s => s.S.deposits >= 10);
             O("wish1", "Catch a True Wish", "Some tosses come with a wish. It rises out of the water where the coin lands. Look at it and press E, quick!", 0.25, s => s.S.wishesCaught >= 1);
+            O("grabber", "Buy the Litter Grabber", "More reach: fish coins out from the rim without getting your socks wet.", 0.25, s => s.GrabTier >= 1);
             O("jets", "Fix the water jets", "Next job on the Fountain Improvement Plan.", 0.5, s => s.TechLevel("fountain_jets") > 0);
+            O("pail", "Get the Sand Pail", "Twenty coins per trip.", 0.5, s => s.CarryTier >= 2);
             O("toss50", "Watch shoppers toss in 50 things", "The fancier the fountain, the faster they throw.", 0, s => s.S.tosses >= 50);
             O("lights", "Install the coloured lights", "Dimes start flying once the fountain has mood lighting.", 1, s => s.TechLevel("fountain_lights") > 0);
-            O("cash10", "Earn $10 in total", "Bigger containers are coming to the Maintenance Terminal.", 0, s => s.S.lifetimeCash >= 10);
+            O("net", "Buy the Pool Skimmer Net", "Scoops everything in a small circle. Hold the button and sweep.", 1, s => s.GrabTier >= 2);
+            O("bucket", "Upgrade to the Mop Bucket", "Sixty coins per trip. The mop stays in the closet.", 2, s => s.CarryTier >= 3);
+            O("neon", "Put up the 'MAKE A WISH' neon", "Quarters at wishability 12, loonies at 20.", 3, s => s.TechLevel("fountain_neon") > 0);
+            O("cherub", "Buy the Cherub Statue with Wish Tokens", "Catch wishes to earn tokens. The cherub only accepts wishes.", 0, s => s.TechLevel("fountain_cherub") > 0);
+            O("cash100", "Earn $100 in total", "Machines are coming. The fountain will empty itself.", 0, s => s.S.lifetimeCash >= 100);
             return o.ToArray();
         }
     }

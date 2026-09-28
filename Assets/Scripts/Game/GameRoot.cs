@@ -25,6 +25,9 @@ namespace WishExtractor.Game
         HUD hud;
         Popups pops;
         Modals modals;
+        TerminalPanel terminal;
+        bool AnyMenu => modals.IsOpen || terminal.IsOpen;
+        bool swallowInput;
         Canvas uiCanvas, popCanvas, modalCanvas;
         float autosave;
         bool devMode, touring, testing;
@@ -102,6 +105,10 @@ namespace WishExtractor.Game
             modals.OnSettingsChanged = ApplySettings;
             modals.OnResetSave = ResetSave;
             modals.OnQuit = () => { Save(); Application.Quit(); };
+            terminal = new TerminalPanel();
+            terminal.Build(modalCanvas, sim);
+            terminal.OnDenied = () => sfx.Play("denied", 0.6f);
+            view.OpenTerminal += () => { sfx.Play("ui"); terminal.Open(); };
 
             sfx = gameObject.AddComponent<AudioHub>();
             sfx.Init(sim.S.musicVol, sim.S.sfxVol);
@@ -176,7 +183,11 @@ namespace WishExtractor.Game
             // the crowd
             view.Crowd.Speak = (head, text, wish, rarity) => pops.Say(head, text, wish, rarity);
             view.Message += m => { hud.ShowMessage(m); sfx.Play("denied", 0.4f, 0.05f, 0.3f); };
-            sim.OnToss += (s, it) => sfx.PlayAt("throw", new Vector3(s.X, 1.5f, s.Z), 0.25f, 0.15f, 0.05f, 1.4f);
+            sim.OnToss += (s, it) =>
+            {
+                if (s != null) sfx.PlayAt("throw", new Vector3(s.X, 1.5f, s.Z), 0.25f, 0.15f, 0.05f, 1.4f);
+                else sfx.PlayAt("wish_spawn", new Vector3(0, 7, 0), 0.5f, 0.2f, 0.2f, 0.7f);
+            };
             sim.OnLanded += it =>
             {
                 var def = Content.Items[it.Type];
@@ -231,12 +242,13 @@ namespace WishExtractor.Game
                 left -= step;
             }
 
-            bool modal = modals.IsOpen;
+            bool modal = AnyMenu;
             if (!testing) HandleKeys(modal);
-            modal = modals.IsOpen;
+            modal = AnyMenu;
             UpdateCursor(modal);
 
-            FPInput input = scripted ?? (testing ? default : ReadInput());
+            FPInput input = scripted ?? (testing || swallowInput ? default : ReadInput());
+            swallowInput = false;
             if (scripted.HasValue)
             {
                 var s = scripted.Value;
@@ -252,6 +264,7 @@ namespace WishExtractor.Game
             hud.Refresh(dt, view.Current, view.Wading, modal);
             pops.Update(dt);
             modals.Update(dt);
+            terminal.Update(dt);
 
             autosave += dt;
             if (autosave >= Balance.AutosaveSeconds) { autosave = 0; Save(); }
@@ -259,9 +272,10 @@ namespace WishExtractor.Game
 
         void HandleKeys(bool modal)
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetKeyDown(KeyCode.Escape) || (terminal.IsOpen && Input.GetKeyDown(KeyCode.E)))
             {
-                if (modal) { if (modals.OpenName != "intro") modals.Close(); }
+                if (terminal.IsOpen) { terminal.Close(); swallowInput = true; }
+                else if (modal) { if (modals.OpenName != "intro") modals.Close(); }
                 else modals.OpenSettings();
             }
             if (Input.GetKeyDown(KeyCode.J) && !modal) { sfx.Play("ui"); modals.OpenJournal(); }
@@ -392,6 +406,13 @@ namespace WishExtractor.Game
             yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.2f);
         }
 
+        IEnumerator GoToTerminal()
+        {
+            var t = view.Terminal.Root;
+            yield return WalkTo(t.position + t.forward * 1.3f, 0.3f);
+            yield return LookAtSmooth(t.position + Vector3.up * 0.85f);
+        }
+
         IEnumerator GoToBoard()
         {
             var b = view.Board.Root;
@@ -413,7 +434,7 @@ namespace WishExtractor.Game
 
         IEnumerator Tour()
         {
-            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 300));
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 420));
             scripted = default(FPInput);
             yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
@@ -472,6 +493,39 @@ namespace WishExtractor.Game
             Press();
             yield return new WaitForSeconds(0.5f);
             yield return Shot("07g_wish_caught");
+
+            // the Maintenance Terminal
+            sim.DebugAddCash(30);
+            sim.S.wishTokens += 12;
+            yield return GoToTerminal();
+            yield return Shot("07h_terminal_prop");
+            Press();
+            yield return new WaitForSeconds(0.5f);
+            terminal.SetBranch(TechBranch.Carry);
+            yield return Shot("07i_terminal_carry");
+            terminal.SetBranch(TechBranch.Fountain);
+            yield return Shot("07j_terminal_fountain");
+            terminal.Close();
+
+            // every fountain upgrade, from the rim and the balcony
+            foreach (var t in Content.Techs) if (t.Branch == TechBranch.Fountain && t.MaxLevel == 1) sim.DebugSetTech(t.Id, 1);
+            view.Player.Place(new Vector3(0, 0.05f, -15.5f), 0, 6);
+            yield return new WaitForSeconds(4f);
+            yield return Shot("07k_all_decor");
+            view.Player.Place(new Vector3(-17, 6.85f, 27f), 180, -20);
+            yield return LookAtSmooth(new Vector3(0, 2, 0));
+            yield return new WaitForSeconds(1f);
+            yield return Shot("07l_all_decor_balcony");
+
+            // containers and tools
+            foreach (var (carry, tool, shot) in new[] { ("carry_barrow", "grab_rake", "07m_wheelbarrow"), ("carry_cart", "grab_magnet", "07n_cart"), ("carry_scrubber", "grab_blower", "07o_scrubber"), ("carry_shopvac", "grab_glove", "07p_shopvac") })
+            {
+                sim.DebugSetTech(carry, 1);
+                sim.DebugSetTech(tool, 1);
+                view.Player.Place(new Vector3(-3, 0.95f, -8.2f), 20, -30);
+                yield return new WaitForSeconds(0.8f);
+                yield return Shot(shot);
+            }
 
             // bigger containers (tech the terminal will sell in M3), shown off in the fountain
             sim.DebugSetTech("carry_bucket", 1);
@@ -665,9 +719,35 @@ namespace WishExtractor.Game
             yield return new WaitForSeconds(0.8f);
             yield return Shot("ui_deposit");
 
-            // a bigger container carries more per trip
-            sim.DebugSetTech("carry_cup", 1);
-            Check(sim.CarryCapacity == 5, $"paper cup holds 5 (got {sim.CarryCapacity})");
+            // buy a bigger container at the Maintenance Terminal, through its UI
+            sim.DebugAddCash(1);
+            yield return GoToTerminal();
+            Check(view.Current.Kind == TargetKind.Terminal, $"crosshair targets the Maintenance Terminal (got {view.Current.Kind})");
+            Press();
+            yield return null;
+            yield return new WaitForSeconds(0.3f);
+            Check(terminal.IsOpen, "E opens MAINT-OS 95");
+            Check(ClickSelectable(FindButton("Carry")), "open the Carry branch");
+            yield return null;
+            Check(ClickSelectable(FindButton("Node:carry_cup")), "select the Paper Cup node");
+            yield return null;
+            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "click INSTALL");
+            yield return null;
+            Check(sim.CarryTier == 1 && sim.CarryCapacity == 5, $"paper cup bought, holds 5 (got {sim.CarryCapacity})");
+            yield return Shot("ui_terminal");
+            sim.DebugAddCash(40);
+            Check(ClickSelectable(FindButton("Tools")), "open the Tools branch");
+            yield return null;
+            float reach0 = sim.Reach;
+            ClickSelectable(FindButton("Node:grab_grabber"));
+            yield return null;
+            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "install the Litter Grabber");
+            yield return null;
+            Check(sim.GrabTier == 1 && sim.Reach > reach0, $"grabber adds reach ({reach0:0.0} → {sim.Reach:0.0} m)");
+            Check(!ClickSelectable(FindButton("Node:grab_rake")) || !FindButton("Buy", b => b.interactable), "the rake stays locked until the net is installed");
+            Check(ClickSelectable(FindButton("Close")), "close the terminal");
+            yield return null;
+            Check(!terminal.IsOpen, "terminal closed");
             yield return EnterFountain();
             int got = 0;
             for (int i = 0; i < 5; i++)

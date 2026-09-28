@@ -26,6 +26,14 @@ journal), the Fountain Improvement Plan easel (buys Fountain-branch techs), firs
 with visuals (scrubbed tiles, water jets, coloured LED ring), speech bubbles, positional splash/plop audio.
 uitest 38/38. `dotnet run ... -- crowd <wishability>` prints what the crowd is doing headlessly.
 
+**M3 (verified, committed):** Maintenance Terminal (`View/Terminal.cs` prop, `UI/TerminalPanel.cs` =
+MAINT-OS 95: branch tabs, node graph by Col/Row with prerequisite lines, detail pane with generated effect
+line). 36 nodes so far (carry ladder + Sturdier Bottoms/Comfy Sneakers, grab ladder + Longer Arms/Nimble
+Fingers, 13 fountain uniques — 5 paid in Wish Tokens — plus 4 levelled fountain nodes). Held tool models and
+floor-level carts/barrows (`Hands.cs`), area-grab ring, shop-vac auto pickup, detector glints, all fountain
+decor (`Decor.cs`), wormhole tosses of other malls' loot. Dig tools are defined but not sold until M5.
+uitest 49/49 (buys through the real terminal UI).
+
 Session 2 notes (kept for history):
 - Done (session 2):
   - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/

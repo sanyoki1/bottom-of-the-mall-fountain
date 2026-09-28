@@ -32,23 +32,49 @@ namespace WishExtractor.Core
                 var t = T("grab_" + g.Id, g.Name, TechBranch.Tools, TechKind.Tool, i, g.Cost, g.Desc, i > 1 ? new[] { "grab_" + GrabTools[i - 1].Id } : new string[0]);
                 t.Target = "grab"; t.Col = i - 1; t.Row = 0;
             }
-            // dig tools
-            for (int i = 1; i < DigTools.Length; i++)
+            // levelled nodes: cheap to author, they give every visit to the terminal something to buy
+            TechDef Lv(string id, string name, TechBranch b, TechKind kind, double value, double cost, double growth, int max, int col, int row, string desc, string req = null, bool tokens = false)
             {
-                var d = DigTools[i];
-                var t = T("dig_" + d.Id, d.Name, TechBranch.Tools, TechKind.Tool, i, d.Cost, d.Desc, i > 1 ? new[] { "dig_" + DigTools[i - 1].Id } : new string[0]);
-                t.Target = "dig"; t.Col = i - 1; t.Row = 1;
+                var t = T(id, name, b, kind, value, cost, desc, req == null ? new string[0] : new[] { req });
+                t.CostGrowth = growth; t.MaxLevel = max; t.Col = col; t.Row = row; t.WishTokens = tokens;
+                return t;
             }
+            Lv("carry_bottom", "Sturdier Bottoms", TechBranch.Carry, TechKind.CarryBonus, 0.10, 1.5, 2.0, 10, 0, 1,
+                "Duct tape, applied lovingly to the bottom of whatever you're carrying things in.", "carry_cup");
+            Lv("carry_sneakers", "Comfy Sneakers", TechBranch.Carry, TechKind.WalkSpeed, 0.05, 1.0, 2.0, 10, 1, 1,
+                "Squeaky, orthopedic, and bought from the Payless that closed in 2019.");
+            Lv("grab_arms", "Longer Arms", TechBranch.Tools, TechKind.Reach, 0.2, 2, 2.3, 8, 0, 1,
+                "Stretching exercises from a VHS tape found in the fountain. They work, somehow.", "grab_grabber");
+            Lv("grab_fingers", "Nimble Fingers", TechBranch.Tools, TechKind.GrabRate, 0.12, 1.5, 2.0, 10, 1, 1,
+                "You practise picking up pennies from a flat table every night. Your family is worried.");
 
             // fountain beautification ("wishability"): more shoppers, more tosses, fancier tosses
-            void F(string id, string name, double wish, double cost, string desc, string req, int col)
+            void F(string id, string name, double wish, double cost, bool tokens, string desc, string req, int col)
             {
                 var t = T(id, name, TechBranch.Fountain, TechKind.Wishability, wish, cost, desc, req == null ? new string[0] : new[] { req });
-                t.Col = col; t.Row = 0;
+                t.Col = col; t.Row = 0; t.WishTokens = tokens;
             }
-            F("fountain_scrub", "Scrub the Grime", 3, 0.50, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
-            F("fountain_jets", "Fix the Water Jets", 4, 3, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
-            F("fountain_lights", "Coloured Lights", 5, 15, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
+            F("fountain_scrub", "Scrub the Grime", 3, 0.50, false, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
+            F("fountain_jets", "Fix the Water Jets", 4, 3, false, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
+            F("fountain_lights", "Coloured Lights", 5, 15, false, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
+            F("fountain_neon", "'MAKE A WISH' Neon", 6, 60, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
+            F("fountain_cherub", "Cherub Statue", 8, 10, true, "A chubby stone baby who judges everyone's throwing form. Paid for in pure wishes.", "fountain_neon", 4);
+            F("fountain_koi", "Koi", 8, 25, true, "Twelve koi, each named after a former mall manager. They are thriving. The managers are not.", "fountain_cherub", 5);
+            F("fountain_music", "Mood Music", 10, 400, false, "Smooth jazz, piped in from a speaker disguised as a rock. The rock is also smooth.", "fountain_koi", 6);
+            F("fountain_dispenser", "Lucky Penny Dispenser", 10, 1500, false, "Sells shoppers 'lucky' pennies to throw in. You are, technically, selling them your own pennies.", "fountain_music", 7);
+            F("fountain_photo", "Influencer Photo Spot", 12, 60, true, "A ring light, a flower wall and a sign saying #WishWall. The influencers arrive within minutes.", "fountain_dispenser", 8);
+            F("fountain_golden", "Golden Statue", 15, 8000, false, "A gold-plated statue of the mall's founder, mid-toss. Slightly too shiny to look at.", "fountain_photo", 9);
+            F("fountain_show", "Fountain Light Show", 20, 150, true, "Every hour on the hour: lasers, fog and a synth version of 'Wind Beneath My Wings'.", "fountain_golden", 10);
+            F("fountain_certified", "Official Wishing Fountain", 25, 40000, false, "Certified by the International Wishing Fountain Board (you founded it last week).", "fountain_show", 11);
+            F("fountain_wormhole", "Wormhole to Other Fountains", 40, 500, true, "A shimmering portal to every mall fountain on Earth. Things come through. Some of them are coins.", "fountain_certified", 12);
+            Lv("fountain_polish", "Polish the Tiles", TechBranch.Fountain, TechKind.Wishability, 1, 1, 1.45, 30, 0, 1,
+                "Elbow grease, applied one tile at a time. The fountain gets a little more wishable every time.", "fountain_scrub");
+            Lv("fountain_mints", "Free Mints by the Fountain", TechBranch.Fountain, TechKind.TossRate, 0.08, 4, 1.85, 15, 1, 1,
+                "Shoppers linger for a free mint, then feel obligated to throw something in.", "fountain_jets");
+            Lv("fountain_coinpolish", "Coin Polish", TechBranch.Fountain, TechKind.ValueMult, 0.10, 8, 1.75, 20, 2, 1,
+                "The COIN-O-MATIC pays more for shiny coins. Nobody knows why. Don't ask it.", "fountain_lights");
+            Lv("fountain_patience", "Wish Catcher's Patience", TechBranch.Fountain, TechKind.WishLife, 0.15, 3, 1.8, 6, 3, 1,
+                "Wishes linger a little longer over the water, as if they want to be caught.", "fountain_scrub", true);
 
             var arr = list.ToArray();
             foreach (var t in arr) TechIndex[t.Id] = t.Index;

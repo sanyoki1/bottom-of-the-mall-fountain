@@ -32,6 +32,7 @@ namespace WishExtractor.Core
         public const double SpawnInterval = 1.2;        // seconds between arrivals while below the crowd target
         public const double Patience = 14;              // seconds a shopper waits at the rim for their turn
         public const int MaxPendingTosses = 4;
+        public const double PortalShare = 0.25;         // wormhole tosses as a share of the crowd's toss rate
 
         // ── manual collection ────────────────────────────────────────────────────
         public const float WalkSpeed = 4.6f, SprintMult = 1.55f, WadeMult = 0.72f;
