@@ -74,7 +74,7 @@ namespace WishExtractor.Core
         // ── live ──
         public double Time;
         public double EarnRate;
-        double metaTimer, earnWindow, earnWindowTime;
+        double metaTimer, earnWindow, earnWindowTime, factoryAcc;
 
         // ── events for the presentation layer ──
         public event Action<ItemType, int, double> OnPickup;           // type, count, base value
@@ -187,7 +187,7 @@ namespace WishExtractor.Core
             SeedCrowd();
         }
 
-        static readonly double[] SeedWeights = { 70, 15, 10, 5 };
+        static readonly double[] SeedWeights = { 60, 20, 13, 7 };
 
         void SeedFountain(int count)
         {
@@ -239,7 +239,7 @@ namespace WishExtractor.Core
         public void Recalc()
         {
             int carry = 0, grab = 0, dig = 0;
-            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1, digMult = 1, relicMult = 1;
+            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1, digMult = 1, relicMult = 1, chunk = 1;
             for (int i = 0; i < techLevel.Length; i++)
             {
                 int L = techLevel[i];
@@ -261,6 +261,7 @@ namespace WishExtractor.Core
                     case TechKind.CarryBonus: carryBonus *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.DigPower: digMult *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.RelicRate: relicMult *= Math.Pow(1 + t.Value, L); break;
+                    case TechKind.ChunkSize: chunk += t.Value * L; break;
                     case TechKind.StartCarry: carry = Math.Max(carry, L); break;
                 }
             }
@@ -288,6 +289,7 @@ namespace WishExtractor.Core
             WishLifeMult = wishLife;
             CarryBonusMult = carryBonus;
             DigMult = digMult;
+            ChunkMult = chunk;
             RelicMult = relicMult;
             RecalcFactory();
             OnRecalc?.Invoke();
@@ -305,7 +307,14 @@ namespace WishExtractor.Core
             UpdateLoose((float)dt);
             UpdateCrowd(dt);
             UpdateWishes(dt);
-            UpdateFactory(dt);
+            // the factory steps at a fixed rate: ports and belts hand over one item per step, so this
+            // keeps throughput the same at any frame rate (and in Tools/BalanceSim's half-second ticks)
+            factoryAcc += dt;
+            for (int guard = 0; factoryAcc >= Balance.FactoryStep && guard < 3000; guard++)
+            {
+                UpdateFactory(Balance.FactoryStep);
+                factoryAcc -= Balance.FactoryStep;
+            }
             UpdateEvent(dt);
             UpdateHazards(dt);
 

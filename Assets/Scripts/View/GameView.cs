@@ -401,6 +401,13 @@ namespace WishExtractor.View
             if (Sim.MallCleared) { Message?.Invoke("Bare concrete! There's nothing left to dig. Sign the next contract."); return; }
             double scoops = Sim.SwingDig(p.x, p.z);
             var sp = Fountain.SurfacePoint(p.x, p.z);
+            if (Sim.RubbleBlocked)
+            {
+                // clang: the crust is buried under your own gunk
+                Fx.Sparks(sp + Vector3.up * 0.1f, new Color(1f, 0.9f, 0.6f), 8, 2.5f, 0.06f, 0.3f);
+                Message?.Invoke($"Clang! {Balance.RubbleCap} chunks of your own gunk are in the way. Haul them to the COIN-O-MATIC (or pump them into a line) and dig again.");
+                return;
+            }
             float mag = Mathf.Clamp01((float)Math.Log10(scoops + 1) / 2.5f);
             Fountain.Dig(sp, 0.12f + mag * 0.45f, 0.7f + mag * 1.3f);
             Color dirt = MeshKit.Hex(Sim.CurStratum.Color);

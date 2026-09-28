@@ -1,113 +1,117 @@
-# Wish Extractor: Mall Fountain Tycoon — Design
+# Wish Extractor — Design
 
-Source concept: *Wish_Extractor_Game_Concept.pdf* ("The Bottom of the Mall Fountain"), modelled on the
-progression arc of *Find The Needle* (one enormous finite pile, dig it by hand, sell the raw material,
-then belts, scanners and robots until it runs itself). Everything below is what the game actually does.
+A first-person fountain factory game. The progression arc follows *Find The Needle* (bare hands → hand tools →
+bigger containers → conveyors, robots and processors until it runs itself); the twist is the crowd: shoppers
+throw things into your fountain, and making the fountain fancier makes them throw more, and fancier, things.
+`PIVOT_FPS.md` records Nico's decisions and the milestone plan; this file describes what the game does.
 
 ## Pillars
 
-1. **Gross nostalgia, big numbers.** Forty years of mall-fountain gunk, dug out with increasingly absurd
-   industrial machinery. Every layer is a joke about an era of mall culture.
-2. **A visible factory.** Every machine you buy appears around the fountain and animates while its stage
-   is busy. The crust visibly sinks; the basin walls show faint bands of every layer you dug through.
-3. **Always something to click.** Wishes float up, golden pennies glint, the mall rat runs off with loot,
-   machines can be whacked, the combo meter rewards fast clicking.
+1. **Carry more per trip.** One penny in your bare hands, then a paper cup, a sand pail, a mop bucket … a
+   walking coin silo. Then machines carry it for you.
+2. **The fountain gets fancier, the tosses get sillier.** Beautification raises *wishability*: a bigger
+   crowd, faster tosses, better coins, and eventually dentures, timeshares and vending machines.
+3. **A finite goal per mall.** Under the water is forty years of crust. Dig it to bare concrete, find the
+   bottom treasure, sign with the next (deeper, richer) mall.
+4. **Humour everywhere.** Receipt footers, shopper barks, 107 wish texts, relics, a jobsworth security guard,
+   a rival diver in a wetsuit, and a goldfish that must go back in the water.
 
-## Core loop: Dredge → Dissolve → Sort → Sell
+## Core loop
 
-| Stage | Input → output | Buffer on screen | Sells for if dumped early |
-|---|---|---|---|
-| **Dredge** | basin crust → raw clumps | Hopper ("RAW GUNK" bin) | 10% of full value |
-| **Dissolve** | raw clumps → washed loot (+ True Wishes) | Washed pile on the sorting table | 35% |
-| **Sort** | washed loot → sorted loot (+ relic finds) | Coin pile by the vending machine | 100% |
-| **Sell** | sorted loot → cash | Greasy vending machine | (manual until the Coin-Op Hookup) |
-
-The top layer of every mall is *loose*: digging drops sorted coins straight into your pocket (the
-"Sticky String" manual-grind phase). From the second layer down everything is glued together, so washing
-and sorting become necessary. The pipeline card flags the bottleneck stage. Value is stored per item at
-dig time (deeper layers are richer) and multipliers apply at sale.
-
-### The three phases in each mall
-
-1. **Manual grind** — bubblegum on a string (1 item/click) → butter knife → sandbox shovel; pogo sticks
-   bounce in the basin. Sell by clicking the vending machine.
-2. **Soda wash** — the Syrup Seal layer: Diet Cola Tumblers, Pigeon Perches, Mall Walker Brigades,
-   Food Court Dishwashers, Coin Star Junctions. True Wishes start floating up. Coin-Op Hookup automates selling.
-3. **Industrial devastation** — Jackhammer Excavators, the glowing Acid-Wash River, Optical Laser Scanners,
-   the Wish Compressor; later malls add claw cranes, car washes, prize-counter robots, gold tunnel borers,
-   champagne jacuzzis, quantum sieves and three megaprojects.
+1. **Collect.** Coins land in the water and settle on the crust. Look at one, press E. The container decides
+   how many you can hold; grab tools add reach and area.
+2. **Deposit.** Walk them to the COIN-O-MATIC 3000 by the entrance. Cash, a ka-ching and a receipt joke.
+3. **Spend.** The Fountain Improvement Plan (an easel by the rim) sells the next beautification; the
+   Maintenance Terminal (a laptop running MAINT-OS 95) sells everything else.
+4. **Automate.** Build mode (3): generators, intakes at the rim, belts, processors, deposit hoppers.
+5. **Dig.** Hand tools (2) and dig rigs break the crust. The top layer is loose change; below it everything is
+   glued into gunk that has to be washed and sorted before it's worth much.
+6. **Bare concrete → the next contract.** Lucky Pennies buy Head Office perks that last forever; cash, techs
+   and the factory start over in the next mall.
 
 ## Systems
 
-- **Tools (11)** — each multiplies items per click (1 → 1.6M). Reset every mall (Head Office can start you
-  with better ones). Clicks build a **combo** (×2 at full meter, raised by upgrades/perks); holding the
-  button repeats digs at 6/s.
-- **Machines (19)** — 5 tiers per stage (Dig/Wash/Sort) + Wish Compressor + 3 megaprojects. Price grows
-  ×1.15 per unit; owning 25/50/100/150/… of one machine doubles its output (milestones). Tiers unlock by
-  depth, earlier in later malls (`Balance.TierUnlock`).
-- **Upgrades (251)** — 10 per machine (at 1…400 owned), 26 general (value, click, wishes, relics, golden
-  pennies, stage multipliers, auto-sell), and 15 themed upgrades that exist only in their own mall.
-- **True Wishes (107 texts)** — spawn every ~11 s while washing; five rarities; drift up for ~13 s. Value =
-  (authored base × sale multipliers) + (a few seconds to minutes of automatic income by rarity). Catching
-  a new one records it in the **Wish Journal** (+1% sale value each, forever). Missed wishes can be caught
-  by the **Wish Compressor** (pressed into purple bricks at 80% value).
-- **Relics (72) + bottom treasures (6)** — rolled while sorting (~1 per 80 s), 12 per mall; completing a
-  mall's set gives +10% value forever; each bottom treasure (the Founder's Penny … the First Wish) +25%.
-- **Golden pennies** — every 75–170 s; 13 s to click. Effects: Lucky Streak (sale ×7), Change Avalanche
-  (cash), Dig Frenzy (clicks ×15), Wish Storm (5–7 wishes), Machine Overdrive (all machines ×3).
-- **Mall rat** — runs along the rim every 200–380 s; catching it drops a relic with boosted rarity.
-- **Mall events** — one per mall, every 5–7 minutes for 40 s (Mall Walker Rush Hour, Neon Hour, Black Card
-  Hour, Exchange Rate Spike, Jackpot Hour, Wishing Hour).
-- **Guided goals (38)** — a tutorial chain through the whole first mall, then milestones across the game,
-  each with a cash reward; after the chain ends the card shows the next layer to reach.
-- **Achievements (71)** — +1% sale value each, forever.
-- **Head Office (prestige)** — clearing a mall to bare concrete pays Lucky Pennies (6 → 200). 18 perks,
-  265 levels: machine speed, sale value, click power, seed money, starting tools, veteran crews, auto-sell
-  from the start, wish/relic/golden boosts, cheaper machines, longer and better offline earnings, and a
-  Compressor patent.
-- **Remodel contracts (endless)** — after Eternity Plaza, every mall repeats with prices ×1e24 per lap,
-  its own fitted first-lap layer sizes, and deeper layers ×3 per further lap.
-- **Offline progress** — up to 2 h at 50% efficiency by default (up to 24 h at 100% with perks).
+- **Carrying** — 10 containers (hands 1 → cup 5 → pail 20 → bucket 60 → fanny pack 150 → wheelbarrow 500 →
+  shopping cart 2,000 → floor scrubber 10,000 → shop-vac 40,000 with auto-pickup → hopper suit 250,000).
+  Heavy oddities take two slots. Bundles (rolls, bags, pallets) let one slot hold many coins.
+- **Tools** — 7 grab tools (reach, area, grab rate: fingers → litter grabber → net → rake → detector magnet,
+  which makes valuables glint → reverse leaf blower → magnet glove) and 6 dig tools (sandbox shovel → handheld
+  borer). Hotbar: 1 grab, 2 dig, 3 build.
+- **The crowd** — 10 archetypes (mall walker, teen, grandma, toddler, businessman, tourist, influencer,
+  heartbroken proposer, bodybuilder, billionaire) unlock with wishability. Each toss picks a coin tier from a
+  Gaussian around `wishability × 0.08` (9 tiers: penny … diamond) or one of 20 oddities. Tosses sometimes carry
+  a **True Wish**: it rises where the coin lands; catch it (E) for cash, Wish Tokens and a journal entry.
+- **The crust** — 8 named layers per mall (48 in all). The loose top layer comes up as coins; deeper layers
+  break into gunk chunks worth 10% as they are, 35% washed (tumbler) and 100% sorted (pigeons or the coin
+  sorter). Sorting sometimes turns up a **relic** (72, 12 per mall). The water follows the crust down and a
+  scaffold ramp spirals down the wall. Rubble matters: dig rigs stop when their output is full, and hand
+  digging stops while 300 gunk chunks are lying around or in your hands.
+- **The factory** — 21 buildables on a 1 m grid: 4 generators (hamster wheel … skylight solar), 3 coin
+  intakes (skimmer bot, drain pump, claw crane), 2 dig intakes (jackhammer rig, tunnel borer), 8 processors
+  (tumbler, pigeon sorter, coin sorter, roller, bagger, palletiser, gold melter, wish compressor), belts,
+  splitters and 2 deposit hoppers. Intakes must stand at the rim facing the fountain. One power budget:
+  short on power, everything slows by the same ratio. The simulation steps at a fixed 60 Hz.
+- **The tech tree** — 81 nodes in 9 branches (Carry, Tools, Fountain, Power, Intake, Logistics, Processing,
+  Security, Head Office), paid in cash, Wish Tokens or Lucky Pennies. Levelled nodes repeat at growing prices;
+  **Bigger Chunks** never maxes out (each level makes chunks 25% of their original size bigger, at a
+  polynomial price), so cash always has something to speed up the dig.
+- **Hazards (always on)** — Officer Doug patrols the plaza and now and then catches you wading: step out
+  within five seconds or pay a fine (4% of cash). Chad the rival diver shows up every 5–9 minutes and pockets
+  the richest loose items until you get close or press E on him; he drops everything when he runs. The
+  Security branch softens both.
+- **Wishability** — 13 one-off fountain upgrades (scrub the grime → wormhole to other fountains, some paid in
+  Wish Tokens), plus levelled tile polish, free mints, coin polish and wish-catcher's patience.
+- **Mall events** — one per mall, every 7–13 minutes for a minute (Mall Walker Rush Hour, Neon Hour, Black Card
+  Hour, Exchange Rate Spike, Jackpot Hour with gold coins raining in, Wishing Hour).
+- **Goals and collections** — a 32-step objective chain (a tutorial through the first mall, then one per
+  mall), 53 achievements (+1% deposit value each), the Wish Journal (+1% per wish found), relic sets (+10%
+  each) and bottom treasures (+25% each).
+- **Head Office** — clearing a mall pays Lucky Pennies (6 → 200). 8 perks: seed money, a bigger starting
+  container, the basic factory pre-researched, seniority (value), sneakers, wishful thinking, relic radar,
+  an excavation grant.
+- **Remodel contracts** — after Eternity Plaza every mall repeats, values ×3 and crust ×1.6 per lap.
 
 ## The six malls
 
-| # | Mall | Depth | Theme | Event | Bottom treasure | New machinery |
-|---|---|---|---|---|---|---|
-| 1 | Crestview Commons | 30 ft | Suburban dead mall, teal & peach | Mall Walker Rush Hour (dig ×3) | The Founder's Penny | Tiers 1–3, Wish Compressor |
-| 2 | Neon Galaxy Mega-Mall | 45 ft | 1980s neon, black & white checker | Neon Hour (wishes ×3) | Golden Arcade Token #0001 | Tier 4 (claw crane, car wash, prize bots) |
-| 3 | Galleria Aurelia | 60 ft | Luxury marble & gold | Black Card Hour (relics ×4) | The Platinum Membership Card | Tier 5 (tunnel borer, champagne jacuzzi, quantum sieve) |
-| 4 | Skyport Terminal C | 75 ft | Airport concourse | Exchange Rate Spike (sale ×2.5) | The Lost Passport of Everyone | Megaproject: Baggage Carousel Loop |
-| 5 | The Lucky Lagoon | 90 ft | Casino resort, red & gold | Jackpot Hour (golden penny rain) | The Lucky Die | Megaproject: Slot Machine of Fortune |
-| 6 | Eternity Plaza | 120 ft | 1956 atomic-age mall over a Roman well | Wishing Hour (everything ×2) | The First Wish (ending) | Megaproject: The Wish Engine |
+| # | Mall | Depth | Event | Bottom treasure |
+|---|---|---|---|---|
+| 1 | Crestview Commons | 30 ft | Mall Walker Rush Hour (tosses ×3) | The Founder's Penny |
+| 2 | Neon Galaxy Mega-Mall | 45 ft | Neon Hour (wishes ×3) | Golden Arcade Token #0001 |
+| 3 | Galleria Aurelia | 60 ft | Black Card Hour (relics ×4) | The Platinum Membership Card |
+| 4 | Skyport Terminal C | 75 ft | Exchange Rate Spike (value ×2.5) | The Lost Passport of Everyone |
+| 5 | The Lucky Lagoon | 90 ft | Jackpot Hour (gold coins rain in) | The Lucky Die |
+| 6 | Eternity Plaza | 120 ft | Wishing Hour (everything ×2) | The First Wish (ending) |
 
-Each mall has 8 named layers with flavour text (48 total), its own loot table (57 item kinds in all),
-12 relics, 17–22 wishes, 15 themed upgrades, storefront signs, signature props and a procedural music loop.
+Each mall has its own theme, storefront signs, music loop, loot table, 17–22 wishes and 12 relics.
 
-## Economy structure (how 24+ hours is guaranteed)
+## Economy (how 24+ hours is guaranteed)
 
-- **Per-mall price scale.** Every price is authored in Crestview dollars and multiplied by the mall's
-  `CostScale` (×1e4 per mall). Sale value is scaled the same way through the mall's contract rate, times a
-  generosity factor (1 → 4), so every mall is a fresh climb with bigger numbers rather than instantly cheap.
-- **Mall-exclusive themed upgrades** stop multipliers from stacking across the whole game (an early
-  version had ×245,000 by mall 6 and cleared it in seconds).
-- **Fitted stratum boundaries.** Each layer's size in items is fitted from the bot's actual trajectory so
-  each layer takes a planned share of the mall (`Tools/BalanceSim -- fit --apply`). The depth meter moves
-  linearly in log(items) within a layer, so it keeps moving while rates grow exponentially.
-- **Measured pacing** (engaged bot / idle bot): Crestview 2h31m / 4h22m · Neon Galaxy 3h21m / 5h23m ·
-  Galleria 3h39m / 5h03m · Skyport 4h15m / 6h10m · Lucky Lagoon 4h30m / 11h56m · Eternity 6h13m / 8h01m.
-  Totals: **24h29m / 40h55m**. Remodel lap 1: ~1.3–1.7 h per mall (engaged).
-- Longest gap between purchases for the engaged bot: 3 min (mall 1) to 13 min (mall 6).
+- **Same prices everywhere.** Prices don't scale per mall (numbers stay modest early on). Later malls are
+  richer (loot, permanent bonuses, Head Office), so their early game flies by; they are *deeper* instead.
+- **Fitted crusts.** `Tools/BalanceSim -- fit --apply` bisects each mall's crust size until the engaged bot
+  clears it in the planned hours (3.25, 3.75, 4.25, 4.75, 5.25, 5.25 = 26.5 h), and moves the layer boundaries
+  so the bot spends about as long in every layer below the loose one. Inside a layer, the depth gauge follows
+  the square root of the scoops dug.
+- **Throughput, not multipliers, sets the pace.** Rigs only dig what their line can take, hand digging is
+  capped by rubble, and the factory ticks at a fixed step, so a mall takes as long as its factory needs.
+- **Something to buy all the way down.** Bigger Chunks (polynomial price, linear effect) keeps cash useful
+  after the rest of the tree is bought, without the runaway growth an exponential sink causes in rich malls.
+- **Measured pacing** (engaged bot, seed 1234, final fit): Crestview 3.26 h · Neon Galaxy 3.77 h · Galleria
+  4.20 h · Skyport 4.73 h · Lucky Lagoon 5.20 h · Eternity 5.19 h = **26.35 h**. On the previous fit six seeds
+  spread 26.09–26.42 h, and the casual bot took 27.5–28.1 h. Longest gap between purchases: 12 min
+  (Crestview), under 5 min from the third mall on.
+- **Early game** (Crestview, engaged bot, median of six seeds): cup and first beautification in under 30 s,
+  bucket ~7 min, hamster wheel ~10 min, skimmer ~21 min, first skimmer line ~37 min.
 
 ## Presentation
 
 - **All art is procedural** (no asset files): low-poly meshes with vertex colours, where vertex alpha is an
-  emission mask (neon, screens, lasers glow and bloom). Built-in render pipeline, linear colour, custom
-  surface shaders (`Assets/Resources/Shaders`), a small bloom/grade post effect, a floodlight over the dig.
-- **The crust** is a heightfield with a tiled procedural coin texture tinted per layer; clicks punch
-  craters that relax over a few seconds; junk props sit on top and are swapped per layer.
-- **UI** is light "glass": translucent rounded cards, soft shadows, one teal accent, gold for money
-  (Segoe UI system fonts). Wallet, depth gauge, pipeline card, goal card, shop (Tools / Machines /
-  Upgrades / Head Office), toasts, centre banners for new layers and legendary finds, wish quote bubbles,
-  the Wish Journal (wishes, relic museum, achievements, stats), settings, offline report, contract signing.
-- **Audio is synthesised at startup**: digs, coin clinks, a ka-ching register, wish chimes, fanfares, rat
-  squeaks, and a 16-bar lo-fi "dead mall muzak" loop per mall (key, tempo and progression from the theme).
+  emission mask (neon, screens and LEDs glow and bloom). Built-in render pipeline, linear colour, custom
+  shaders (`Assets/Resources/Shaders`: lit, crust, water, glow, ghost, soft, scroll, text, bloom).
+- **Loose items and belt items** are drawn with GPU instancing per item type, so thousands of coins cost
+  little. Shoppers, Doug and Chad are jointed low-poly people with walk and throw animations.
+- **UI** is uGUI built from code: a first-person HUD (crosshair, carry meter, cash, depth, hotbar, prompts,
+  receipts), speech bubbles, toasts and banners, MAINT-OS 95 (a green-on-black 1995 laptop), the build
+  catalogue, the Wish Journal and settings.
+- **Audio is synthesised at startup**: footsteps and wading plops, coin clinks, a ka-ching register, wish
+  chimes, a whistle, fanfares, and a lo-fi "dead mall muzak" loop per mall.

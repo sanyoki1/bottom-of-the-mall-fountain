@@ -120,6 +120,7 @@ namespace WishExtractor.Core
         public double DepthFeet;
         public double CrustScoops;     // total crust work (scoops) from the top to bare concrete
         public double[] Bounds;        // cumulative scoops at the top of each stratum; last entry = CrustScoops
+        public double[] BoundFracs;    // fitted tops of strata 2.. as fractions of CrustScoops (null = geometric layers)
         public double ValueScale = 1;  // every value and price in this mall is (Crestview amount) × ValueScale
         public double LootScale = 1;   // v1 crust loot values are divided by this (v1 grew ×10⁴ per mall; v2 keeps numbers modest)
         public double StoryScale = 1;  // likewise for v1 wish and relic values
@@ -216,6 +217,7 @@ namespace WishExtractor.Core
         StartCarry,     // Head Office: start every mall with this carry tier (level = tier)
         StartUnlocks,   // Head Office: start every mall with the basic factory researched
         RivalRepel,     // × (1 - Value) rival diver visits per level
+        ChunkSize,      // + Value × the base chunk per level (linear): more crust and loot per gunk chunk, so swings and rigs dig faster
     }
 
     public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice }
@@ -232,6 +234,7 @@ namespace WishExtractor.Core
         public double Value;
         public double Cost;             // first level, Crestview dollars (× mall ValueScale)
         public double CostGrowth = 2.2;
+        public double CostPower;        // > 0: level L costs Cost × (L + 1)^CostPower instead (deep sinks that never max out)
         public int MaxLevel = 1;
         public bool WishTokens;         // paid in Wish Tokens instead of cash
         public bool LuckyPennies;       // Head Office perks: paid in Lucky Pennies, kept across malls
@@ -243,7 +246,8 @@ namespace WishExtractor.Core
         public double CostAt(int level, double scale)
         {
             bool plain = WishTokens || LuckyPennies;
-            return Math.Round(Cost * Math.Pow(CostGrowth, level) * (plain ? 1 : scale), plain ? 0 : 2);
+            double curve = CostPower > 0 ? Math.Pow(level + 1, CostPower) : Math.Pow(CostGrowth, level);
+            return Math.Round(Cost * curve * (plain ? 1 : scale), plain ? 0 : 2);
         }
     }
 

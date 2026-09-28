@@ -56,6 +56,10 @@ namespace WishExtractor.Core
             }
             Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.0, 12, 0, 3,
                 "Forty push-ups a day, all of them with a shovel. Every swing and every dig rig bites deeper.", "dig_sandshovel");
+            // the deep money sink: never maxes out, and every level gets the mall to bare concrete sooner
+            var chunks = Lv("dig_chunks", "Bigger Chunks", TechBranch.Tools, TechKind.ChunkSize, 0.25, 300, 1, 999, 1, 3,
+                "A geologist from the community college shows you the crust's fault lines. It now comes away in slabs the size of a toaster.", "dig_shoulders");
+            chunks.CostPower = 2.5;
 
             // security: keeping Officer Doug and Chad off your back
             Lv("sec_donuts", "Donut Diplomacy", TechBranch.Security, TechKind.GuardFine, 0.3, 4, 3.5, 3, 0, 0,
@@ -89,8 +93,8 @@ namespace WishExtractor.Core
             }
             F("fountain_scrub", "Scrub the Grime", 3, 0.50, false, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
             F("fountain_jets", "Fix the Water Jets", 4, 3, false, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
-            F("fountain_lights", "Coloured Lights", 5, 15, false, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
-            F("fountain_neon", "'MAKE A WISH' Neon", 6, 80, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
+            F("fountain_lights", "Coloured Lights", 5, 8, false, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
+            F("fountain_neon", "'MAKE A WISH' Neon", 6, 45, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
             F("fountain_cherub", "Cherub Statue", 8, 15, true, "A chubby stone baby who judges everyone's throwing form. Paid for in pure wishes.", "fountain_neon", 4);
             F("fountain_koi", "Koi", 8, 40, true, "Twelve koi, each named after a former mall manager. They are thriving. The managers are not.", "fountain_cherub", 5);
             F("fountain_music", "Mood Music", 10, 2000, false, "Smooth jazz, piped in from a speaker disguised as a rock. The rock is also smooth.", "fountain_koi", 6);

@@ -1,12 +1,15 @@
-# Wish Extractor: Mall Fountain Tycoon
+# Wish Extractor
 
-A Unity (6000.4.2f1) incremental tycoon game. You start at the bottom of a dry, 30-foot mall fountain
-packed with forty years of pennies, gum and calcified mall, armed with a piece of chewed bubblegum on a
-string. Dig it out, wash off the syrup, sort the treasure from the zinc, sell it at a greasy vending
-machine, and keep buying bigger machines until the whole fountain runs itself. Then sign with a bigger
-mall and do it again.
+A first-person fountain factory game in Unity (6000.4.2f1), in the spirit of *Find The Needle*. You clock in
+at the bottom of a dead mall's fountain with nothing but your hands. Pick up the pennies shoppers throw
+in, one at a time, and carry them to the COIN-O-MATIC 3000. Buy a paper cup, then a sand pail, a mop
+bucket, a wheelbarrow, a shopping cart. Research hamster wheels, skimmer bots, conveyor belts and deposit
+hoppers at the Maintenance Terminal. Beautify the fountain so the crowd throws more, and fancier, things
+(quarters, gold coins, diamonds, then car keys, dentures, a whole vending machine). Then dig through forty
+years of crust to bare concrete and sign with the next mall.
 
-![Crestview Commons mid-game](Docs/Screenshots/crestview_factory.png)
+Mall security fines you for wading, a rival diver named Chad pockets your coins, and every goldfish has to
+go back in the water.
 
 ## Play
 
@@ -20,19 +23,16 @@ The Windows build is not committed; rebuild it with the command below.
 
 | Input | Action |
 |---|---|
-| Left click the crust | Dig (hold to keep digging) |
-| Left click a glowing orb | Catch a True Wish before it floats away |
-| Left click a golden penny / the mall rat | Bonus effects / a guaranteed relic |
-| Left click a machine | Whack it for a small burst of output |
-| Left click the red vending machine, or **Space** | Sell your pocket |
-| Right-drag or **Q/E** | Orbit the camera |
-| Scroll | Zoom |
-| **WASD** / middle-drag | Pan · **R** resets the view |
-| **1–4** | Shop tabs · **B** cycles buy amount (×1/×10/×100/Max) |
-| **Tab** | Hide/show the shop · **J** journal · **Esc** settings |
+| **WASD** / mouse | Walk / look · **Shift** sprint · **Space** jump |
+| **E** or left click | Pick up what you're looking at, deposit at the kiosk, use the terminal or the easel, catch a wish, chase Chad |
+| Hold left click | Keep grabbing (nets, rakes and magnets scoop everything in their circle) |
+| **1** / **2** / **3** (or **B**) | Grab tool / dig tool / build mode |
+| In build mode | Click build (drag for belt lines) · **R** rotate · wheel next item · **Tab** catalogue · **X** demolish |
+| **J** / **Esc** | Journal (wishes, relics, achievements, stats) / settings |
+| **C** | Sign the next contract once you hit bare concrete |
 
-Progress autosaves every 30 seconds and on quit (`%USERPROFILE%\AppData\LocalLow\Nico Macaraig\Wish Extractor\wishextractor_save.json`).
-Offline progress runs for up to 2 hours at 50% efficiency (Head Office perks raise both).
+Progress autosaves every 30 seconds and on quit
+(`%USERPROFILE%\AppData\LocalLow\Nico Macaraig\Wish Extractor\wishextractor_save.json`).
 
 ## How long is it?
 
@@ -40,11 +40,10 @@ Measured with the balance simulator (a bot playing the real game rules, see belo
 
 | Player profile | Six malls (the campaign) |
 |---|---|
-| Engaged, efficient bot (clicks, catches 55% of wishes, buys optimally every second) | **24h 29m** |
-| Idle-leaning bot (barely clicks, catches 15% of wishes) | **40h 55m** |
+| Engaged bot (sprints, catches 80% of wishes, saves for the next big upgrade, fills the rim with lines) | **26h 21m** (seed 1234) |
+| Casual bot (walks, reacts slower, catches 45% of wishes, idles now and then; builds the same factory) | about 27–28 h (measured on the previous fit) |
 
-After the sixth mall the game continues forever with Remodel contracts (every mall again, bigger and
-richer, about 1–3 hours per mall). Collections (107 wishes, 72 relics, 71 achievements) add more.
+After the sixth mall the game continues with Remodel contracts (every mall again, deeper and richer).
 
 ## Build
 
@@ -55,15 +54,19 @@ richer, about 1–3 hours per mall). Collections (107 wishes, 72 relics, 71 achi
 Or in the editor: **Wish Extractor → 2. Build Windows Player**. The build step also (re)creates
 `Assets/Scenes/Main.unity` and applies player settings (linear colour, windowed, no splash).
 
+No Unity at hand (a cloud or Linux session)? `dotnet build Tools/UnityCompileCheck` compiles every runtime
+script against Unity 2022.3 reference assemblies from NuGet. It reports one expected error (a Unity 6-only
+overload in `GameRoot.cs`) and catches type errors only.
+
 ## Self-tests in the player
 
 | Flag | What it does |
 |---|---|
-| `-autotour -shots <dir>` | Plays a scripted tour through every mall and saves ~20 screenshots, then quits |
-| `-uitest -savefile <name> -fresh` | Drives the real uGUI/raycast input path through 39 checks (dig, sell, buy, journal, settings, contract, Head Office) and logs PASS/FAIL |
-| `-loadtest -savefile <name> -pretendaway <sec>` | Loads a save as if you'd been away, logs the restored state and the offline report |
+| `-autotour -shots <dir>` | A scripted walk through every system and mall; saves 52 screenshots, then quits |
+| `-uitest -savefile <name> -fresh` | Drives the real controller, crosshair and uGUI through 96 checks (walk, pick up, deposit, terminal, crowd, wishes, the goldfish, Officer Doug, Chad, build mode, digging, the contract, Head Office, menus, save) and logs PASS/FAIL |
+| `-loadtest -savefile <name>` | Loads a save and logs what came back (pose, cash, carried items, buildings) |
 | `-savefile <name>` / `-fresh` | Use a different save file / erase it first |
-| `-dev` | Debug keys: F5 cash, F6 finish mall, F7 dig +10%, F8 golden penny, F9 wish storm |
+| `-dev` | Debug keys: F5 cash, F6 finish the mall, F7 dig 10% deeper, F8 start the mall event |
 
 Example (screenshots land in `Screenshots/`):
 
@@ -78,15 +81,14 @@ Builds/Windows/WishExtractor.exe -autotour -shots Screenshots -screen-fullscreen
 
 ```bash
 dotnet run -c Release --project Tools/BalanceSim -- 40 1234 engaged
-```
-
-```bash
 dotnet run -c Release --project Tools/BalanceSim -- fit --apply
 ```
 
-The first prints per-mall and per-stratum clear times, purchase cadence and the longest gap between
-purchases (`report_<profile>.txt`). The second re-fits every stratum boundary (and the first Remodel
-lap) from the bot's actual trajectory and writes them into `ContentMalls.cs`; run it after any change
-to prices, rates or multipliers. `counts` prints content totals.
+The first plays all six malls and writes `report_<profile>.txt`: hourly income, dig rate and depth; when
+each layer was reached; the first time each key upgrade was bought; the longest gap between purchases;
+where the money came from; and which rim slots got a line. The second fits every mall's crust size and
+layer boundaries to the planned hours and writes them into `ContentMalls.cs`; run it after any change to
+prices, rates or multipliers. `counts`, `crowd <wishability>`, `factory`, `crust`, `smoke` and `slots`
+check individual systems.
 
-See `DESIGN.md` for the game design and `HANDOFF.md` for current state and next steps.
+See `DESIGN.md` for the game design and `HANDOFF.md` for the current state and next steps.

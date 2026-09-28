@@ -2,20 +2,18 @@ Paste this into a new Claude Code session opened in `C:\Users\niczm\Bottom of th
 
 ---
 
-Continue the first-person pivot of Wish Extractor (Unity 6000.4.2f1, this repo). Read `CLAUDE.md`, then `HANDOFF.md`, then `PIVOT_FPS.md`. `PIVOT_FPS.md` is the design and milestone plan and the source of truth. Its "Decisions" and "Spec decided in session 2" sections are settled, so don't ask me those again.
+Continue Wish Extractor (Unity 6000.4.2f1, this repo). Read `CLAUDE.md`, then `HANDOFF.md`, then `PIVOT_FPS.md` if you need the settled design decisions (don't ask me those again).
 
-Where things stand: milestones M1–M5 are done, verified and committed (`f37e470` … `053f424`). M6 is in progress as **uncommitted work that compiles and passes the existing uitest (85/85)**: hazards (Officer Doug, Chad the rival diver), the Security tech branch, the goldfish, footsteps and more jokes, a rewritten balance bot with a `fit` command, and a round of economy fixes. `HANDOFF.md` ("NEXT: finish M6") lists exactly what's done and what's left. Build on that WIP; don't redo it.
+Where things stand: M1–M5 are verified and committed. M6 (hazards, the Security branch, the goldfish, the balance bot and the economy) was finished in a cloud session with no Unity: the balance is measured with the bot (every seed ≥ 24 h), and the new tour shots and uitest checks compile against Unity reference assemblies, but **nothing from that session has been built or run in Unity**. That work lives on the branch `claude/upbeat-dijkstra-ypw7nn` once it's committed and pushed; check it out (or merge it into `master` if I ask you to).
 
-What's left for M6:
-1. Run the fitter (`dotnet run -c Release --project Tools/BalanceSim -- fit --apply`), then the 40 h engaged and casual reports. The engaged bot must total at least 24 hours (unfitted it's 11.1 h). Read the per-mall logs for runaway income or dead stretches, and fix the economy if needed, not just the crust sizes.
-2. Check the early pacing against `PIVOT_FPS.md`.
-3. Extend `-autotour` and `-uitest` to cover the hazards and the goldfish; build, run tour, uitest and loadtest, look at every screenshot, and fix what's wrong.
-4. Commit M6 once verified.
-5. Update HANDOFF.md, CLAUDE.md, DESIGN.md and README.md for the new game (HANDOFF lists the lessons to add to CLAUDE.md).
-
-What I want (unchanged): a first-person fountain factory game like Find The Needle. Pick up coins by hand and carry them to the COIN-O-MATIC 3000; buy equipment that carries more per trip; a Maintenance Terminal tech tree unlocking tools, generators, machines and conveyor belts; NPC shoppers throwing ever-better (and more ridiculous) things as the fountain gets fancier; lots of humour; hazards always on; the six malls, strata, wishes and relics from v1; at least 24 hours total, verified by the balance bot. You have creative liberty.
+What's left for M6 (`HANDOFF.md`, "NEXT"):
+1. Build, then fix any compile errors the reference-assembly check couldn't see.
+2. Run `-autotour` and look at every screenshot, especially 30–36 (Security tab, Officer Doug, Chad, the goldfish). Fix what's wrong.
+3. Run `-uitest` (expect 96/96) and `-loadtest`.
+4. Refresh `Docs/Screenshots` from the tour.
+5. Commit M6 once it's verified, then update HANDOFF.md.
 
 How to work:
 - You're authorized to commit a verified milestone (build + tour + uitest pass); ask before committing anything unverified.
-- Follow the CLAUDE.md rules: vertex alpha = emission; no commands that trigger permission prompts (file changes through Write/Edit only, no rm, no `sed -i`, no `cd` chains); never kill processes.
+- Follow the CLAUDE.md rules: vertex alpha = emission; after any price/rate change re-fit with the balance bot; no commands that trigger permission prompts (file changes through Write/Edit only, no rm, no `sed -i`, no `cd` chains); never kill processes.
 - Give me a one-line status update when M6 is done.

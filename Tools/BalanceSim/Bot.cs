@@ -22,9 +22,23 @@ sealed class Bot
     public double ReportEvery = 3600;
     float px = -1.5f, pz = -8.5f;
     const float KioskX = -6.5f, KioskZ = -13.5f, EntryX = -1.2f, EntryZ = -8.2f;
-    // factory: slot index → building uids in its line
-    static readonly float[] SlotAngles = { 0, 180, 60, 120, 240, 300, 45, 135, 225, 315, 15, 165, 195, 345, 75, 105, 255, 285 };   // (cos, sin) degrees
-    const int CoinSlots = 2;                   // the first two carry coin lines; the rest dig lines
+    // factory: slot index → building uids in its line. Slots are rim angles in degrees (x = cos, z = sin);
+    // the first two carry coin lines, the rest dig lines. Slots that don't fit (stepping stones, props,
+    // neighbouring lines) are skipped, like a player would.
+    static readonly float[] SlotAngles = MakeSlots();
+    const int CoinSlots = 2;
+    static float[] MakeSlots()
+    {
+        var a = new List<float> { 0, 180 };
+        foreach (int k in new[] { 6, 3, 1, 5, 2, 4, 8, 7 })
+            foreach (int q in new[] { 0, 180 })
+            {
+                a.Add(q + k * 10);
+                a.Add(q - k * 10 + 360);
+            }
+        for (int i = 0; i < a.Count; i++) a[i] %= 360;
+        return a.Distinct().ToArray();
+    }
     readonly List<int>[] lines = new List<int>[SlotAngles.Length];
     readonly string[] lineIntake = new string[SlotAngles.Length];
     readonly HashSet<string> failed = new HashSet<string>();
@@ -38,6 +52,12 @@ sealed class Bot
         idleShare = engaged ? 0 : 0.25;
         Sim = new Sim(save, seed);
         if (save.itemsPicked == 0 && save.mallIndex == 0 && Sim.Loose.Count == 0) Sim.StartRun();
+        Sim.OnDeposit += (cash, n, joke) => income[0] += cash;
+        Sim.OnHopperSold += (b, cash, n) => income[1] += cash;
+        Sim.OnWishCaught += (w, cash, tokens, first) => income[2] += cash;
+        Sim.OnObjectiveDone += (o, reward) => income[3] += reward;
+        Sim.OnFined += fine => income[4] += fine;
+        Sim.OnStratumReached += s => layerTimes.Add(Sim.Time - mallStart);
         for (int i = 0; i < lines.Length; i++) lines[i] = new List<int>();
         mallStart = Sim.Time;
     }
@@ -47,6 +67,10 @@ sealed class Bot
     void Mark(string what) { if (!firsts.ContainsKey(what)) firsts[what] = Sim.Time - mallStart; }
 
     // ───────────────────────────── time ─────────────────────────────
+
+    /// <summary>When set, PlayMall records (seconds into the mall, scoops dug) every few seconds (the fitter uses it).</summary>
+    public List<(double t, double dug)> Curve;
+    double nextCurve;
 
     /// <summary>Let time pass; the bot keeps an eye on wishes and Chad while it does.</summary>
     void Advance(double seconds)
@@ -59,6 +83,7 @@ sealed class Bot
             Sim.PlayerInWater = px * px + pz * pz < 64;
             Sim.Tick(step);
             seconds -= step;
+            if (Curve != null && Sim.Time >= nextCurve) { Curve.Add((Sim.Time - mallStart, Sim.S.dug)); nextCurve = Sim.Time + 5; }
             foreach (var w in Sim.Wishes.ToArray())
             {
                 if (w.Age < reaction || wishDecided.Contains(w.Uid)) continue;
@@ -183,27 +208,82 @@ sealed class Bot
 
     // ───────────────────────────── shopping ─────────────────────────────
 
+    /// <summary>How much the bot wants a tech: its price is multiplied by this (lower = sooner).</summary>
+    static double Priority(TechDef t)
+    {
+        // the headline upgrades (a bigger container, the next fountain job, a new machine) come first;
+        // levelled nodes are what's left over
+        switch (t.Kind)
+        {
+            case TechKind.Carry: return 0.25;
+            case TechKind.Unlock: return 0.45;
+            case TechKind.Tool: return 0.5;
+            case TechKind.Wishability: return t.MaxLevel == 1 ? 0.35 : 1.5;
+            case TechKind.GuardFine:
+            case TechKind.RivalRepel: return 3.0;
+            default: return 1.5;
+        }
+    }
+
+    /// <summary>
+    /// Wish Tokens and Lucky Pennies buy whatever they can (they have nothing else to do). Cash has a goal:
+    /// the most wanted tech, affordable or not. The bot buys it as soon as it can and, while saving up,
+    /// only spends pocket change (a tenth of the goal's price) on anything else, like a player would.
+    /// </summary>
     void Shop()
     {
-        for (int guard = 0; guard < 40; guard++)
+        for (int guard = 0; guard < 80; guard++)
         {
-            int best = -1;
-            double bc = double.MaxValue;
+            int buy = -1, goal = -1;
+            double buyScore = double.MaxValue, goalScore = double.MaxValue;
             for (int i = 0; i < Content.Techs.Length; i++)
             {
-                if (!Sim.CanBuyTech(i)) continue;
+                if (Sim.TechMaxed(i) || !Sim.TechUnlocked(i)) continue;
                 var t = Content.Techs[i];
-                double c = Sim.TechCost(i);
-                // cash, tokens and pennies are separate budgets; compare within each by price, preferring big-ticket unlocks a little
-                double score = t.WishTokens ? c * 0.01 : t.LuckyPennies ? c * 0.001 : c;
-                if (t.Kind == TechKind.Carry || t.Kind == TechKind.Wishability || t.Kind == TechKind.Unlock) score *= 0.6;
-                if (score < bc) { bc = score; best = i; }
+                double score = Sim.TechCost(i) * Priority(t);
+                if (t.WishTokens || t.LuckyPennies)
+                {
+                    if (Sim.CanAfford(i) && score < buyScore) { buyScore = score; buy = i; }
+                }
+                else if (score < goalScore) { goalScore = score; goal = i; }
             }
-            if (best < 0) return;
-            var bt = Content.Techs[best];
-            Sim.BuyTech(best);
-            Mark(bt.Id);
+            if (buy < 0 && goal >= 0)
+            {
+                // the factory's next line competes with the tech goal (ManageFactory builds it once it's affordable)
+                bool forFactory = factoryWant > 0 && factoryWant * 0.45 < goalScore;
+                if (!forFactory && Sim.CanAfford(goal)) buy = goal;
+                else
+                {
+                    double limit = (forFactory ? factoryWant : Sim.TechCost(goal)) * 0.1;
+                    for (int i = 0; i < Content.Techs.Length; i++)
+                    {
+                        var t = Content.Techs[i];
+                        if (t.WishTokens || t.LuckyPennies || !Sim.CanBuyTech(i) || Sim.TechCost(i) > limit) continue;
+                        double score = Sim.TechCost(i) * Priority(t);
+                        if (score < buyScore) { buyScore = score; buy = i; }
+                    }
+                }
+            }
+            if (buy < 0) return;
+            Sim.BuyTech(buy);
+            Mark(Content.Techs[buy].Id);
+            NoteBuy();
         }
+    }
+
+    // where the money came from this mall: kiosk, hoppers, wishes, objectives (and went: fines)
+    readonly double[] income = new double[5];
+    readonly List<double> layerTimes = new List<double>();
+
+    // purchase gaps: long stretches with nothing to buy are dead time for a player
+    double lastBuy, maxGap, maxGapAt;
+    int buys;
+    void NoteBuy()
+    {
+        double gap = Sim.Time - lastBuy;
+        if (gap > maxGap) { maxGap = gap; maxGapAt = lastBuy - mallStart; }
+        lastBuy = Sim.Time;
+        buys++;
     }
 
     // ───────────────────────────── the factory ─────────────────────────────
@@ -215,10 +295,10 @@ sealed class Bot
         return ((int)Math.Round(px - 0.5f - ox), (int)Math.Round(pz - 0.5f - oz));
     }
 
-    /// <summary>Plan a straight line out from the rim: intake, then 2×2 stages, then a hopper.</summary>
-    List<(BuildDef d, int x, int z, int rot)> PlanLine(int slot, string intake, string[] stages, string hopper, float radius)
+    /// <summary>Plan a straight line out from the rim at an angle (degrees): intake, then 2×2 stages, then a hopper.</summary>
+    List<(BuildDef d, int x, int z, int rot)> PlanLine(float angleDeg, float radius, string intake, string[] stages, string hopper)
     {
-        float a = SlotAngles[slot] * (float)Math.PI / 180;
+        float a = angleDeg * (float)Math.PI / 180;
         float cx = (float)Math.Cos(a) * radius, cz = (float)Math.Sin(a) * radius;
         int rot = Sim.FacingRotation(cx, cz);
         var di = D(intake);
@@ -267,6 +347,7 @@ sealed class Bot
         foreach (int u in lines[slot]) Sim.Remove(u);
         lines[slot].Clear();
         lineIntake[slot] = null;
+        lineSig[slot] = null;
     }
 
     string BestUnlocked(params string[] ids)
@@ -281,53 +362,103 @@ sealed class Bot
     static readonly string[] CoinLadder = { "intake_skimmer", "intake_pump", "intake_claw" };
     static readonly string[] DigLadder = { "dig_rig", "dig_borer" };
 
+    /// <summary>
+    /// The first placement near a slot where every machine of the line fits: the exact angle and radius
+    /// first, then nudged outward and sideways (a 3-deep borer needs to stand further out). Null = no room.
+    /// </summary>
+    List<(BuildDef d, int x, int z, int rot)> FindPlan(int slot, string intake, string[] stages, string hopper)
+    {
+        foreach (float dr in new[] { 0f, 0.5f, 1f })
+            foreach (float da in new[] { 0f, 4f, -4f })
+            {
+                var plan = PlanLine(SlotAngles[slot] + da, 10.6f + dr, intake, stages, hopper);
+                if (plan.All(p => Sim.CanPlace(p.d, p.x, p.z, p.rot, out _, true))) return plan;
+            }
+        return null;
+    }
+
+    /// <summary>Diagnostics: build a borer line in every slot that has room (everything unlocked).</summary>
+    public string ProbeSlots()
+    {
+        foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock) Sim.DebugSetTech(t.Id, 1);
+        Sim.DebugAddCash(1e12);
+        var sb = new StringBuilder();
+        int built = 0;
+        for (int s = 0; s < SlotAngles.Length; s++)
+        {
+            string intake = s < CoinSlots ? "intake_claw" : "dig_borer";
+            var stages = s < CoinSlots ? new[] { "proc_roller" } : new[] { "proc_tumbler", "proc_sorter" };
+            var plan = FindPlan(s, intake, stages, "hopper2");
+            bool ok = plan != null && TryBuild(plan, lines[s]);
+            if (ok) built++;
+            sb.AppendLine($"slot {s,2} ({SlotAngles[s],3}°): {(ok ? "built at " + string.Join(" ", plan.Select(p => $"{p.d.Id}({p.x},{p.z})")) : "no room")}");
+        }
+        sb.AppendLine($"{built} lines");
+        return sb.ToString();
+    }
+
+    /// <summary>The cheapest line the factory wants next but can't afford yet (0 = nothing): Shop saves for it.</summary>
+    double factoryWant;
+    bool bigHoppers;
+    readonly string[] lineSig = new string[SlotAngles.Length];
+    readonly (string intake, string[] stages, string hopper)[] linePlan = new (string, string[], string)[SlotAngles.Length];
+
+    /// <summary>(Re)build the line in a slot if its planned machines beat what's there. False = can't afford it yet.</summary>
+    bool UpgradeLine(int s, string intake, string[] stages, string hopper)
+    {
+        string sig = intake + "|" + string.Join(",", stages) + "|" + hopper;
+        if (lineSig[s] == sig || failed.Contains(s + sig)) return true;
+        double cost = (D(intake).Cost + stages.Sum(st => D(st).Cost) + D(hopper).Cost + (D(intake).W == 1 ? D("belt").Cost : 0)) * Sim.Scale;
+        double need = cost * (lineSig[s] == null ? 1.05 : 1.3);
+        if (Sim.S.cash < need)
+        {
+            if (factoryWant <= 0 || need < factoryWant) factoryWant = need;
+            return false;
+        }
+        var old = linePlan[s];
+        bool had = lineSig[s] != null;
+        if (had) ClearLine(s);
+        var plan = FindPlan(s, intake, stages, hopper);
+        if (plan != null && TryBuild(plan, lines[s]))
+        {
+            lineIntake[s] = intake; lineSig[s] = sig; linePlan[s] = (intake, stages, hopper);
+            Mark("line " + intake);
+            return true;
+        }
+        failed.Add(s + sig);
+        lineSig[s] = null;
+        var back = had ? FindPlan(s, old.intake, old.stages, old.hopper) : null;
+        if (back != null && TryBuild(back, lines[s]))
+        {
+            // put the old line back (the upgrade didn't fit here)
+            lineIntake[s] = old.intake;
+            lineSig[s] = old.intake + "|" + string.Join(",", old.stages) + "|" + old.hopper;
+            linePlan[s] = old;
+        }
+        return true;
+    }
+
     void ManageFactory()
     {
+        factoryWant = 0;
         if (!Sim.BuildUnlocked(D("hopper")) || !Sim.BuildUnlocked(D("gen_hamster"))) return;
-        string hopper = Sim.BuildUnlocked(D("hopper2")) && Sim.S.cash > 40000 * Sim.Scale ? "hopper2" : "hopper";
-        // coin lines on the east and west
+        if (Sim.BuildUnlocked(D("hopper2")) && Sim.S.cash > 20 * D("hopper2").Cost * Sim.Scale) bigHoppers = true;
+        string hopper = bigHoppers ? "hopper2" : "hopper";
+        // coin lines on the east and west (rollers make coins worth 10% more)
         string coin = BestUnlocked(CoinLadder);
         if (coin != null)
             for (int s = 0; s < CoinSlots; s++)
             {
-                if (Rank(lineIntake[s], CoinLadder) >= Rank(coin, CoinLadder) || failed.Contains(s + coin)) continue;
-                var stages = Sim.BuildUnlocked(D("proc_roller")) && coin != "intake_skimmer" ? new[] { "proc_roller" } : new string[0];
-                if (coin == "intake_skimmer") stages = new string[0];
-                var plan = PlanLine(s, coin, stages, hopper, 10.6f);
-                double cost = plan.Sum(p => p.d.Cost) * Sim.Scale;
-                if (Sim.S.cash < cost * (lineIntake[s] == null ? 1 : 1.5)) continue;
-                var old = lineIntake[s];
-                if (old != null) ClearLine(s);
-                if (TryBuild(plan, lines[s])) { lineIntake[s] = coin; Mark("line " + coin); }
-                else
-                {
-                    failed.Add(s + coin);
-                    if (old != null) { var back = PlanLine(s, old, new string[0], "hopper", 10.6f); TryBuild(back, lines[s]); lineIntake[s] = old; }
-                }
+                var stages = coin != "intake_skimmer" && Sim.BuildUnlocked(D("proc_roller")) ? new[] { "proc_roller" } : new string[0];
+                if (!UpgradeLine(s, coin, stages, hopper)) break;
             }
-        // dig lines (need the tumbler and a sorter to be worth it below the loose layer)
+        // dig lines (need the tumbler and a sorter to be worth it below the loose layer); dug loot isn't
+        // coins, so there's no roller on these
         string dig = BestUnlocked(DigLadder);
         string sorter = BestUnlocked("proc_pigeons", "proc_sorter");
         if (dig != null && sorter != null && Sim.BuildUnlocked(D("proc_tumbler")) && !Sim.MallCleared)
             for (int s = CoinSlots; s < SlotAngles.Length; s++)
-            {
-                if (Rank(lineIntake[s], DigLadder) >= Rank(dig, DigLadder) || failed.Contains(s + dig)) continue;
-                var stages = new List<string> { "proc_tumbler", sorter };
-                if (Sim.BuildUnlocked(D("proc_roller"))) stages.Add("proc_roller");
-                var plan = PlanLine(s, dig, stages.ToArray(), hopper, 10.6f);
-                double cost = plan.Sum(p => p.d.Cost) * Sim.Scale;
-                if (Sim.S.cash < cost * (lineIntake[s] == null ? 1.1 : 1.6)) break;
-                var old = lineIntake[s];
-                if (old != null) ClearLine(s);
-                if (TryBuild(plan, lines[s])) { lineIntake[s] = dig; Mark("line " + dig); break; }
-                failed.Add(s + dig);
-                if (old != null)
-                {
-                    // put the old line back (the upgrade didn't fit here)
-                    var back = PlanLine(s, old, stages.ToArray(), "hopper", 10.6f);
-                    if (TryBuild(back, lines[s])) lineIntake[s] = old;
-                }
-            }
+                if (!UpgradeLine(s, dig, new[] { "proc_tumbler", sorter }, hopper)) break;
         EnsurePower();
     }
 
@@ -358,11 +489,16 @@ sealed class Bot
     {
         mallStart = Sim.Time;
         firsts.Clear();
-        for (int i = 0; i < lines.Length; i++) { lines[i].Clear(); lineIntake[i] = null; }
+        for (int i = 0; i < lines.Length; i++) { lines[i].Clear(); lineIntake[i] = null; lineSig[i] = null; linePlan[i] = default; }
         failed.Clear();
+        bigHoppers = false;
+        factoryWant = 0;
+        lastBuy = mallStart; maxGap = 0; maxGapAt = 0; buys = 0;
+        Array.Clear(income, 0, income.Length);
+        layerTimes.Clear();
         var mall = Sim.Mall;
         double end = mallStart + maxHours * 3600;
-        double nextReport = mallStart + ReportEvery;
+        double nextReport = mallStart + ReportEvery, lastDug = Sim.S.dug, lastEarned = Sim.S.runCash;
         while (!Sim.MallCleared && Sim.Time < end)
         {
             Trip();
@@ -372,12 +508,24 @@ sealed class Bot
             if (Sim.Time >= nextReport)
             {
                 nextReport += ReportEvery;
-                Log.AppendLine($"  [{mall.Id}] {Fmt.Time(Sim.Time - mallStart)}: cash {Fmt.Money(Sim.S.cash)}, earned {Fmt.Money(Sim.S.runCash)}, dug {Sim.S.dug:0}, depth {Sim.DepthFeet:0.0}/{mall.DepthFeet} ft (stratum {Sim.Stratum}), " +
+                Log.AppendLine($"  [{mall.Id}] {Fmt.Time(Sim.Time - mallStart)}: cash {Fmt.Money(Sim.S.cash)}, earned {Fmt.Money(Sim.S.runCash)} (+{Fmt.Money((Sim.S.runCash - lastEarned) / ReportEvery * 60)}/min), " +
+                               $"dug {Sim.S.dug:0} ({(Sim.S.dug - lastDug) / ReportEvery:0.#}/s), depth {Sim.DepthFeet:0.0}/{mall.DepthFeet} ft (stratum {Sim.Stratum}), " +
                                $"wish {Sim.Wishability:0}, carry {Sim.CarryDef.Name}, machines {Sim.MachinesBuilt}, power {Sim.PowerGen:0}/{Sim.PowerUse:0}, " +
-                               $"hoppers {Fmt.Money(Sim.HopperCashRate * 60)}/min, techs {Sim.TechLevelsOwned}");
+                               $"hoppers {Fmt.Money(Sim.HopperCashRate * 60)}/min, techs {Sim.TechLevelsOwned}, buys {buys}");
+                lastDug = Sim.S.dug;
+                lastEarned = Sim.S.runCash;
             }
         }
         double hours = (Sim.Time - mallStart) / 3600;
+        Curve?.Add((Sim.Time - mallStart, Sim.S.dug));
+        double tail = Sim.Time - lastBuy;
+        if (tail > maxGap) { maxGap = tail; maxGapAt = lastBuy - mallStart; }
+        Log.AppendLine($"  [{mall.Id}] {buys} purchases; longest gap {Fmt.Time(maxGap)} from {Fmt.Time(maxGapAt)}; last purchase {Fmt.Time(lastBuy - mallStart)}; " +
+                       $"income: kiosk {Fmt.Money(income[0])}, hoppers {Fmt.Money(income[1])}, wishes {Fmt.Money(income[2])}, objectives {Fmt.Money(income[3])}, fines -{Fmt.Money(income[4])}; " +
+                       $"value ×{Sim.ValueMult:0.0}, wishability {Sim.Wishability:0}, crust {Sim.TotalScoops:0} scoops, loot EV {Fmt.Money(mall.BaseEV)}/scoop");
+        Log.AppendLine($"  [{mall.Id}] layers reached at " + string.Join(", ", layerTimes.Select(t => Fmt.Time(t))) + $"; bare concrete {Fmt.Time(Sim.Time - mallStart)}");
+        Log.AppendLine($"  [{mall.Id}] lines at the end: " + string.Join(" ", Enumerable.Range(0, SlotAngles.Length).Select(s => lineSig[s] == null ? "-" : lineSig[s].Split('|')[0].Replace("intake_", "").Replace("dig_", ""))) +
+                       $"; plans that didn't fit: {failed.Count}");
         string firstsLine = string.Join(", ", firsts.Where(kv => kv.Key.StartsWith("carry_") || kv.Key.StartsWith("line ") || kv.Key.StartsWith("unlock_") || kv.Key.StartsWith("fountain_") && !kv.Key.Contains("polish") && !kv.Key.Contains("mints") || kv.Key.StartsWith("dig_"))
             .OrderBy(kv => kv.Value).Take(24).Select(kv => $"{kv.Key} {Fmt.Time(kv.Value)}"));
         Log.AppendLine($"  [{mall.Id}] firsts: {firstsLine}");

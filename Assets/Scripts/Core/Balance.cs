@@ -10,16 +10,16 @@ namespace WishExtractor.Core
 
         // ── NPC tosses ───────────────────────────────────────────────────────────
         // interval between tosses = TossBaseInterval / (1 + wishability * TossPerWish), then × event and tech
-        public const double TossBaseInterval = 7.0;
+        public const double TossBaseInterval = 5.0;
         public const double TossPerWish = 0.06;
         public const double TossFlight = 1.05;          // seconds a toss spends in the air
         public const double SinkTime = 0.9;             // seconds to sink to the crust
         public const int MaxLoose = 2500;               // oldest pennies dissolve into the crust beyond this
-        public const double SeedCoins = 180;            // loose coins waiting in a fresh fountain
+        public const double SeedCoins = 400;            // loose coins waiting in a fresh fountain (the carry ladder's first job)
 
         // Coin tier curve: tier i is allowed once wishability >= its MinWish; the weight of each allowed tier
         // is exp(-(i - mu)^2 / (2 sigma^2)) with mu = wishability * TierPerWish (+ archetype bias).
-        public const double TierPerWish = 0.075;
+        public const double TierPerWish = 0.08;
         public const double TierSigma = 1.35;
         public const double OddityBaseChance = 0.02;    // per toss once any oddity is unlocked
         public const double OddityPerWish = 0.0006;
@@ -59,7 +59,10 @@ namespace WishExtractor.Core
         public const float DigReach = 3.4f;
         public const double ChunkValue = 1.6;           // a gunk chunk carries this many scoops' worth of sorted loot
 
+        public const int RubbleCap = 300;               // hand digging stops while this many gunk chunks are lying around or carried
+
         // ── processing ───────────────────────────────────────────────────────────
+        public const double FactoryStep = 1.0 / 60;     // the factory ticks at this fixed step (see Sim.Tick)
         public const int RollSize = 50, BagSize = 20, PalletSize = 40;
         public const double RollMult = 1.10, BagMult = 1.15, PalletMult = 1.25, MeltMult = 1.35;
         public const double CompressorValue = 0.6;      // a pressed wish brick is worth this share of the wish

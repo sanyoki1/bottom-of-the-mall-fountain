@@ -31,5 +31,10 @@ Tools/BalanceSim/report_*.txt
 Tools/BalanceSim/fitted_bounds.txt
 !Tools/BalanceSim/BalanceSim.csproj
 
+# Compile check without Unity (Tools/UnityCompileCheck)
+Tools/UnityCompileCheck/bin/
+Tools/UnityCompileCheck/obj/
+!Tools/UnityCompileCheck/UnityCompileCheck.csproj
+
 # Tour / test screenshots (curated ones live in Docs/Screenshots)
 /Screenshots/

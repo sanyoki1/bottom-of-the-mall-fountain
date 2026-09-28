@@ -25,8 +25,25 @@ namespace WishExtractor.Core
         static readonly double[] FittedScoops =
         {
             // <fitted-scoops> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
-            0, 0, 0, 0, 0, 0,
+            194700, 27904200, 93981000, 200863100, 319065800, 488113000,
             // </fitted-scoops>
+        };
+
+        /// <summary>
+        /// Where strata 2..7 start, as fractions of each mall's crust, fitted with the scoops so the engaged
+        /// bot spends about as long in every layer below the loose one. A row of zeros falls back to
+        /// geometric layers (DefaultBounds).
+        /// </summary>
+        static readonly double[][] FittedBounds =
+        {
+            // <fitted-bounds> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
+            new[] { 0.0110439, 0.0307226, 0.0666121, 0.112771, 0.189609, 0.406094 },
+            new[] { 0.000351517, 0.00251202, 0.0155489, 0.06242, 0.227308, 0.559294 },
+            new[] { 0.000475532, 0.0196777, 0.126041, 0.292784, 0.496894, 0.733255 },
+            new[] { 0.0135871, 0.10373, 0.231818, 0.387721, 0.568382, 0.772348 },
+            new[] { 0.0378604, 0.135155, 0.261724, 0.412556, 0.586071, 0.781865 },
+            new[] { 0.044023, 0.141335, 0.266709, 0.415902, 0.588019, 0.782767 },
+            // </fitted-bounds>
         };
 
         /// <summary>Fallback: a loose layer of looseScoops, then geometric growth down to total.</summary>
@@ -41,11 +58,17 @@ namespace WishExtractor.Core
             return b;
         }
 
-        /// <summary>Resize a mall's crust (the balance fitter calls this between runs).</summary>
+        /// <summary>Resize a mall's crust (the balance fitter calls this between runs). Fitted layer shapes scale with it.</summary>
         public static void SetCrust(MallDef mall, double scoops)
         {
             mall.CrustScoops = Math.Max(Balance.LooseLayerScoops * 3, scoops);
-            mall.Bounds = DefaultBounds(mall.CrustScoops, Balance.LooseLayerScoops, mall.Strata.Length);
+            int n = mall.Strata.Length;
+            var b = DefaultBounds(mall.CrustScoops, Balance.LooseLayerScoops, n);
+            var f = mall.BoundFracs;
+            if (f != null && f.Length == n - 2)
+                for (int i = 2; i < n; i++)
+                    b[i] = Math.Min(mall.CrustScoops - (n - i), Math.Max(b[i - 1] + 1, f[i - 2] * mall.CrustScoops));
+            mall.Bounds = b;
         }
 
         static WishDef W(Rarity r, double v, string text) => new WishDef(r, v, text);
@@ -577,6 +600,8 @@ namespace WishExtractor.Core
                 var mall = malls[m];
                 mall.ComputeEV();
                 if (m < FittedScoops.Length && FittedScoops[m] > 0) mall.CrustScoops = FittedScoops[m];
+                if (m < FittedBounds.Length && FittedBounds[m] != null && FittedBounds[m].Length == mall.Strata.Length - 2 && FittedBounds[m][0] > 0)
+                    mall.BoundFracs = FittedBounds[m];
                 SetCrust(mall, mall.CrustScoops);
             }
 

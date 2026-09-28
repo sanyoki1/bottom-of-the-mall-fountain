@@ -364,14 +364,15 @@ namespace WishExtractor.Core
                 int d = (p.side + b.Rot) & 3;
                 var target = At(cx + Building.DX[d], cz + Building.DZ[d]);
                 if (target == null || target == b) { if (b.Status == "") b.Status = "Output needs a belt"; continue; }
-                var s = list[0];
-                double v = s.Count > 0 ? s.Value / s.Count : 0;
-                if (TryDeliver(target, cx, cz, s.Type, v))
+                // machines hand over as much as the next one takes (a belt takes one per gap)
+                for (int moved = 0; list.Count > 0 && moved < 32; moved++)
                 {
+                    var s = list[0];
+                    double v = s.Count > 0 ? s.Value / s.Count : 0;
+                    if (!TryDeliver(target, cx, cz, s.Type, v)) { if (moved == 0 && b.Status == "") b.Status = "Output blocked"; break; }
                     if (proc) TakeFrom(b.Out, ref b.OutCount, out _, out _);
                     else BufTake(b, out _, out _);
                 }
-                else if (b.Status == "") b.Status = "Output blocked";
             }
         }
 

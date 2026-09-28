@@ -133,7 +133,7 @@ namespace WishExtractor.Game
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 420));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 600));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
@@ -549,6 +549,40 @@ namespace WishExtractor.Game
             yield return LookAtSmooth(b.position + Vector3.up * 1.25f);
         }
 
+        /// <summary>Wade toward Chad, re-aiming as he moves, until within dist of him (or he's left).</summary>
+        IEnumerator ApproachRival(float dist, float timeout = 25f)
+        {
+            float t0 = Time.time;
+            while (Time.time - t0 < timeout && (sim.Rival.State == RivalState.Stealing || sim.Rival.State == RivalState.Arriving))
+            {
+                var r = new Vector3(sim.Rival.X, 0, sim.Rival.Z);
+                var feet = view.Player.Feet;
+                if (new Vector2(r.x - feet.x, r.z - feet.z).magnitude <= dist) break;
+                yield return WalkTo(r, dist, 0.4f, false);
+            }
+            Drive(Vector2.zero);
+        }
+
+        /// <summary>A goldfish resting on the crust a step ahead of the player (kept inside the basin).</summary>
+        LooseItem DropGoldfishNearby()
+        {
+            var feet = view.Player.Feet;
+            var p = new Vector2(feet.x + 0.9f, feet.z + 1.2f);
+            if (p.magnitude > 6.5f) p = p.normalized * 6.5f;
+            if (p.magnitude < 1.6f) p = p.normalized * 1.6f;
+            return sim.AddLoose(Content.Type("goldfish"), p.x, p.y, 0, null);
+        }
+
+        /// <summary>Send Chad in now and wait until he's in the fountain stealing.</summary>
+        IEnumerator SummonRival()
+        {
+            float wait = 0;
+            while (sim.Rival.State != RivalState.Away && wait < 20) { wait += Time.deltaTime; yield return null; }
+            sim.DebugRival();
+            wait = 0;
+            while (sim.Rival.State != RivalState.Stealing && wait < 40) { wait += Time.deltaTime; yield return null; }
+        }
+
         // ───────────────────────────── screenshot tour (-autotour) ─────────────────────────────
 
         IEnumerator Shot(string name)
@@ -634,7 +668,39 @@ namespace WishExtractor.Game
             yield return Shot("07i_terminal_carry");
             terminal.SetBranch(TechBranch.Fountain);
             yield return Shot("07j_terminal_fountain");
+            terminal.SetBranch(TechBranch.Security);
+            yield return Shot("30_terminal_security");
             terminal.Close();
+
+            // the hazards: Officer Doug's whistle and fine, Chad the rival diver, and a goldfish that goes back
+            sim.DebugAddCash(20);
+            yield return EnterFountain();
+            for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
+            sim.DebugGuardCheck();
+            yield return new WaitForSeconds(0.6f);
+            yield return LookAtSmooth(view.Hazards.GuardHead.position);
+            yield return Shot("31_guard_warning");
+            yield return new WaitForSeconds(5f);
+            yield return Shot("32_guard_fine");
+            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f);
+            yield return SummonRival();
+            yield return new WaitForSeconds(3f);
+            yield return EnterFountain();
+            yield return ApproachRival(5f);
+            yield return LookAtSmooth(view.Hazards.RivalHead.position - Vector3.up * 0.3f, 0.2f);
+            yield return Shot("33_chad");
+            yield return LookAtSmooth(view.Hazards.RivalHead.position - Vector3.up * 0.3f, 0.1f);
+            Press();
+            yield return new WaitForSeconds(0.7f);
+            yield return Shot("34_chad_chased");
+            var fish = DropGoldfishNearby();
+            yield return new WaitForSeconds(0.3f);
+            yield return LookAtSmooth(view.Items.PositionOf(fish));
+            yield return Shot("35_goldfish");
+            Press();
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("36_goldfish_returned");
+            Debug.Log($"[TOUR] hazards: fines {sim.S.finesPaid}, Chad chased {sim.S.rivalsChased}, goldfish returned {sim.S.fishReturned}");
 
             // every fountain upgrade, from the rim and the balcony
             foreach (var t in Content.Techs) if (t.Branch == TechBranch.Fountain && t.MaxLevel == 1) sim.DebugSetTech(t.Id, 1);
@@ -1022,6 +1088,61 @@ namespace WishExtractor.Game
                 Check(sim.S.wishesCaught == 1 && sim.S.wishTokens > tok0 && sim.WishFound(wish.Def.Id), "E catches the wish (cash, tokens and a journal entry)");
             }
             yield return Shot("ui_wish");
+
+            // ── the goldfish: E puts it back in the water (to applause), it never goes in your cup ──
+            var fish = DropGoldfishNearby();
+            yield return null;
+            yield return LookAtSmooth(view.Items.PositionOf(fish), 0.2f);
+            Check(view.Current.Kind == TargetKind.Item && view.Current.Uid == fish.Uid, $"crosshair targets the goldfish (got {view.Current.Kind})");
+            double tokFish = sim.S.wishTokens;
+            int carriedFish = sim.CarriedCount;
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.S.fishReturned == 1 && Math.Abs(sim.S.wishTokens - tokFish - 1) < 1e-9 && sim.CarriedCount == carriedFish && sim.FindLoose(fish.Uid) != null,
+                  "E returns the goldfish to the water (+1 Wish Token) instead of pocketing it");
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("ui_goldfish");
+
+            // ── Officer Doug: wade on after his whistle and he fines you; step out and he calms down ──
+            Check(view.Wading, "still wading in the fountain");
+            for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
+            double cashFine = sim.S.cash;
+            double fines0 = sim.S.finesPaid;
+            sim.DebugGuardCheck();
+            yield return new WaitForSeconds(0.4f);
+            Check(sim.Guard.State == GuardState.Warning && sim.Guard.Line != null, $"Officer Doug blows his whistle at you (\"{sim.Guard.Line}\")");
+            yield return new WaitForSeconds(5.3f);
+            Check(sim.S.finesPaid == fines0 + 1 && sim.S.cash < cashFine, $"staying in the water gets you fined ({Fmt.Money(cashFine - sim.S.cash)})");
+            yield return Shot("ui_guard_fine");
+            for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
+            sim.DebugGuardCheck();
+            yield return new WaitForSeconds(0.4f);
+            Check(sim.Guard.State == GuardState.Warning, "a second whistle");
+            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f, 4f);
+            yield return new WaitForSeconds(0.3f);
+            Check(!view.Wading && sim.Guard.State != GuardState.Warning && sim.S.finesPaid == fines0 + 1, "stepping out of the water after the whistle avoids the fine");
+
+            // ── Chad the rival diver: wade up to him and he drops everything and runs; E works too ──
+            double chased0 = sim.S.rivalsChased;
+            yield return SummonRival();
+            Check(sim.Rival.State == RivalState.Stealing && GameObject.Find("Chad the Rival Diver") != null, "Chad the rival diver climbs into the fountain");
+            yield return new WaitForSeconds(2.5f);
+            int stolen = sim.Rival.Loot.Count;
+            yield return EnterFountain();
+            yield return ApproachRival(1.2f);
+            yield return null;
+            Check(sim.S.rivalsChased == chased0 + 1 && sim.Rival.State == RivalState.Fleeing, $"wading up to Chad chases him off (he had pocketed {stolen}+ items)");
+            yield return Shot("ui_chad_chased");
+            yield return SummonRival();
+            yield return ApproachRival(4.5f);
+            yield return LookAtSmooth(view.Hazards.RivalHead.position - Vector3.up * 0.3f, 0.15f);
+            Check(view.Current.Kind == TargetKind.Rival, $"crosshair targets Chad (got {view.Current.Kind})");
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.S.rivalsChased == chased0 + 2 && sim.Rival.State == RivalState.Fleeing, "E on Chad chases him off too");
+            yield return WalkTo(new Vector3(0, 0, -6.5f), 0.6f, 10f, false);
 
             // ── the factory: hamster wheels, a skimmer bot, a belt line and a hopper, built through build mode ──
             foreach (var t in new[] { "unlock_hamster", "unlock_skimmer", "unlock_belts", "unlock_hopper" }) sim.DebugSetTech(t, 1);

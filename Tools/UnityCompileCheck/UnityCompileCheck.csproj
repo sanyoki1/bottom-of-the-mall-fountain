@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile-checks every runtime script (Assets/Scripts) without Unity, against Unity 2022.3 reference
+       assemblies from NuGet. For machines with no Unity install (cloud sessions): it catches type errors,
+       not runtime behaviour, and it doesn't cover Assets/Editor. Usage:
+         dotnet build Tools/UnityCompileCheck
+       Expected: exactly one error, GameRoot.cs "No overload for method 'FindObjectsByType' takes 0 arguments"
+       (that overload is new in Unity 6; the real build compiles it). Anything else is a real error. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>CS0618;CS0649;CS0414;CS0169;CS0067</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Scripts/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="RocketModFix.UnityEngine.Redist" Version="2022.3.62.3" />
+  </ItemGroup>
+</Project>

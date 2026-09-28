@@ -16,6 +16,7 @@ namespace WishExtractor.Core
         double CrustScale => Math.Pow(Balance.RemodelCrustGrowth, Remodel);
         public double TotalScoops => Mall.CrustScoops * CrustScale;
         public double DigMult { get; private set; } = 1;
+        public double ChunkMult { get; private set; } = 1;
         public double RelicMult { get; private set; } = 1;
 
         public double StratumStartDug(int s) => Mall.Bounds[Math.Max(0, Math.Min(s, Mall.Bounds.Length - 1))] * CrustScale;
@@ -32,8 +33,9 @@ namespace WishExtractor.Core
         double FracStart(int s) => s < Mall.Strata.Length ? Mall.Strata[s].StartFrac : 1.0;
 
         /// <summary>
-        /// Visual depth 0..1. The loose layer is linear in scoops; every deeper layer is linear in
-        /// log(scoops), so the crust keeps visibly sinking while dig rates grow.
+        /// Visual depth 0..1. The loose layer is linear in scoops. Fitted layers each take about the same
+        /// time, so inside one the depth follows the square root of the scoops (steady for a digger that
+        /// keeps speeding up); unfitted (geometric) layers follow log(scoops).
         /// </summary>
         public double FracAtDug(double dug)
         {
@@ -42,6 +44,7 @@ namespace WishExtractor.Core
             double local;
             if (dug >= hi) local = 1;
             else if (s == 0 || lo <= 0) local = hi > lo ? (dug - lo) / (hi - lo) : 1;
+            else if (Mall.BoundFracs != null) local = Math.Sqrt(Math.Max(0, dug - lo) / (hi - lo));
             else local = Math.Log(Math.Max(dug, lo) / lo) / Math.Log(hi / lo);
             double a = FracStart(s), b = FracStart(s + 1);
             return Math.Min(1, a + (b - a) * Math.Max(0, Math.Min(1, local)));
@@ -70,43 +73,54 @@ namespace WishExtractor.Core
 
         double digAcc;
 
+        /// <summary>Scoops of crust in one gunk chunk (Bigger Chunks makes them bigger).</summary>
+        public double ChunkScoops => Balance.ChunkValue * ChunkMult;
+
         /// <summary>
-        /// Remove crust. Every whole scoop becomes an item handed to sink(type, value): loot straight
-        /// from the loose layer, gunk chunks below it. Returns scoops removed.
+        /// Remove crust. The loose layer comes up one item per scoop (coins, or junk that isn't worth
+        /// keeping); every deeper stratum breaks into gunk chunks of ChunkScoops scoops, each carrying
+        /// their worth of loot. Items go to sink(type, value), which returns false when there's no room;
+        /// digging stops there (the crust only breaks as fast as its rubble can go somewhere).
+        /// Returns scoops removed.
         /// </summary>
-        public double DigCrust(double scoops, Action<int, double> sink)
+        public double DigCrust(double scoops, Func<int, double, bool> sink)
         {
             if (S.mallCleared || scoops <= 0) return 0;
             digAcc += scoops;
-            int whole = (int)Math.Floor(digAcc);
-            if (whole <= 0) return 0;
-            digAcc -= whole;
-            double total = TotalScoops;
-            int done = 0;
-            for (int i = 0; i < whole; i++)
+            double want = Math.Floor(digAcc);
+            if (want <= 0) return 0;
+            digAcc -= want;
+            double total = TotalScoops, done = 0, cv = ChunkScoops;
+            while (done < want && S.dug < total)
             {
-                if (S.dug >= total) break;
                 int s = StratumAtDug(S.dug);
                 var st = Mall.Strata[s];
-                S.dug = Math.Min(total, S.dug + 1);
-                done++;
                 if (st.Loose)
                 {
                     int k = PickLoot(false);
                     double v = Mall.Items[k].Value * st.ValueMult * Scale;
-                    if (v > 0) sink(Mall.LootTypes[k], v);
+                    if (v > 0 && !sink(Mall.LootTypes[k], v)) break;
+                    S.dug = Math.Min(total, S.dug + 1);
+                    done += 1;
+                    continue;
                 }
-                else
+                // a chunk at a time (never a scoop at a time: late rigs break thousands of scoops a second)
+                double end = s + 1 < Mall.Strata.Length ? Math.Min(total, StratumStartDug(s + 1)) : total;
+                double step = Math.Min(want - done, end - S.dug);
+                if (chunkAcc + step < cv)
                 {
-                    // chunks come out every few scoops; each one carries those scoops' worth of loot
-                    chunkAcc += 1;
-                    if (chunkAcc >= Balance.ChunkValue)
-                    {
-                        chunkAcc -= Balance.ChunkValue;
-                        sink(Mall.GunkTypes[s], Mall.BaseEV * st.ValueMult * Scale * Balance.ChunkValue);
-                    }
+                    chunkAcc += step;
+                    done += step;
+                    S.dug = step >= end - S.dug ? end : S.dug + step;
+                    continue;
                 }
+                if (!sink(Mall.GunkTypes[s], Mall.BaseEV * st.ValueMult * Scale * cv)) break;
+                double need = cv - chunkAcc;
+                chunkAcc = 0;
+                done += need;
+                S.dug = need >= end - S.dug ? end : S.dug + need;
             }
+            if (done < want) digAcc = 0;
             S.scoops += done;
             int ns = StratumAtDug(S.dug);
             if (ns > S.maxStratum)
@@ -134,34 +148,60 @@ namespace WishExtractor.Core
             return items.Length - 1;
         }
 
+        /// <summary>Gunk chunks lying in the fountain or in your hands: hand digging stops at Balance.RubbleCap.</summary>
+        public int RubbleInPlay
+        {
+            get
+            {
+                int n = 0;
+                foreach (var l in Loose) if (Content.Items[l.Type].Cat == ItemCat.Gunk) n++;
+                foreach (var s in Carried) if (s.Def.Cat == ItemCat.Gunk) n += s.Count;
+                return n;
+            }
+        }
+
+        /// <summary>True when the last swing broke nothing because too much rubble is lying around.</summary>
+        public bool RubbleBlocked { get; private set; }
+
         /// <summary>A swing of the hand dig tool at (x, z): returns scoops; items land around the spot.</summary>
         public double SwingDig(float x, float z)
         {
             var tool = DigTool;
+            RubbleBlocked = false;
             if (tool.DigPower <= 0) return 0;
             S.swings++;
-            double scoops = tool.DigPower * DigMult;
-            return DigCrust(scoops, (type, value) =>
+            double scoops = tool.DigPower * DigMult * ChunkMult;
+            int room = Balance.RubbleCap - RubbleInPlay;
+            double done = DigCrust(scoops, (type, value) =>
             {
+                if (Content.Items[type].Cat == ItemCat.Gunk && room-- <= 0) return false;
                 double a = Rng.NextDouble() * Math.PI * 2, r = Rng.NextDouble() * 0.45;
                 float px = x + (float)(Math.Cos(a) * r), pz = z + (float)(Math.Sin(a) * r);
                 float rr = (float)Math.Sqrt(px * px + pz * pz);
                 if (rr > Balance.LandMaxR + 0.4f) { px *= (Balance.LandMaxR + 0.4f) / rr; pz *= (Balance.LandMaxR + 0.4f) / rr; }
                 AddLoose(type, px, pz, value, null);
+                return true;
             });
+            RubbleBlocked = done <= 0 && room < 0 && !S.mallCleared;
+            return done;
         }
 
         void TickDigRig(Building b, double dt, double speed)
         {
             if (S.mallCleared) { b.Status = "Bare concrete!"; b.Activity = 0; return; }
             b.Activity = 1;
-            b.Acc += dt * b.Def.Rate * speed * DigMult;
+            b.Acc += dt * b.Def.Rate * speed * DigMult * ChunkMult;
             if (b.Acc < 1) return;
             double take = Math.Floor(b.Acc);
             b.Acc -= take;
             var (sx, sz) = SuctionPoint(b);
             b.LastPickX = sx; b.LastPickZ = sz; b.PickSerial++;
-            DigCrust(take, (type, value) => { if (!BufAdd(b, type, value)) b.Status = "Full: output blocked"; });
+            // a rig only breaks off what its output can hold: a blocked line stops the digging
+            if (DigCrust(take, (type, value) => BufAdd(b, type, value)) < take)
+            {
+                b.Status = "Full: output blocked";
+                b.Acc = Math.Min(b.Acc, 1);
+            }
         }
 
         // ───────────────────────────── processing ─────────────────────────────

@@ -1,8 +1,9 @@
 // Balance simulator for the first-person game. Compiles the real Core and plays it with a bot
 // (Bot.cs). Usage:
 //   dotnet run -c Release --project Tools/BalanceSim -- [maxHours] [seed] [engaged|casual]   play all six malls
-//   dotnet run -c Release --project Tools/BalanceSim -- fit [--apply]                         fit each mall's crust size
-//   ... -- counts | crowd <wishability> | factory | crust                                     content counts and system checks
+//   dotnet run -c Release --project Tools/BalanceSim -- fit [--apply]                         fit each mall's crust size and layers
+//   ... -- counts | crowd <wishability> | factory | crust | smoke | slots                     content counts and system checks
+// BOT_REPORT=<seconds> sets the report interval (default an hour).
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,8 +14,8 @@ using WishExtractor.Core;
 
 static class Program
 {
-    /// <summary>Planned engaged-bot hours per mall (sum ≥ 24).</summary>
-    static readonly double[] TargetHours = { 3.0, 3.5, 4.0, 4.5, 5.0, 5.0 };
+    /// <summary>Planned engaged-bot hours per mall: 26.5 in all, so every seed stays above Nico's 24 h.</summary>
+    static readonly double[] TargetHours = { 3.25, 3.75, 4.25, 4.75, 5.25, 5.25 };
 
     static int Main(string[] args)
     {
@@ -30,6 +31,7 @@ static class Program
         if (args.Length > 0 && args[0] == "factory") return Factory();
         if (args.Length > 0 && args[0] == "crust") return Crust();
         if (args.Length > 0 && args[0] == "smoke") return Smoke();
+        if (args.Length > 0 && args[0] == "slots") { Console.Write(new Bot(new SaveData(), 1, "engaged").ProbeSlots()); return 0; }
         double hours = args.Length > 0 ? double.Parse(args[0]) : 40;
         int seed = args.Length > 1 ? int.Parse(args[1]) : 1234;
         string profile = args.Length > 2 ? args[2] : "engaged";
@@ -67,36 +69,40 @@ static class Program
     static SaveData Clone(SaveData s) => JsonSerializer.Deserialize<SaveData>(JsonSerializer.Serialize(s, JsonOpts), JsonOpts);
 
     /// <summary>
-    /// For each mall in turn, bisect its crust size (log space) until the engaged bot clears it in the
-    /// target hours, starting from the state the bot reached at the end of the previous mall.
+    /// For each mall in turn, starting from the state the bot reached at the end of the previous mall:
+    /// bisect the crust size until the engaged bot clears it in the target hours, then move the layer
+    /// boundaries so it spends equal time in every layer below the loose one, and repeat (the layers
+    /// change the income, so the size is fitted again). apply = rewrite the fitted blocks in ContentMalls.cs.
     /// </summary>
     static int Fit(bool apply)
     {
-        var fitted = new double[Content.Malls.Length];
+        int n = Content.Malls.Length;
+        var fitted = new double[n];
+        var fracs = new double[n][];
         var bot = new Bot(new SaveData(), 1234, "engaged");
         var start = Clone(bot.Sim.Snapshot());
-        for (int m = 0; m < Content.Malls.Length; m++)
+        for (int m = 0; m < n; m++)
         {
             var mall = Content.Malls[m];
             double target = TargetHours[m];
-            double lo = Math.Log(3000), hi = Math.Log(6e7), best = mall.CrustScoops;
-            for (int iter = 0; iter < 14; iter++)
+            mall.BoundFracs = null;
+            double lo = Math.Log(3000), hi = Math.Log(1e8), best = 0, hours = -1;
+            Bot run = null;
+            for (int pass = 0; pass < 3; pass++)
             {
-                double mid = (lo + hi) / 2;
-                Content.SetCrust(mall, Math.Exp(mid));
-                var trial = new Bot(Clone(start), 1234, "engaged");
-                double h = trial.PlayMall(target * 2.2);
-                Console.WriteLine($"  {mall.Id}: {Math.Exp(mid):0} scoops → {(h < 0 ? "timeout" : h.ToString("0.00") + " h")}");
-                if (h < 0 || h > target) hi = mid; else lo = mid;
-                best = Math.Exp((lo + hi) / 2);
-                if (h > 0 && Math.Abs(h - target) / target < 0.02) { best = Math.Exp(mid); break; }
+                best = FitScoops(mall, target, start, lo, hi);
+                lo = Math.Log(best / 3); hi = Math.Log(best * 3);
+                Content.SetCrust(mall, best);
+                run = new Bot(Clone(start), 1234, "engaged") { Curve = new List<(double, double)>() };
+                hours = run.PlayMall(target * 3);
+                Console.WriteLine($"  {mall.Id} pass {pass + 1}: {best:0} scoops → {hours:0.00} h");
+                if (hours < 0 || pass == 2) break;
+                mall.BoundFracs = EqualTimeFracs(run.Curve, mall.CrustScoops, mall.Strata.Length);
             }
-            best = Math.Round(best, -2);
-            Content.SetCrust(mall, best);
             fitted[m] = best;
-            var run = new Bot(Clone(start), 1234, "engaged");
-            double hours = run.PlayMall(target * 3);
-            Console.WriteLine($"{mall.Name}: {best:0} scoops → {hours:0.00} h (target {target})");
+            fracs[m] = mall.BoundFracs;
+            Console.WriteLine($"{mall.Name}: {best:0} scoops → {hours:0.00} h (target {target}); layers start at " +
+                              string.Join(", ", mall.Bounds.Skip(1).Take(mall.Strata.Length - 1).Select(v => v.ToString("0"))));
             if (hours < 0) { Console.WriteLine("  did not clear; stopping"); break; }
             run.SignAndSpend();
             start = Clone(run.Sim.Snapshot());
@@ -106,16 +112,76 @@ static class Program
         {
             string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Assets", "Scripts", "Core", "ContentMalls.cs"));
             var text = File.ReadAllText(path);
-            int a = text.IndexOf("// <fitted-scoops>"), b = text.IndexOf("// </fitted-scoops>");
-            int lineEnd = text.IndexOf('\n', a) + 1;
-            int indentStart = text.LastIndexOf('\n', b) + 1;
-            string indent = text.Substring(indentStart, b - indentStart);
-            string body = indent + string.Join(", ", fitted.Select(v => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture))) + ",\n";
-            text = text.Substring(0, lineEnd) + body + text.Substring(indentStart);
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            text = ReplaceBlock(text, "fitted-scoops", new[] { string.Join(", ", fitted.Select(v => v.ToString("0", inv))) + "," });
+            text = ReplaceBlock(text, "fitted-bounds", fracs.Select(f => f == null ? "null," : "new[] { " + string.Join(", ", f.Select(v => v.ToString("G6", inv))) + " },"));
             File.WriteAllText(path, text);
             Console.WriteLine("wrote " + path);
         }
         return 0;
+    }
+
+    /// <summary>Bisect (in log space) the crust size that the engaged bot clears in the target hours.</summary>
+    static double FitScoops(MallDef mall, double target, SaveData start, double lo, double hi)
+    {
+        double Trial(double logScoops, string note)
+        {
+            Content.SetCrust(mall, Math.Exp(logScoops));
+            double h = new Bot(Clone(start), 1234, "engaged").PlayMall(target * 2.2);
+            Console.WriteLine($"  {mall.Id}: {Math.Exp(logScoops):0} scoops → {(h < 0 ? "timeout" : h.ToString("0.00") + " h")}{note}");
+            return h < 0 ? double.MaxValue : h;
+        }
+        // widen the bracket until it straddles the target
+        for (int k = 0; k < 8 && Trial(hi, " (bracket top)") <= target; k++) { lo = hi; hi += Math.Log(30); }
+        for (int k = 0; k < 8 && lo > Math.Log(3000) && Trial(lo, " (bracket bottom)") > target; k++) { hi = lo; lo = Math.Max(Math.Log(3000), lo - Math.Log(30)); }
+        double best = Math.Exp((lo + hi) / 2);
+        for (int iter = 0; iter < 16; iter++)
+        {
+            double mid = (lo + hi) / 2;
+            double h = Trial(mid, "");
+            if (h > target) hi = mid; else lo = mid;
+            best = Math.Exp((lo + hi) / 2);
+            if (Math.Abs(h - target) / target < 0.015) { best = Math.Exp(mid); break; }
+        }
+        return Math.Round(best / 100) * 100;
+    }
+
+    /// <summary>Tops of layers 2.. (as fractions of the crust) that split the time after the loose layer evenly.</summary>
+    static double[] EqualTimeFracs(List<(double t, double dug)> curve, double total, int strata)
+    {
+        double loose = Balance.LooseLayerScoops, tEnd = curve[curve.Count - 1].t, tLoose = tEnd;
+        foreach (var c in curve) if (c.dug >= loose) { tLoose = c.t; break; }
+        var f = new double[strata - 2];
+        double prev = loose;
+        for (int i = 2; i < strata; i++)
+        {
+            double t = tLoose + (i - 1) * (tEnd - tLoose) / (strata - 1);
+            double dug = curve[curve.Count - 1].dug;
+            for (int j = 1; j < curve.Count; j++)
+                if (curve[j].t >= t)
+                {
+                    var (ta, da) = curve[j - 1];
+                    var (tb, db) = curve[j];
+                    dug = da + (db - da) * (t - ta) / Math.Max(1e-9, tb - ta);
+                    break;
+                }
+            dug = Math.Max(dug, prev * 1.05);
+            f[i - 2] = dug / total;
+            prev = dug;
+        }
+        return f;
+    }
+
+    /// <summary>Replace the lines between "// &lt;tag&gt;" and "// &lt;/tag&gt;" (keeping the closing line's indent).</summary>
+    static string ReplaceBlock(string text, string tag, IEnumerable<string> lines)
+    {
+        int a = text.IndexOf("// <" + tag + ">"), b = text.IndexOf("// </" + tag + ">");
+        if (a < 0 || b < 0) throw new InvalidOperationException("missing // <" + tag + "> block");
+        int lineEnd = text.IndexOf('\n', a) + 1;
+        int indentStart = text.LastIndexOf('\n', b) + 1;
+        string indent = text.Substring(indentStart, b - indentStart);
+        string body = string.Concat(lines.Select(l => indent + l + "\n"));
+        return text.Substring(0, lineEnd) + body + text.Substring(indentStart);
     }
 
     /// <summary>Build a hamster wheel, a skimmer, four belts and a hopper; watch it run for three minutes.</summary>

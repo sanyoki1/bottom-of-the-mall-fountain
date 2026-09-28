@@ -156,6 +156,8 @@ namespace WishExtractor.UI
         public TechBranch Branch => branch;
 
         const float CardW = 230, CardH = 96, StepX = 262, StepY = 140, Pad = 30;
+        /// <summary>Levelled nodes with this many levels never really max out (Bigger Chunks): no "/max", no bar.</summary>
+        const int Endless = 999;
 
         static Vector2 NodePos(TechDef t) => new Vector2(Pad + t.Col * StepX, -(Pad + t.Row * StepY));
 
@@ -268,6 +270,7 @@ namespace WishExtractor.UI
                     return Content.BuildIndex.TryGetValue(t.Target ?? "", out int bi) ? $"Unlocks the {Content.Buildables[bi].Name} in build mode" : "Unlocks: " + t.Target;
                 case TechKind.DigPower: return $"+{t.Value * 100:0}% scoops per swing and per dig rig, per level";
                 case TechKind.RelicRate: return $"+{t.Value * 100:0}% relic chance per level";
+                case TechKind.ChunkSize: return $"Gunk chunks grow by {t.Value * 100:0}% of their original size per level (more crust and loot in each): swings and dig rigs get through the crust that much faster";
                 case TechKind.StartCash: return $"Start every contract with ${t.Value:0} per level (× the mall's prices)";
                 case TechKind.StartCarry: return "Start every contract already owning container tier = level";
                 case TechKind.StartUnlocks: return "Start every contract with the basic kit researched";
@@ -302,14 +305,14 @@ namespace WishExtractor.UI
                 var c = kv.Value;
                 int lvl = sim.TechLevel(i);
                 bool maxed = sim.TechMaxed(i), unlocked = sim.TechUnlocked(i), afford = sim.CanAfford(i);
-                c.Sub.text = t.MaxLevel > 1 ? $"LV {lvl}/{t.MaxLevel}" : lvl > 0 ? "INSTALLED" : unlocked ? "" : "LOCKED";
+                c.Sub.text = t.MaxLevel >= Endless ? $"LV {lvl}" : t.MaxLevel > 1 ? $"LV {lvl}/{t.MaxLevel}" : lvl > 0 ? "INSTALLED" : unlocked ? "" : "LOCKED";
                 c.Cost.text = maxed ? "✓" : CostText(t, sim.TechCost(i));
                 c.Cost.color = maxed ? Green : afford && unlocked ? Color.white : new Color(1f, 0.5f, 0.45f);
                 Color bg = maxed || (lvl > 0 && t.MaxLevel == 1) ? new Color(0.1f, 0.26f, 0.18f) : unlocked ? (afford ? new Color(0.12f, 0.2f, 0.22f) : Panel) : new Color(0.07f, 0.09f, 0.1f);
                 if (i == selected) bg = Color.Lerp(bg, Pal.Accent, 0.35f);
                 c.Btn.SetColors(bg, bg);
                 c.Name.color = unlocked ? Color.white : Faint;
-                c.Bar.rectTransform.sizeDelta = new Vector2(CardW * (t.MaxLevel > 0 ? lvl / (float)t.MaxLevel : 0), 4);
+                c.Bar.rectTransform.sizeDelta = new Vector2(CardW * (t.MaxLevel > 0 && t.MaxLevel < Endless ? lvl / (float)t.MaxLevel : 0), 4);
             }
             if (selected < 0 || selected >= Content.Techs.Length)
             {
@@ -321,7 +324,7 @@ namespace WishExtractor.UI
             int L = sim.TechLevel(selected);
             dKind.text = $"{st.Branch.ToString().ToUpperInvariant()} MODULE";
             dName.text = st.Name;
-            dLevel.text = st.MaxLevel > 1 ? $"LEVEL {L} / {st.MaxLevel}" : L > 0 ? "INSTALLED" : "NOT INSTALLED";
+            dLevel.text = st.MaxLevel >= Endless ? $"LEVEL {L}" : st.MaxLevel > 1 ? $"LEVEL {L} / {st.MaxLevel}" : L > 0 ? "INSTALLED" : "NOT INSTALLED";
             dEffect.text = "» " + EffectText(st);
             dDesc.text = st.Desc;
             var missing = new List<string>();

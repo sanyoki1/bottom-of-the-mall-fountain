@@ -1,185 +1,128 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-27 (end of session 3: M1–M5 committed, M6 in progress, stopped at Nico's request)._
+_Last updated 2026-09-28 (session 4, a cloud session on Linux with no Unity: M6 balance done, tour/uitest
+written but not run)._
 
-## NEXT: finish M6 (balance fit + tour/uitest for hazards + docs)
+## NEXT: verify M6 in Unity on Windows, then commit it as a milestone
 
-Nico wants the game reworked into a first-person, Find The Needle–style factory game with NPCs throwing
-coins into the fountain. Plan and confirmed decisions: `PIVOT_FPS.md`. Session prompt: `NEXT_SESSION_PROMPT.md`.
+Everything below "M6 done" compiles against Unity 2022.3 reference assemblies (`dotnet build
+Tools/UnityCompileCheck`: only the one expected Unity 6-overload error), and the balance numbers are
+measured, but **nothing was built or run in Unity this session**. Before calling M6 done:
 
-**Git:** nested repo in this folder, branch `master`. Commits: `96a8f81` v1 baseline, `f37e470` M1,
-`7edf45a` M2, `d8089f0` M3, `ec44256` M4, `053f424` M5. Commit after each verified milestone (authorized).
+1. Build (CLAUDE.md step 1) and fix any `error CS` the reference-assembly check couldn't see.
+2. Run `-autotour` and look at every screenshot, especially the new ones: `30_terminal_security`,
+   `31_guard_warning`, `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish`, `36_goldfish_returned`.
+3. Run `-uitest`: expect `[UITEST] done: 96 passed, 0 failed` (85 old checks + 11 new: the goldfish,
+   Officer Doug's whistle and fine and "step out to avoid it", Chad chased by wading up and by E). Then
+   `-loadtest`.
+4. Play the first 20 minutes and the start of a dig by hand: this session changed the early economy and
+   digging (see below), and only the bot has played it.
+5. Refresh `Docs/Screenshots` from the tour (they are still v1's overhead shots; the README no longer uses them).
 
-**Working tree = uncommitted M6 WIP. It compiles** (Unity batch build OK, BalanceSim OK) and the existing
-`-uitest` still passes 85/85. Not yet run on this WIP: `-autotour` (and nothing in it shows the new hazards).
+**Git:** branch `master` holds M1–M5 and the M6 WIP commit `4a99037`. This session worked on
+`claude/upbeat-dijkstra-ypw7nn` (branched from `4a99037`) and left its changes uncommitted pending Nico's OK
+(CLAUDE.md: ask before any commit). Once committed there, it is still unverified in Unity: review before
+merging into `master`.
 
-### M6 done so far (uncommitted)
-- Hazards, always on (`Core/SimHazards.cs`, `View/Hazards.cs`): Officer Doug patrols a loop at r = 13.5;
-  every 60–150 s, if you're wading within 22 m, he whistles and warns, and fines you after 5 s in the water
-  (4% of cash, min $0.05 × scale; reduced by Security techs). Chad the rival diver arrives every 5–9 min
-  (after 40 tosses), steals the richest nearby loose items, and flees dropping everything when you get
-  within 2.2 m or press E on him (trigger collider on the Water layer, `TargetKind.Rival`).
-- Security branch (tab added to MAINT-OS): Donut Diplomacy, 'No Rival Divers' Sign, Honorary Deputy Badge
-  (`TechKind.GuardFine`, new `TechKind.RivalRepel`).
-- Goldfish oddity: picking it up returns it to the water (+1 Wish Token, applause message); intakes and
-  Chad ignore it (`Sim.IsFish`).
-- Juice: footsteps (`Synth.Footstep`, wading plops), whistle (`Synth.Whistle`), 8 more receipt jokes,
-  toasts for fines/Chad/goldfish.
-- Balance bot rewritten (`Tools/BalanceSim/Bot.cs`): plays the real Core with abstracted walking (kiosk
-  ↔ fountain, item to item, ramp length from depth), real pickups/deposits/wishes/dig swings, cheapest-first
-  shopping (cash, tokens, Lucky Pennies), factory lines planned radially from up to 18 rim slots (2 coin
-  lines: skimmer→pump→claw [+roller]; the rest dig lines: rig→borer + tumbler + sorter [+roller], then a
-  hopper), generator field at x 18..32, z −27..−17, prestige + Head Office spending. `Program.cs`:
-  `run` (default, writes `report_<profile>.txt`), `fit [--apply]` (bisects each mall's crust size against
-  `TargetHours` = 3, 3.5, 4, 4.5, 5, 5 and rewrites the `<fitted-scoops>` block in `ContentMalls.cs`),
-  plus `counts | crowd | factory | crust | smoke`. `BOT_REPORT=<seconds>` env var sets the log interval.
-- Economy fixes found by the bot (the first run finished all six malls in 2.9 h):
-  - v1's per-mall values are divided back down: `MallDef.LootScale` {1, 25, 225, 28, 60, 40} for crust loot,
-    `MallDef.StoryScale` {1, 10, 84, 83, 110, 118} for wishes and relics (set in `ContentMalls.BuildMalls`).
-  - Coin ladder top tamed: silver $5 @ W55, gold $20 @ W85, diamond $100 @ W120.
-  - Oddities moved to the top of the ladder: cheap silly ones early (duck $0.50 @ W18 … toaster $6 @ W55),
-    the ridiculous ones after diamonds (seed phrase $120 @ W110 … moon rock $2,000 @ W195); archetype gates
-    raised (influencer 35, proposer 65, bodybuilder 120, billionaire 150).
-  - Late fountain upgrades cost what they unlock (music $2k, dispenser $12k, golden statue $150k,
-    certification $3M; token ones 15/40/150/500/2000); Polish the Tiles growth 1.62.
-  - Early costs trimmed so automation arrives sooner (pail $3, bucket $15, hamster research $10 / build $3,
-    skimmer $18 / $15, Wired Deposit $20).
-- Crust sizes are still the unfitted placeholders (`CrustScoops` in each MallDef; `FittedScoops` all 0).
-  Latest unfitted engaged run: Crestview 5.0 h, Neon 2.9, Aurelia 1.7, Skyport 0.8, Lagoon 0.4,
-  Eternity 0.3 = **11.1 h** (needs ≥ 24 h).
+## M6 done (session 4)
 
-### M6 still to do
-1. `dotnet run -c Release --project Tools/BalanceSim -- fit --apply`, then re-run the 40 h engaged report
-   and a `casual` one; check engaged total ≥ 24 h and read the per-mall logs for sanity (runaway income,
-   dead stretches, slots that never fit). The late malls finish fast because of Head Office perks and
-   richer content: expect the fit to grow their crusts a lot; if the late part of a mall turns into
-   "waiting for borers", consider a money-sink dig upgrade (a levelled DigPower node with steep growth
-   was planned but not added yet).
-2. Check early pacing in the Crestview "firsts" line against PIVOT_FPS.md (cup/bucket in the first ~10 min,
-   generator + skimmer by ~15–20 min, first line by ~45 min).
-3. Tour: add shots of Officer Doug warning, Chad in the fountain, a goldfish, the Security tab; run the
-   full `-autotour` and look at every screenshot (M5 tour shots were fine).
-4. uitest: add checks for the guard fine (`sim.DebugGuardCheck()` while wading), chasing Chad
-   (`sim.DebugRival()`, walk to him), and returning a goldfish.
-5. Build, tour, uitest, loadtest → commit M6.
-6. Docs: rewrite HANDOFF.md, CLAUDE.md (layout table, `fit --apply` now writes `<fitted-scoops>`, new
-   rules below), DESIGN.md and README.md for the first-person game.
+### Mechanics that broke the balance (fixed in Core, so the game and the bot both get them)
+- **Dig rigs dug on when their output was full** and threw the loot away, so the crust cleared at raw dig
+  speed and crust size barely mattered (the fitter couldn't reach the targets even at 60M scoops).
+  `DigCrust`'s sink now returns false when there's no room and digging stops there ("Full: output blocked").
+- **Hand digging had no limit** (a jackhammer × Stronger Shoulders × Excavation Grant cleared late malls in
+  minutes). It now stops while `Balance.RubbleCap` (300) gunk chunks lie in the fountain or your hands; the
+  swing clangs and the HUD says to haul the gunk out or pump it into a line (`GameView.SwingAt`).
+- **The factory ticked once per frame and ports handed over one item per tick**, so throughput depended on
+  frame rate and the bot (0.5 s ticks) ran a factory several times slower than the game's. `Sim.Tick` now
+  steps `UpdateFactory` at a fixed 1/60 s (`Balance.FactoryStep`), and machine-to-machine ports hand over up
+  to 32 items per step.
+- **`DigCrust` walked a scoop at a time**; it now steps a chunk at a time (late rigs break thousands of scoops
+  a second).
 
-### Lessons this session (also worth adding to CLAUDE.md)
-- A lit mesh at exactly zero scale makes NaN pixels that bloom smears into black squares; use 0.01 and
-  deactivate instead.
-- World TextMesh colour must have alpha 1 (`Mats.NewText` forces it); v1's coloured signs were invisible.
-- The player is on the Ignore Raycast layer; wishes and Chad are triggers on layer 4 (Water) so they never
-  block movement but the aim ray (SphereCast) finds them.
-- Additive `WE/Glow` multiplies by vertex alpha, so it can't draw matte (alpha 0) meshes; build ghosts use
-  `WE/Ghost`.
-- In the tour/uitest, drive input through `scripted` FPInput (`Press`, `SetFlag`, `WalkTo`, `AimAt`); relative
-  `-shots` paths must be made absolute.
+### Economy
+- **Early game** (targets from PIVOT_FPS: cup + bucket in ~10 min, generator + skimmer by 15–20, first line by
+  ~45): a fresh fountain holds 400 loose coins (was 180, slightly richer mix), shoppers toss every 5 s at
+  wishability 0 (was 7), `TierPerWish` 0.08 (was 0.075); cheaper bucket ($10), coloured lights ($8), neon
+  ($45), hamster research $6 / build $2, skimmer $12 / $10, belts $5, Wired Deposit $12, hopper $12.
+- **Bigger Chunks** (Tools branch, after Stronger Shoulders): the deep money sink. Each level adds 25% of the
+  original chunk size (more crust and loot per chunk; rigs and swings dig that much faster); level L costs
+  $300 × (L + 1)^2.5 (`TechDef.CostPower`, new), up to 999 levels. Before it, the late malls bought the whole
+  tree in 12–35 minutes and then waited hours with billions in the bank. An exponential version (×1.1 per level)
+  exploded instead: rich late malls bought 100+ levels at once and the fitter wanted 10¹¹-scoop crusts.
+- **Layer boundaries are fitted** (`<fitted-bounds>` in `ContentMalls.cs`, fractions of the crust) so the
+  engaged bot spends about as long in each layer below the loose one; inside a fitted layer the depth gauge
+  follows the square root of the scoops. Before, geometric layers meant late malls sat in their last layer
+  for three hours.
+- Targets are now 3.25, 3.75, 4.25, 4.75, 5.25, 5.25 h (26.5 h) so every seed stays above 24 h.
 
-Detailed per-milestone notes follow.
+### The balance bot (`Tools/BalanceSim`)
+- Shops like a player: a cash **goal** (the most wanted tech by price × priority: containers 0.25, unlocks 0.45,
+  tools 0.5, fountain jobs 0.35, levelled nodes 1.5, security 3), bought as soon as it's affordable; only
+  pocket change (≤ 10% of the goal) goes elsewhere meanwhile. The next factory line competes as a goal.
+- Upgrades lines when better machines unlock (pigeons → coin sorter, hopper → armoured hopper), not only when
+  the intake changes; no coin rollers on dig lines (dug loot isn't coins).
+- Plans lines at 34 rim angles and nudges each one outward/sideways until it fits (the 3-deep tunnel borer
+  used to poke into the rim's no-build ring). It now fills 12 dig lines + 2 coin lines instead of 5 + 2;
+  with the old planner the same crusts took 26 h instead of 15, i.e. the 24 h check was optimistic.
+- Reports: hourly income and dig rate, layer arrival times, purchase count and longest gap, income by source
+  (kiosk / hoppers / wishes / objectives), final lines per slot. `fit` does three passes per mall (size →
+  equal-time layers → size) and widens its bracket as needed; `slots` probes line placement.
+- The fitter's `Math.Round(best, -2)` crashed (.NET has no negative digits): fixed.
 
-**M1 (verified, committed):** first-person controller (`View/FirstPerson.cs`, injectable `FPInput`),
-view-model hands (`Hands.cs`), instanced loose items (`ItemRenderer.cs`), COIN-O-MATIC 3000 (`Kiosk.cs`),
-WE/Water shader, south wall + skylight ceiling + colliders (`WorldBuilder`), water/rim/stepping-stone/crust
-colliders (`FountainView`), FP HUD, Core `Sim` v2 (loose items, carry, deposit, tech levels), SaveData v2.
-Tour: 18 screenshots; uitest 28/28; loadtest restores pose, cash, carry tier and loose items.
-Lessons: a lit mesh at exactly zero scale makes NaN pixels that bloom turns into black squares; world
-text colours must have alpha 1 (`Mats.NewText` now forces it — v1's coloured signs were invisible);
-the player sits on the Ignore Raycast layer so the aim ray doesn't hit its own capsule.
+### Measured (balance bot)
+- **Final fit** (engaged bot, seed 1234, each mall's last fit pass, chained): Crestview 3.26 h, Neon Galaxy
+  3.77, Galleria Aurelia 4.20, Skyport 4.73, Lucky Lagoon 5.20, Eternity Plaza 5.19 = **26.35 h**. Crusts
+  194,700 / 27.9M / 94.0M / 200.9M / 319.1M / 488.1M scoops.
+- **The fit before it** (same game rules; the bot still built only 5 dig lines): engaged 26.09–26.42 h over six
+  seeds, casual 27.5–28.1 h over three. Longest gap between purchases 12 min (Crestview), 10.5 min (Neon),
+  under 5 min from Aurelia on; a new layer every ~20 min in Crestview up to ~45 min in Eternity; late-mall
+  income tens of $M per minute.
+- The six-seed and casual runs after the final fit didn't run this session. Run them before relying on the
+  totals: `dotnet run -c Release --project Tools/BalanceSim -- 40 <seed> engaged` for a few seeds, and
+  `-- 60 1234 casual`.
+- **Early game** (Crestview; unaffected by the final bot and fit changes). Engaged, six seeds: cup and scrub
+  in under 30 s, pail by ~1 min, bucket median ~7 min (40 s–15 min), hamster wheel ~10 min (40 s–17 min),
+  skimmer ~21 min, first line ~37 min (24–45). Casual, four seeds: bucket 7–15 min, hamster 10–21, skimmer
+  19–37, first line 36–61. PIVOT_FPS's targets: bucket within 10 min, generator + skimmer by 15–20, first line
+  by ~45.
 
-**M2 (verified, committed):** shopper crowd in Core (`SimCrowd.cs`: 10 archetypes walk in from doors in
-`Layout.cs`, stand at r = 10.7, wind up, toss coins/oddities/gum along the Gaussian tier curve, speak barks
-or wish quotes, leave), True Wishes rising where wishful tosses land (catch with E: cash + Wish Tokens +
-journal), the Fountain Improvement Plan easel (buys Fountain-branch techs), first 3 beautification upgrades
-with visuals (scrubbed tiles, water jets, coloured LED ring), speech bubbles, positional splash/plop audio.
-uitest 38/38. `dotnet run ... -- crowd <wishability>` prints what the crowd is doing headlessly.
+### Tour and uitest (written, compile-checked, not run)
+- Tour: the Security tab, Doug's whistle and his fine (wading on purpose), Chad walked up to and chased off
+  with E, a goldfish returned. Helpers `ApproachRival`, `SummonRival`, `DropGoldfishNearby` in `GameRoot`.
+- uitest: +11 checks after the wish catch (see NEXT). Watchdog raised to 600 s (Chad walks in twice).
 
-**M3 (verified, committed):** Maintenance Terminal (`View/Terminal.cs` prop, `UI/TerminalPanel.cs` =
-MAINT-OS 95: branch tabs, node graph by Col/Row with prerequisite lines, detail pane with generated effect
-line). 36 nodes so far (carry ladder + Sturdier Bottoms/Comfy Sneakers, grab ladder + Longer Arms/Nimble
-Fingers, 13 fountain uniques — 5 paid in Wish Tokens — plus 4 levelled fountain nodes). Held tool models and
-floor-level carts/barrows (`Hands.cs`), area-grab ring, shop-vac auto pickup, detector glints, all fountain
-decor (`Decor.cs`), wormhole tosses of other malls' loot. Dig tools are defined but not sold until M5.
-uitest 49/49 (buys through the real terminal UI).
+### Tools
+- `Tools/UnityCompileCheck` (new): compiles `Assets/Scripts` against Unity 2022.3 reference assemblies from
+  NuGet (`RocketModFix.UnityEngine.Redist`). It caught two type errors in the new uitest code this session.
 
-**M4 (verified, committed):** the factory. Core `SimFactory.cs` (1 m grid on the hall floor, placement rules
-incl. rim-only intakes that must face the fountain, stepping stones and the entrance kept clear; belts with
-0.25-spaced items that hop cell to cell; splitter; skimmer bot that roams and docks; drain pump; claw
-crane; hoppers that sell; one global power budget with brownout ratio; save/load of buildings, buffers and
-belt items). `ContentBuild.cs`: 11 buildables + 16 Power/Intake/Logistics tech nodes. View: `FactoryView.cs`
-(models, scrolling belts, instanced belt items, bot/hose/claw animation), `BuildMode.cs` (grid ghost with
-`WE/Ghost` shader, R, auto-facing, belt drag, X demolish), `UI/BuildMenu.cs` (Tab catalogue). Headless:
-`dotnet run ... -- factory`. uitest 69/69 builds a working skimmer→belt→hopper line through the real input path.
+## Ideas / later
+- Where a human could beat the bot (so the real campaign could run a bit shorter than measured): routing
+  belts around obstacles to fit more lines than the bot's straight radial ones (it fills 14 of its 34
+  candidate rim slots; the south side stays clear for the entrance, kiosk and terminal), and hand digging
+  alongside the rigs (the bot stops swinging once it owns a rig; the rubble cap bounds what that's worth).
+  The bot ignores Officer Doug, but that costs it nothing that matters (fines were 0.2% of Crestview's
+  income and ~0 later, once the Deputy Badge is bought).
+- The casual bot is only ~7% slower than the engaged one, because late malls are factory-driven and both
+  profiles build identically. A sloppier casual builder would make the casual numbers more meaningful.
+- Late-mall money reaches tens of billions (Eternity). Fine for an incremental game, but if Nico wants
+  smaller numbers, trim the permanent value bonuses (coin polish, Seniority, treasures) and re-fit.
+- Late malls re-buy the early tree in minutes; more mall-specific content (new machines per mall) would make
+  their first half more interesting than Bigger Chunks levels.
+- Remodel laps (after mall 6) aren't fitted; they reuse each mall's fitted shape with crust ×1.6 per lap.
 
-**M5 (verified, committed):** the crust and the processing chain. Core `SimCrust.cs`: `DigCrust` turns scoops
-into loot (loose layer) or gunk chunks (deeper strata, one per `Balance.ChunkValue` scoops); hand swings
-(hotbar 2) and dig rigs/borers; depth mapping (loose layer linear, deeper layers log) drives `FountainView`
-(the crust sinks, water follows, colliders rebuild, a scaffold ramp spirals down the wall); processors
-(tumbler/pigeon sorter/coin sorter/roller/bagger/palletiser/melter/compressor) pass through what they
-can't use; sorting finds relics; mall events (per-mall effects, Jackpot Hour rains gold coins); bare
-concrete → treasure → contract modal → `Prestige()` (Lucky Pennies; non-Head-Office techs, cash, factory
-reset); Head Office perks (`TechDef.LuckyPennies`, saved in `S.headOffice`). `Sim.Scale` = mall value scale
-× remodel growth. uitest 85/85 (dig by hand, gunk, bare concrete, sign, buy a Head Office perk).
-Headless: `dotnet run ... -- crust`.
+## Milestone notes (M1–M5, verified and committed on Windows)
 
-Session 2 notes (kept for history):
-- Done (session 2):
-  - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/
-    TechBranch, ObjectiveDef with a flat reward. MallDef now has CrustScoops, ValueScale, LootTypes and
-    GunkTypes.
-  - `Core/Balance.cs` rewritten (tosses, tier curve, wishes, crust, deposit rates).
-  - `Core/ContentWorld.cs` added: item registry (9 coin tiers, 19 oddities, per-mall loot, gunk and relic
-    types, processed goods), 10 carry tiers, 7 grab tools, 6 dig tools, receipt and "hands full" jokes.
-  - `Core/ContentMalls.cs` trimmed: v1 fitted bounds gone, CrustScoops per mall (placeholders), Crestview
-    event now boosts tosses.
-- Still to do before M1 compiles:
-  - `Content.cs`: after BuildMalls, call BuildCoins, BuildOddities and BuildMallTypes; expose the `types`
-    list as an `Items` array; add Carry, GrabTools and DigTools; drop Machines, Tools, Upgrades and
-    HeadOffice.
-  - `ContentMeta.cs`: achievements and objectives against the new Sim.
-  - `SaveData.cs` v2: player pose, carried and loose items with a type-id table, tech levels, stats,
-    mouse sensitivity and FOV settings.
-  - `Sim.cs` v2: loose items, toss scheduler, pickup, deposit, crust.
-  - Remove the v1-only files with `git rm`, including their `.meta`: SimShop, ContentShop, MachineVisuals,
-    Stations, CameraRig, Clickables (keep RarityColors), ShopPanel.
-  - Rewrite GameView, HUD, Modals and GameRoot (FP autotour, uitest and loadtest).
-  - New view code: first-person controller, first-person hands, instanced item renderer, COIN-O-MATIC kiosk,
-    water shader.
-  - WorldBuilder: south wall, ceiling, colliders. FountainView: water, crust collider, ramp.
-  - Stub `Tools/BalanceSim/Program.cs` against the new Core so it compiles until M6.
-- Note: `ContentMalls.cs` was edited once with a PowerShell `WriteAllText`. Use Write/Edit for file changes.
+**M1:** first-person controller (`View/FirstPerson.cs`, injectable `FPInput`), view-model hands, instanced
+loose items, COIN-O-MATIC 3000, WE/Water, south wall + skylight ceiling + colliders, FP HUD, Core `Sim` v2,
+SaveData v2. **M2:** shopper crowd (`SimCrowd.cs`, 10 archetypes), True Wishes, the Fountain Improvement
+Plan, first beautification visuals, speech bubbles, positional audio. **M3:** MAINT-OS 95 tech tree
+(`TerminalPanel`), carry/grab ladders, held tool models, area grab, shop-vac, detector glints, fountain
+decor, wormhole tosses. **M4:** the factory (`SimFactory.cs`: grid, belts, splitter, skimmer, pump, claw,
+hoppers, power; `FactoryView`, `BuildMode`, `BuildMenu`). **M5:** the crust and processing chain
+(`SimCrust.cs`: digging, strata, processors, relics, events, bare concrete → contract → `Prestige()`, Head
+Office). **M6 WIP (`4a99037`, Nico's session 3):** hazards (`SimHazards.cs`, `View/Hazards.cs`), the Security
+branch, the goldfish, footsteps, more jokes, the first bot rewrite and economy fixes (per-mall `LootScale` /
+`StoryScale`, coin ladder and oddity values, late fountain upgrade prices).
 
-Everything below describes the v1 (overhead auto-clicker) build at commit `96a8f81`.
-
-## State
-
-Complete, playable game: six malls, endless Remodel contracts, full UI, procedural art and audio,
-save/load and offline progress. Windows build at `Builds/Windows/WishExtractor.exe` (not in git).
-No git commits yet (the folder sits inside the home-directory repo; ask Nico before `git init`/commit).
-
-## Verified (measured, not assumed)
-
-- Compiles clean in Unity 6000.4.2f1; Windows player builds (85 MB).
-- `-uitest`: 39/39 checks pass (intro, dig, sell button and vending machine, buy tool/machine, journal tabs,
-  settings, shop toggle, clear mall → contract → sign → new mall intro → buy a Head Office perk).
-- `-loadtest`: save/load restores cash, tool, machines, clicks, depth, objective; offline 2 h simulated
-  at 50% efficiency.
-- `-autotour`: screenshots of every mall and every major screen; ~165 FPS at 1920×1080 in the busiest
-  Crestview scene (RX 7800 XT).
-- Balance sim: engaged bot 24h29m for the six malls, idle bot 40h55m; Remodel lap 1 ≈ 9 h (engaged).
-
-## Not verified
-
-- Audio was never listened to (the clips are synthesised and play without errors; mix levels are guesses).
-- Real OS mouse input was not driven end-to-end (computer-use couldn't target the unpackaged exe); the
-  uitest drives the same EventSystem raycasts and world picking a real click uses.
-- Only 1600×900 and 1920×1080 windows were looked at; ultrawide/4K layouts are untested.
-
-## Ideas / next steps
-
-- Play it for real and tune the feel: click juice, sound levels, wish frequency, golden penny rate.
-- The idle profile stalls in the Lucky Lagoon's last layers (12 h); if idle players matter, add a late
-  Lucky Lagoon upgrade or soften its last two boundaries.
-- Late-mall purchase gaps reach ~13 min for the engaged bot (malls 5–6); more late upgrades would help.
-- Possible additions: per-mall gimmick mechanics beyond timed events, cosmetic worker hats, a statistics
-  graph, controller support, Steam-style achievements.
+v1 (the overhead auto-clicker) lives on only in git history at `96a8f81`.
