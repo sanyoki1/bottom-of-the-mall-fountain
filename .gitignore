@@ -1,0 +1,35 @@
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.pidb
+*.booproj
+*.userprefs
+.vs/
+.vscode/
+.idea/
+*.apk
+*.aab
+*.unitypackage
+crashlytics-build.properties
+
+# Balance simulator outputs
+Tools/BalanceSim/bin/
+Tools/BalanceSim/obj/
+Tools/BalanceSim/report_*.txt
+Tools/BalanceSim/fitted_bounds.txt
+!Tools/BalanceSim/BalanceSim.csproj
+
+# Tour / test screenshots (curated ones live in Docs/Screenshots)
+/Screenshots/
