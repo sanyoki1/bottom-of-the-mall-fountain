@@ -8,7 +8,7 @@ using WishExtractor.Core;
 
 namespace WishExtractor.View
 {
-    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board, Building }
+    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board, Building, Crust }
 
     public struct Target
     {
@@ -38,6 +38,12 @@ namespace WishExtractor.View
         bool decorPrimed;
         float wallDistNow = 999;
         int hoverBuilding = -1;
+        /// <summary>Hotbar 2: the dig tool is out.</summary>
+        public bool DigMode { get; private set; }
+        float swingCooldown;
+        GameObject treasure;
+        /// <summary>A swing of the dig tool landed: point, scoops removed.</summary>
+        public event Action<Vector3, double> Dug;
         /// <summary>The player pressed E on the Maintenance Terminal.</summary>
         public event Action OpenTerminal;
         Material areaMat;
@@ -122,6 +128,23 @@ namespace WishExtractor.View
                 Fx.Dust(c + Vector3.up * 0.2f, new Color(0.9f, 0.9f, 0.85f), b.Def.IsBelt ? 2 : 8, 0.8f, 0.6f, 1f);
                 if (!b.Def.IsBelt) Fx.Glint(c + Vector3.up * 1.2f, Color.white, 1.5f, 2, 0.5f);
             };
+            Sim.OnStratumReached += s =>
+            {
+                Fountain.SetStratum(Sim.Mall, s, false);
+                Shake(0.5f);
+                for (int i = 0; i < 16; i++)
+                {
+                    float a = i * Mathf.PI * 2 / 16;
+                    Fx.Dust(Fountain.SurfacePoint(Mathf.Cos(a) * 6.8f, Mathf.Sin(a) * 6.8f), MeshKit.Hex(Sim.Mall.Strata[s].Color), 3, 1.4f, 0.8f, 2f);
+                }
+            };
+            Sim.OnMallCleared += () => { SpawnTreasure(true); Shake(1f); };
+            Sim.OnPrestige += () => { RebuildMall(); PlacePlayer(new SaveData()); };
+            Sim.OnWishCompressed += (w, v) =>
+            {
+                Building comp = Sim.Buildings.Find(b => b.Def.Process == "compress");
+                WishOrbs.Compressed(w, comp != null ? FactoryView.WorldCenter(comp) + Vector3.up * 1.8f : new Vector3(0, 10, 0));
+            };
             Sim.OnHopperSold += (b, cash, n) =>
             {
                 if (UnityEngine.Random.value < 0.25f)
@@ -150,8 +173,10 @@ namespace WishExtractor.View
             mallRoot.SetParent(transform, false);
             world.Build(mall, mallRoot, Sim.S.mallIndex * 97 + 5);
             Fountain.Build(mall, mallRoot);
-            Fountain.SetDepth(0, false, true);
-            Fountain.SetStratum(mall, 0, true);
+            Fountain.SetDepth(Sim.DepthFrac, Sim.MallCleared, true);
+            Fountain.SetStratum(mall, Sim.Stratum, true);
+            treasure = null;
+            if (Sim.MallCleared) SpawnTreasure(false);
             Kiosk = new Kiosk();
             Kiosk.Build(mallRoot);
             Board = new FountainBoard();
@@ -204,9 +229,15 @@ namespace WishExtractor.View
             Sim.S.distance += Player.Moved;
             if (Player.Feet.y < FountainView.BasinFloor - 5) PlacePlayer(new SaveData());
 
-            if (!frozen && input.Hotbar == 3) Build.SetActive(true);
-            if (!frozen && (input.Hotbar == 1 || input.Hotbar == 2)) Build.SetActive(false);
-            if (!frozen && input.Catalogue && !Build.Active) Build.SetActive(true);
+            if (!frozen && input.Hotbar == 3 && Build.SetActive(true)) DigMode = false;
+            if (!frozen && input.Hotbar == 1) { Build.SetActive(false); DigMode = false; }
+            if (!frozen && input.Hotbar == 2)
+            {
+                if (Sim.DigTier <= 0) Message?.Invoke("You need something to dig with. Sandbox Shovel: Tools tab at the Maintenance Terminal.");
+                else { Build.SetActive(false); DigMode = true; }
+            }
+            if (!frozen && input.Catalogue && !Build.Active && Build.SetActive(true)) DigMode = false;
+            if (Build.Active) DigMode = false;
 
             UpdateTarget();
             grabCooldown -= dt;
@@ -216,6 +247,13 @@ namespace WishExtractor.View
             {
                 // in build mode the mouse builds; E still works on the kiosk, terminal, easel and wishes
                 if (input.Interact && Current.Kind != TargetKind.Item && Current.Kind != TargetKind.Building) Use();
+                return;
+            }
+            swingCooldown -= dt;
+            if (DigMode)
+            {
+                if (input.Interact && Current.Kind != TargetKind.Crust) Use();
+                if ((input.PrimaryDown || input.Primary) && swingCooldown <= 0 && Current.Kind == TargetKind.Crust) SwingAt(Current.Point);
                 return;
             }
             if (input.Interact || input.PrimaryDown) Use();
@@ -266,6 +304,12 @@ namespace WishExtractor.View
                     if (ct.Kind == "board") { Current = new Target { Kind = TargetKind.Board, Point = hit.point, Distance = hit.distance }; return; }
                     if (ct.Kind == "terminal") { Current = new Target { Kind = TargetKind.Terminal, Point = hit.point, Distance = hit.distance }; return; }
                 }
+            }
+            if (DigMode)
+            {
+                if (hitSomething && hit.distance <= Balance.DigReach + 0.6f && hit.collider.name == "Crust Collider")
+                    Current = new Target { Kind = TargetKind.Crust, Point = hit.point, Distance = hit.distance };
+                return;
             }
             var grab = Sim.Grab;
             if (grab.Area > 0 && wallDist <= reach + 0.5f && FountainView.InBasin(hit.point))
@@ -338,6 +382,60 @@ namespace WishExtractor.View
             }
         }
 
+        void SwingAt(Vector3 p)
+        {
+            var tool = Sim.DigTool;
+            swingCooldown = 1f / Mathf.Max(0.5f, tool.Rate);
+            Hands.Swing();
+            if (Sim.MallCleared) { Message?.Invoke("Bare concrete! There's nothing left to dig. Sign the next contract."); return; }
+            double scoops = Sim.SwingDig(p.x, p.z);
+            var sp = Fountain.SurfacePoint(p.x, p.z);
+            float mag = Mathf.Clamp01((float)Math.Log10(scoops + 1) / 2.5f);
+            Fountain.Dig(sp, 0.12f + mag * 0.45f, 0.7f + mag * 1.3f);
+            Color dirt = MeshKit.Hex(Sim.CurStratum.Color);
+            Fx.Dust(sp + Vector3.up * 0.1f, dirt, 3 + (int)(mag * 8), 0.7f + mag, 0.6f, 1.2f + mag);
+            if (Fountain.InWater(sp)) Fx.Ripple(new Vector3(sp.x, Fountain.WaterY + 0.01f, sp.z), new Color(0.9f, 0.95f, 1f, 0.6f), 0.9f + mag, 0.6f);
+            Fx.CoinShower(sp + Vector3.up * 0.1f, new[] { dirt, dirt * 0.8f }, 2 + (int)(mag * 10), 2.5f + mag * 2, 0.6f);
+            if (mag > 0.6f) Shake(0.12f);
+            Dug?.Invoke(sp, scoops);
+        }
+
+        void SpawnTreasure(bool fanfare)
+        {
+            if (treasure != null) Destroy(treasure);
+            var mall = Sim.Mall;
+            ItemShape shape = ItemShape.Coin;
+            Color col = new Color(1f, 0.8f, 0.3f);
+            switch (mall.Id)
+            {
+                case "crestview": col = MeshKit.Hex(0xC77B43); break;
+                case "neongalaxy": col = MeshKit.Hex(0xFFD34D); break;
+                case "aurelia": shape = ItemShape.Paper; col = MeshKit.Hex(0xE8ECF2); break;
+                case "skyport": shape = ItemShape.Cube; col = MeshKit.Hex(0x2F4F9F); break;
+                case "luckylagoon": shape = ItemShape.Cube; col = MeshKit.Hex(0xF5F5F5); break;
+                case "eternity": col = MeshKit.Hex(0x9FF0FF); break;
+            }
+            treasure = new GameObject("Treasure");
+            treasure.transform.SetParent(mallRoot, false);
+            var item = Loot.MakeItemMesh(shape, col, 5f, treasure.transform);
+            item.transform.localRotation = Quaternion.Euler(70, 0, 0);
+            var halo = new GameObject("Halo");
+            halo.transform.SetParent(treasure.transform, false);
+            halo.AddComponent<MeshFilter>().sharedMesh = FX.Quad;
+            halo.AddComponent<MeshRenderer>().sharedMaterial = Mats.NewGlow(TexKit.SoftDot, 2.4f, new Color(1f, 0.9f, 0.55f));
+            halo.transform.localScale = Vector3.one * 3.5f;
+            var beam = new MeshKit();
+            beam.Cylinder(new Vector3(0, 8, 0), 0.5f, 16, 16, Color.white, false);
+            var bgo = beam.Build("Beam", treasure.transform, false);
+            bgo.GetComponent<MeshRenderer>().sharedMaterial = Mats.NewGlow(TexKit.SoftDot, 0.6f, new Color(1f, 0.9f, 0.6f, 0.5f));
+            treasure.transform.position = new Vector3(0, FountainView.BasinFloor + 1.4f, -2.4f);
+            if (fanfare)
+            {
+                Fx.Confetti(treasure.transform.position + Vector3.up * 2, 150, 10);
+                Fx.CoinShower(treasure.transform.position, new[] { col, Color.white }, 40, 9, 1.4f);
+            }
+        }
+
         void PickupFx(Vector3 at, double value, int count)
         {
             Fx.Glint(at + Vector3.up * 0.05f, new Color(1f, 0.95f, 0.7f), 0.5f, 1, 0.05f);
@@ -353,7 +451,14 @@ namespace WishExtractor.View
             float time = Time.time;
             Ctx.Time = time;
             Fountain.SetBeauty(Sim.TechLevel("fountain_scrub") > 0, Sim.TechLevel("fountain_jets") > 0, Sim.TechLevel("fountain_lights") > 0);
+            Fountain.SetDepth(Sim.DepthFrac, Sim.MallCleared, false);
+            Fountain.SetStratum(Sim.Mall, Sim.Stratum, false);
             Fountain.Update(dt);
+            if (treasure != null)
+            {
+                treasure.transform.GetChild(0).localRotation = Quaternion.Euler(70, time * 60, 0);
+                treasure.transform.Find("Halo").rotation = Cam.transform.rotation * Quaternion.Euler(-90, 0, 0);
+            }
             world.Animate(time, dt);
             Kiosk.Update(dt, time);
             Board.Update(dt);
@@ -371,7 +476,8 @@ namespace WishExtractor.View
 
             // hands: bare hands show the top item; containers show how full they are
             Hands.SetCarryTier(Sim.CarryTier);
-            Hands.SetTool(Build.Active ? 0 : Sim.GrabTier);
+            if (DigMode) Hands.SetDigTool(Sim.DigTier);
+            else Hands.SetTool(Build.Active ? 0 : Sim.GrabTier);
             AutoVacuum(dt, feet);
             DetectorGlints(dt, feet);
             if (Sim.CarryTier == 0) Hands.SetHeld(Sim.Carried.Count > 0 ? Sim.Carried[Sim.Carried.Count - 1].Type : -1);

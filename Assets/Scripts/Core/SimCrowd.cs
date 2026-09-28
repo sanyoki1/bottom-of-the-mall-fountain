@@ -68,7 +68,7 @@ namespace WishExtractor.Core
         public double TossRate => (1 + Wishability * Balance.TossPerWish) * TossRateMult * EventTossMult / Balance.TossBaseInterval;
         public double TossInterval => 1 / Math.Max(1e-6, TossRate);
         public int CrowdTarget => (int)Math.Min(Balance.CrowdMax, Balance.CrowdBase + Wishability * Balance.CrowdPerWish + Math.Max(0, TossRate - 0.3) * 6);
-        public double EventTossMult => 1;
+        public double EventTossMult => EventMult("toss");
 
         /// <summary>Coin tier weights right now (for the terminal's "what gets thrown" readout).</summary>
         public double[] TierWeights(double bias = 0)
@@ -329,7 +329,7 @@ namespace WishExtractor.Core
             s.PendingType = PickTossType(s.Def);
             var t = Content.Items[s.PendingType];
             int tier = t.Tier >= 0 ? t.Tier : 3 + (int)t.Rarity * 2;
-            s.PendingWish = Rng.NextDouble() < Balance.WishChanceBase + Balance.WishChancePerTier * tier ? PickWish() : null;
+            s.PendingWish = Rng.NextDouble() < (Balance.WishChanceBase + Balance.WishChancePerTier * tier) * EventMult("wish") ? PickWish() : null;
             if (s.PendingWish != null) Say(s, "“" + s.PendingWish.Text + "”", 4.5f, true, s.PendingWish.Rarity);
             else if (Rng.NextDouble() < 0.3) Say(s, Rng.NextDouble() < 0.75 && s.Def.Barks.Length > 0 ? s.Def.Barks[Rng.Next(s.Def.Barks.Length)] : Content.GenericBarks[Rng.Next(Content.GenericBarks.Length)], 3f, false, Rarity.Common);
         }
@@ -389,7 +389,7 @@ namespace WishExtractor.Core
             float h = (float)(Math.PI / 180 * s.Heading);
             float hx = s.X + (float)Math.Sin(h) * 0.35f, hz = s.Z + (float)Math.Cos(h) * 0.35f;
             var def = Content.Items[type];
-            var it = AddLoose(type, x, z, def.BaseValue * Mall.ValueScale, (hx, 1.55f * s.Def.Scale + 0.2f, hz));
+            var it = AddLoose(type, x, z, def.BaseValue * Scale, (hx, 1.55f * s.Def.Scale + 0.2f, hz));
             it.Wish = s.PendingWish;
             s.PendingWish = null;
             s.State = ShopperState.Waiting;
@@ -412,7 +412,7 @@ namespace WishExtractor.Core
             if (good.Count == 0) return;
             int type = good[Rng.Next(good.Count)];
             var (x, z) = RandomLanding();
-            var it = AddLoose(type, x, z, Content.Items[type].BaseValue * Mall.ValueScale, (0f, 7.2f, 0f));
+            var it = AddLoose(type, x, z, Content.Items[type].BaseValue * Scale, (0f, 7.2f, 0f));
             S.tosses++;
             OnToss?.Invoke(null, it);
         }
@@ -442,7 +442,7 @@ namespace WishExtractor.Core
                 : candidates[Rng.Next(candidates.Count)];
         }
 
-        public double WishValue(WishDef def) => def.BaseValue * Balance.WishValueScale * Mall.ValueScale * ValueMult;
+        public double WishValue(WishDef def) => def.BaseValue * Balance.WishValueScale * Scale * ValueMult * EventValueMult;
 
         void SpawnWish(WishDef def, float x, float z)
         {
@@ -473,7 +473,7 @@ namespace WishExtractor.Core
                 if (w.Age >= w.Life)
                 {
                     Wishes.RemoveAt(i);
-                    OnWishEscaped?.Invoke(w);
+                    if (!TryCompress(w)) OnWishEscaped?.Invoke(w);
                 }
             }
         }

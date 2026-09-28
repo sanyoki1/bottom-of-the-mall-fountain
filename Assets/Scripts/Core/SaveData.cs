@@ -91,6 +91,7 @@ namespace WishExtractor.Core
         public double wishesCaught, wishesSeen, relicsFound, playTime, biggestDeposit, remodelsDone, distance;
         public double finesPaid, rivalsChased, fishReturned;
         public double built, hopperItems, hopperCash, machinePicked;
+        public double washed, sorted, bundles, wishesCompressed;
         public bool legendaryWish, legendaryRelic, endingSeen;
 
         // settings

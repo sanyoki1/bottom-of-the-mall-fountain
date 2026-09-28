@@ -208,9 +208,14 @@ namespace WishExtractor.Core
         DepositMult,    // × (1 + Value) for a category (Target = ItemCat name)
         GuardFine,      // × (1 - Value) security fines per level
         CarryBonus,     // × (1 + Value) carry capacity per level
+        DigPower,       // × (1 + Value) scoops per swing (hand tools and dig rigs) per level
+        RelicRate,      // × (1 + Value) relic chance per level
+        StartCash,      // Head Office: start every mall with Value × level dollars (× the mall's value scale)
+        StartCarry,     // Head Office: start every mall with this carry tier (level = tier)
+        StartUnlocks,   // Head Office: start every mall with the basic factory researched
     }
 
-    public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security }
+    public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice }
 
     /// <summary>A node on the Maintenance Terminal's tech tree. Levelled nodes repeat with growing cost.</summary>
     public sealed class TechDef
@@ -226,11 +231,17 @@ namespace WishExtractor.Core
         public double CostGrowth = 2.2;
         public int MaxLevel = 1;
         public bool WishTokens;         // paid in Wish Tokens instead of cash
+        public bool LuckyPennies;       // Head Office perks: paid in Lucky Pennies, kept across malls
+        public bool Persistent => LuckyPennies;
         public string[] Requires = Array.Empty<string>();
         public int UnlockMall;          // first mall where it can appear
         public int Col, Row;            // layout position in the tree view
         public int Index;
-        public double CostAt(int level, double scale) => Math.Round(Cost * Math.Pow(CostGrowth, level) * (WishTokens ? 1 : scale), WishTokens ? 0 : 2);
+        public double CostAt(int level, double scale)
+        {
+            bool plain = WishTokens || LuckyPennies;
+            return Math.Round(Cost * Math.Pow(CostGrowth, level) * (plain ? 1 : scale), plain ? 0 : 2);
+        }
     }
 
     public enum BuildCat { Power, Intake, Logistics, Processing, Output }

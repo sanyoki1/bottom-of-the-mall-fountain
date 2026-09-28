@@ -2,6 +2,7 @@
 // Milestone 1 stub: content counts and a short hand-carry smoke run. The full throughput bot
 // (walking times, tech purchases, factory) arrives with the balance pass.
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using WishExtractor.Core;
 
@@ -18,6 +19,7 @@ static class Program
         }
         if (args.Length > 0 && args[0] == "crowd") return Crowd(args.Length > 1 ? double.Parse(args[1]) : 0);
         if (args.Length > 0 && args[0] == "factory") return Factory();
+        if (args.Length > 0 && args[0] == "crust") return Crust();
         return Smoke();
     }
 
@@ -49,6 +51,46 @@ static class Program
         var snap = sim.Snapshot();
         var back = new Sim(snap, 4);
         Console.WriteLine($"save/load: {back.Buildings.Count} buildings (was {sim.Buildings.Count}), belt items {back.Buildings.Sum(b => b.Items.Count)}");
+        return 0;
+    }
+
+    /// <summary>A dig rig feeding a tumbler, a pigeon sorter and a hopper, in the gunk strata; then prestige.</summary>
+    static int Crust()
+    {
+        var sim = new Sim(new SaveData(), 5);
+        sim.StartRun();
+        foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock) sim.DebugSetTech(t.Id, 1);
+        sim.DebugSetDepth(0.2);
+        Console.WriteLine($"depth {sim.DepthFeet:0.0} ft, stratum {sim.Stratum} '{sim.CurStratum.Name}', dug {sim.S.dug:0} of {sim.TotalScoops:0}");
+        BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+        var placed = new List<Building>
+        {
+            sim.Place(D("gen_diesel"), 12, 8, 0, true), sim.Place(D("gen_diesel"), 12, 11, 0, true),
+            sim.Place(D("dig_rig"), 8, 8, 2, true),
+            sim.Place(D("belt"), 8, 9, 0, true), sim.Place(D("belt"), 7, 9, 1, true), sim.Place(D("belt"), 8, 10, 0, true),
+            sim.Place(D("proc_tumbler"), 8, 11, 0, true),
+            sim.Place(D("belt"), 8, 13, 0, true), sim.Place(D("belt"), 9, 13, 3, true),
+            sim.Place(D("proc_pigeons"), 8, 14, 0, true),
+            sim.Place(D("belt"), 8, 16, 0, true), sim.Place(D("belt"), 9, 16, 3, true),
+            sim.Place(D("hopper"), 8, 17, 0, true),
+        };
+        Console.WriteLine("placed: " + string.Join(", ", placed.Select(b => b == null ? "FAILED" : b.Def.Id)));
+        for (int step = 0; step < 3000; step++)
+        {
+            sim.Tick(0.1);
+            if (step % 600 == 599)
+                Console.WriteLine($"t={sim.Time:0}s dug {sim.S.dug:0} ({sim.DepthFeet:0.0} ft, {sim.CurStratum.Name}) washed {sim.S.washed} sorted {sim.S.sorted} relics {sim.S.relicsFound} " +
+                                  $"hopper {sim.S.hopperItems} items {Fmt.Money(sim.S.hopperCash)} power {sim.PowerGen}/{sim.PowerUse} | " +
+                                  string.Join(" ", sim.Buildings.Where(b => !b.Def.IsBelt && b.Def.Cat != BuildCat.Power).Select(b => $"{b.Def.Id}[{b.BufCount}/{b.OutCount}]{b.Status}")));
+        }
+        sim.DebugFinishMall();
+        Console.WriteLine($"cleared {sim.MallCleared}, treasures {sim.S.treasures.Count}, reward {sim.PrestigeReward} LP");
+        sim.Prestige();
+        Console.WriteLine($"after prestige: mall {sim.S.mallIndex} {sim.Mall.Name}, LP {sim.S.luckyPennies}, buildings {sim.Buildings.Count}, cash {sim.S.cash}, techs {sim.TechLevelsOwned}, loose {sim.Loose.Count}, dug {sim.S.dug}");
+        int ho = Content.TechIndex["ho_card"];
+        Console.WriteLine($"buy Company Credit Card: {sim.BuyTech(ho)} → LP {sim.S.luckyPennies}");
+        var back = new Sim(sim.Snapshot(), 9);
+        Console.WriteLine($"save/load keeps head office: {back.TechLevel("ho_card")} and mall {back.S.mallIndex}");
         return 0;
     }
 

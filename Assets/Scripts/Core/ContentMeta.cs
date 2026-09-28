@@ -88,8 +88,21 @@ namespace WishExtractor.Core
             O("net", "Buy the Pool Skimmer Net", "Scoops everything in a small circle. Hold the button and sweep.", 1, s => s.GrabTier >= 2);
             O("bucket", "Upgrade to the Mop Bucket", "Sixty coins per trip. The mop stays in the closet.", 2, s => s.CarryTier >= 3);
             O("neon", "Put up the 'MAKE A WISH' neon", "Quarters at wishability 12, loonies at 20.", 3, s => s.TechLevel("fountain_neon") > 0);
-            O("cherub", "Buy the Cherub Statue with Wish Tokens", "Catch wishes to earn tokens. The cherub only accepts wishes.", 0, s => s.TechLevel("fountain_cherub") > 0);
-            O("cash100", "Earn $100 in total", "Machines are coming. The fountain will empty itself.", 0, s => s.S.lifetimeCash >= 100);
+            O("shovel", "Buy a Sandbox Shovel and dig", "Tools tab. Press 2, aim at the crust and click. The fountain has forty years of coins packed under the water.", 2, s => s.S.scoops >= 10 || s.S.mallIndex > 0);
+            O("cherub", "Buy the Cherub Statue with Wish Tokens", "Catch wishes to earn tokens. The cherub only accepts wishes.", 0, s => s.TechLevel("fountain_cherub") > 0 || s.S.mallIndex > 0);
+            O("seal", "Dig down to the Syrup Seal", "Below the loose coins everything is glued together with forty years of syrup.", 5, s => s.S.maxStratum >= 1 || s.S.mallIndex > 0);
+            O("tumbler", "Build a Rinse Tumbler", "Gunk chunks are worth 10% as they are, 35% washed, full price sorted. Processing tab.", 10, s => s.CountBuilt("proc_tumbler") > 0 || s.S.mallIndex > 0);
+            O("sorter", "Sort washed loot (Pigeon Sorter)", "Sorting pays full price, and sometimes turns up a relic.", 20, s => s.S.sorted >= 10 || s.S.mallIndex > 0);
+            O("digrig", "Build a Crust Jackhammer Rig", "Let a machine do the digging. Belt its chunks through the tumbler and sorter to a hopper.", 50, s => s.CountBuilt("dig_rig") > 0 || s.S.mallIndex > 0);
+            O("relic", "Find a relic", "Sorting machines occasionally turn up lost treasures. They're worth a lot at the kiosk.", 50, s => s.S.relicsFound >= 1);
+            O("concrete", "Hit bare concrete", "Clear the whole crust. The mall's bottom treasure is waiting.", 0, s => s.S.mallCleared || s.S.mallIndex > 0);
+            O("contract", "Sign the next contract", "Press C (or wait for the contract). You keep Lucky Pennies, relics and the journal.", 0, s => s.S.mallIndex >= 1);
+            O("headoffice", "Spend Lucky Pennies at Head Office", "Maintenance Terminal, Head Office tab. Perks last forever.", 0, s => s.S.headOffice.Count > 0 || s.S.mallIndex > 1);
+            O("mall2", "Clear the Neon Galaxy Mega-Mall", "The Golden Arcade Token waits at 45 ft.", 0, s => s.S.maxMallCleared >= 1);
+            O("mall3", "Clear Galleria Aurelia", "The Platinum Membership Card waits at 60 ft.", 0, s => s.S.maxMallCleared >= 2);
+            O("mall4", "Clear Skyport Terminal C", "The Lost Passport of Everyone waits at 75 ft.", 0, s => s.S.maxMallCleared >= 3);
+            O("mall5", "Clear The Lucky Lagoon", "The Lucky Die waits at 90 ft.", 0, s => s.S.maxMallCleared >= 4);
+            O("mall6", "Find the First Wish", "At the very bottom of Eternity Plaza, 120 ft down.", 0, s => s.S.maxMallCleared >= 5);
             return o.ToArray();
         }
     }

@@ -53,6 +53,8 @@ namespace WishExtractor.View
             jets = null;
             lightRing = null;
             lightMat = null;
+            ramp = null;
+            rampBuiltY = float.NaN;
             if (Root != null) Object.Destroy(Root.gameObject);
             Root = new GameObject("Fountain").transform;
             Root.SetParent(parent, false);
@@ -711,7 +713,66 @@ namespace WishExtractor.View
             }
             if (water != null) water.localPosition = new Vector3(0, WaterY, 0);
             AnimateBeauty(Time.time);
+            UpdateRamp();
             if (crustCollider != null && (float.IsNaN(colliderY) || Mathf.Abs(SurfaceY - colliderY) > 0.04f)) RebuildCrustCollider();
+        }
+
+        // ── the scaffold ramp: spirals down the inside of the wall as the crust sinks ──
+
+        Transform ramp;
+        float rampBuiltY = float.NaN;
+        public const float RampRadius = 7.35f, RampWidth = 1.1f;
+
+        void UpdateRamp()
+        {
+            bool need = SurfaceY < CrustTop - 0.35f;
+            if (!need)
+            {
+                if (ramp != null) { Object.Destroy(ramp.gameObject); ramp = null; rampBuiltY = float.NaN; }
+                return;
+            }
+            if (!float.IsNaN(rampBuiltY) && Mathf.Abs(SurfaceY - rampBuiltY) < 0.25f) return;
+            if (ramp != null) Object.Destroy(ramp.gameObject);
+            rampBuiltY = SurfaceY;
+            ramp = new GameObject("Scaffold Ramp").transform;
+            ramp.SetParent(Root, false);
+            float top = RimTop - 0.04f, bottom = SurfaceY + 0.25f;
+            float drop = top - bottom;
+            const float slope = 0.36f;                               // rise per metre (about 20 degrees)
+            float length = drop / slope;
+            float span = Mathf.Min(length / RampRadius, Mathf.PI * 1.85f);
+            float realSlope = drop / (span * RampRadius);
+            int n = Mathf.Max(3, Mathf.CeilToInt(span / 0.14f));
+            float a0 = -Mathf.PI / 2 - 0.25f;                          // starts just west of the south stepping stone, spirals clockwise
+            var k = new MeshKit();
+            Color plank = new Color(0.62f, 0.46f, 0.3f, 0), pole = new Color(0.72f, 0.74f, 0.76f, 0), stripe = new Color(1f, 0.82f, 0.1f, 0);
+            for (int i = 0; i < n; i++)
+            {
+                float t0 = i / (float)n, t1 = (i + 1) / (float)n;
+                float angA = a0 - span * t0, angB = a0 - span * t1;
+                Vector3 pa = new Vector3(Mathf.Cos(angA) * RampRadius, top - drop * t0, Mathf.Sin(angA) * RampRadius);
+                Vector3 pb = new Vector3(Mathf.Cos(angB) * RampRadius, top - drop * t1, Mathf.Sin(angB) * RampRadius);
+                Vector3 mid = (pa + pb) * 0.5f;
+                Vector3 dir = pb - pa;
+                float len = dir.magnitude + 0.04f;
+                var rot = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                k.Box(mid - Vector3.up * 0.06f, new Vector3(RampWidth, 0.1f, len), rot, i % 2 == 0 ? plank : plank * 0.9f);
+                var go = new GameObject("Plank");
+                go.transform.SetParent(ramp, false);
+                go.transform.localPosition = mid - Vector3.up * 0.08f;
+                go.transform.localRotation = rot;
+                go.AddComponent<BoxCollider>().size = new Vector3(RampWidth, 0.14f, len);
+                // a railing on the open (inner) side every few planks
+                if (i % 3 == 0)
+                {
+                    Vector3 inward = -new Vector3(mid.x, 0, mid.z).normalized;
+                    Vector3 post = mid + inward * (RampWidth * 0.5f);
+                    float depthBelow = Mathf.Max(0.2f, post.y - (SurfaceY - 0.2f));
+                    k.Tube(post + Vector3.down * depthBelow, post + Vector3.up * 1.0f, 0.03f, 5, pole);
+                    k.Box(post + Vector3.up * 0.98f, new Vector3(0.05f, 0.05f, len * 3.1f), rot, stripe);
+                }
+            }
+            k.Build("Ramp Mesh", ramp, true);
         }
 
         /// <summary>True when a point (feet) is standing in the fountain water.</summary>

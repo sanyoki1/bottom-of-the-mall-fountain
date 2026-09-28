@@ -103,7 +103,9 @@ namespace WishExtractor.Core
             wishFound.Clear();
             relicCount.Clear();
             foreach (var ic in S.tech)
-                if (Content.TechIndex.TryGetValue(ic.id, out int ti)) techLevel[ti] = Math.Min(ic.count, Content.Techs[ti].MaxLevel);
+                if (Content.TechIndex.TryGetValue(ic.id, out int ti) && !Content.Techs[ti].Persistent) techLevel[ti] = Math.Min(ic.count, Content.Techs[ti].MaxLevel);
+            foreach (var ic in S.headOffice)
+                if (Content.TechIndex.TryGetValue(ic.id, out int hi) && Content.Techs[hi].Persistent) techLevel[hi] = Math.Min(ic.count, Content.Techs[hi].MaxLevel);
             foreach (var id in S.achievements)
                 if (Content.AchievementIndex.TryGetValue(id, out int ai)) achievementDone[ai] = true;
             foreach (var id in S.wishes) wishFound.Add(id);
@@ -137,8 +139,9 @@ namespace WishExtractor.Core
         public SaveData Snapshot()
         {
             S.tech.Clear();
+            S.headOffice.Clear();
             for (int i = 0; i < techLevel.Length; i++)
-                if (techLevel[i] > 0) S.tech.Add(new IdCount(Content.Techs[i].Id, techLevel[i]));
+                if (techLevel[i] > 0) (Content.Techs[i].Persistent ? S.headOffice : S.tech).Add(new IdCount(Content.Techs[i].Id, techLevel[i]));
             S.achievements.Clear();
             for (int i = 0; i < achievementDone.Length; i++)
                 if (achievementDone[i]) S.achievements.Add(Content.Achievements[i].Id);
@@ -193,7 +196,7 @@ namespace WishExtractor.Core
                 int tier = Pick(SeedWeights);
                 int type = Content.CoinTiers[tier];
                 var (x, z) = RandomLanding();
-                AddLoose(type, x, z, Content.Items[type].BaseValue * Mall.ValueScale, null, false);
+                AddLoose(type, x, z, Content.Items[type].BaseValue * Scale, null, false);
             }
         }
 
@@ -227,7 +230,7 @@ namespace WishExtractor.Core
         public int CarryCapacity => Math.Max(1, (int)Math.Floor(CarryDef.Capacity * (CarryTier == 0 ? 1 : CarryBonusMult) + 1e-6));
         public int CarryFree => Math.Max(0, CarryCapacity - CarryUsed);
         public float Reach => Grab.Reach + (float)ReachBonus;
-        public double CarriedValue { get { double v = 0; foreach (var s in Carried) v += s.Value * CatRate(s.Def.Cat); return v * ValueMult; } }
+        public double CarriedValue { get { double v = 0; foreach (var s in Carried) v += s.Value * CatRate(s.Def.Cat); return v * ValueMult * EventValueMult; } }
         public int CarriedCount { get { int c = 0; foreach (var s in Carried) c += s.Count; return c; } }
         public ObjectiveDef CurrentObjective => S.objective < Content.Objectives.Length ? Content.Objectives[S.objective] : null;
 
@@ -236,7 +239,7 @@ namespace WishExtractor.Core
         public void Recalc()
         {
             int carry = 0, grab = 0, dig = 0;
-            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1;
+            double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1, digMult = 1, relicMult = 1;
             for (int i = 0; i < techLevel.Length; i++)
             {
                 int L = techLevel[i];
@@ -256,6 +259,9 @@ namespace WishExtractor.Core
                     case TechKind.GrabRate: grabRate *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.WishLife: wishLife *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.CarryBonus: carryBonus *= Math.Pow(1 + t.Value, L); break;
+                    case TechKind.DigPower: digMult *= Math.Pow(1 + t.Value, L); break;
+                    case TechKind.RelicRate: relicMult *= Math.Pow(1 + t.Value, L); break;
+                    case TechKind.StartCarry: carry = Math.Max(carry, L); break;
                 }
             }
             CarryTier = Math.Min(carry, Content.Carry.Length - 1);
@@ -281,6 +287,8 @@ namespace WishExtractor.Core
             GrabRateMult = grabRate;
             WishLifeMult = wishLife;
             CarryBonusMult = carryBonus;
+            DigMult = digMult;
+            RelicMult = relicMult;
             RecalcFactory();
             OnRecalc?.Invoke();
         }
@@ -298,6 +306,7 @@ namespace WishExtractor.Core
             UpdateCrowd(dt);
             UpdateWishes(dt);
             UpdateFactory(dt);
+            UpdateEvent(dt);
 
             earnWindowTime += dt;
             if (earnWindowTime >= 1)
@@ -468,7 +477,7 @@ namespace WishExtractor.Core
 
         // ───────────────────────────── tech tree ─────────────────────────────
 
-        public double TechCost(int i) => Content.Techs[i].CostAt(techLevel[i], Mall.ValueScale);
+        public double TechCost(int i) => Content.Techs[i].CostAt(techLevel[i], Scale);
         public bool TechMaxed(int i) => techLevel[i] >= Content.Techs[i].MaxLevel;
         public bool TechUnlocked(int i)
         {
@@ -478,14 +487,22 @@ namespace WishExtractor.Core
                 if (!Content.TechIndex.TryGetValue(r, out int ri) || techLevel[ri] <= 0) return false;
             return true;
         }
-        public bool CanAfford(int i) => Content.Techs[i].WishTokens ? S.wishTokens >= TechCost(i) : S.cash >= TechCost(i) - 1e-9;
+        public bool CanAfford(int i)
+        {
+            var t = Content.Techs[i];
+            double c = TechCost(i);
+            return t.LuckyPennies ? S.luckyPennies >= c - 1e-9 : t.WishTokens ? S.wishTokens >= c - 1e-9 : S.cash >= c - 1e-9;
+        }
         public bool CanBuyTech(int i) => !TechMaxed(i) && TechUnlocked(i) && CanAfford(i);
 
         public bool BuyTech(int i)
         {
             if (!CanBuyTech(i)) return false;
             double cost = TechCost(i);
-            if (Content.Techs[i].WishTokens) S.wishTokens -= cost; else S.cash -= cost;
+            var td = Content.Techs[i];
+            if (td.LuckyPennies) S.luckyPennies -= cost;
+            else if (td.WishTokens) S.wishTokens -= cost;
+            else S.cash -= cost;
             techLevel[i]++;
             Recalc();
             OnTechBought?.Invoke(Content.Techs[i]);
@@ -526,7 +543,7 @@ namespace WishExtractor.Core
             {
                 var o = CurrentObjective;
                 if (o == null || !o.Check(this)) return;
-                double reward = o.Reward * Mall.ValueScale;
+                double reward = o.Reward * Scale;
                 S.objective++;
                 AddCash(reward);
                 OnObjectiveDone?.Invoke(o, reward);

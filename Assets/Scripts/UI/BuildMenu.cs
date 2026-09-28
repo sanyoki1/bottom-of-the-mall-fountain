@@ -56,7 +56,7 @@ namespace WishExtractor.UI
                     btn.Button.interactable = unlocked;
                     btn.SetColors(unlocked ? new Color(0.12f, 0.2f, 0.22f) : new Color(0.07f, 0.09f, 0.1f), new Color(0.07f, 0.09f, 0.1f));
                     UIKit.Label(btn.Rt, "Name", unlocked ? d.Name : "??? (research it)", 17, unlocked ? Color.white : new Color(0.4f, 0.48f, 0.47f), TextAnchor.UpperLeft, UIKit.Semibold).rectTransform.TL(14, 10, colW - 28, 24);
-                    string stats = $"{Fmt.Money(d.Cost * sim.Mall.ValueScale)}   {d.W}×{d.D}" + (d.Power > 0 ? $"   +{d.Power:0.#} kW" : d.Power < 0 ? $"   {d.Power:0.#} kW" : "");
+                    string stats = $"{Fmt.Money(d.Cost * sim.Scale)}   {d.W}×{d.D}" + (d.Power > 0 ? $"   +{d.Power:0.#} kW" : d.Power < 0 ? $"   {d.Power:0.#} kW" : "");
                     UIKit.Label(btn.Rt, "Stats", stats, 13, new Color(0.42f, 1f, 0.62f), TextAnchor.UpperLeft, UIKit.Mono).rectTransform.TL(14, 36, colW - 28, 20);
                     if (unlocked) UIKit.Label(btn.Rt, "Desc", d.Desc, 13, new Color(0.62f, 0.72f, 0.7f), TextAnchor.UpperLeft, UIKit.Regular, true).rectTransform.TL(14, 58, colW - 28, 68);
                     int built = sim.CountBuilt(d.Id);

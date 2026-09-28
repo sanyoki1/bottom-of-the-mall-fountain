@@ -112,6 +112,19 @@ namespace WishExtractor.View
             dying.Add(o);
         }
 
+        /// <summary>A wish nobody caught gets sucked into a Wish Compressor at dest.</summary>
+        public void Compressed(ActiveWish w, Vector3 dest)
+        {
+            if (!orbs.TryGetValue(w.Uid, out var o)) return;
+            orbs.Remove(w.Uid);
+            o.Mode = 3;
+            o.Out = 0;
+            o.From = o.T.position;
+            o.Hover = dest;
+            Object.Destroy(o.T.GetComponent<SphereCollider>());
+            dying.Add(o);
+        }
+
         public void Escaped(ActiveWish w)
         {
             if (!orbs.TryGetValue(w.Uid, out var o)) return;
@@ -152,6 +165,14 @@ namespace WishExtractor.View
                     float t = o.Out / 0.25f;
                     o.T.localScale = Vector3.one * Mathf.Max(0.01f, 1 + t * 1.4f);
                     if (t >= 1) { Object.Destroy(o.T.gameObject); dying.RemoveAt(i); continue; }
+                }
+                else if (o.Mode == 3)
+                {
+                    float t = Mathf.Clamp01(o.Out / 1.0f);
+                    float e = t * t;
+                    o.T.position = Vector3.Lerp(o.From, o.Hover, e) + Vector3.up * Mathf.Sin(t * Mathf.PI) * 2.5f;
+                    o.T.localScale = Vector3.one * Mathf.Max(0.05f, 1 - e * 0.8f);
+                    if (t >= 1) { ctx.Fx.Sparks(o.T.position, new Color(0.8f, 0.6f, 1f), 12, 3f, 0.1f, 0.5f); Object.Destroy(o.T.gameObject); dying.RemoveAt(i); continue; }
                 }
                 else
                 {

@@ -230,6 +230,8 @@ namespace WishExtractor.UI
             Stat("Grabbing with", sim.Grab.Name);
             Stat("Items lying in the fountain", Fmt.Int(sim.Loose.Count));
             Stat("Tech levels bought", Fmt.Int(sim.TechLevelsOwned));
+            Stat("Depth", $"{Fmt.Feet(sim.DepthFeet)} of {Fmt.Feet(sim.Mall.DepthFeet)}  ·  {Fmt.Int(S.dug)} of {Fmt.Int(sim.TotalScoops)} scoops");
+            Stat("Machines / belts", $"{sim.MachinesBuilt} / {sim.BeltsBuilt}  ·  power {sim.PowerGen:0} / {sim.PowerUse:0} kW");
             Section(list, "All time", "", Pal.Gold);
             Stat("Total play time", Fmt.Time(S.playTime));
             Stat("Lifetime earnings", Fmt.Money(S.lifetimeCash));
@@ -240,6 +242,8 @@ namespace WishExtractor.UI
             Stat("Things tossed in by shoppers", Fmt.Int(S.tosses));
             Stat("Wishes caught / seen", $"{Fmt.Int(S.wishesCaught)} / {Fmt.Int(S.wishesSeen)}");
             Stat("Relics found", Fmt.Int(S.relicsFound));
+            Stat("Scoops dug / chunks washed / sorted", $"{Fmt.Int(S.scoops)} / {Fmt.Int(S.washed)} / {Fmt.Int(S.sorted)}");
+            Stat("Machine pickups / hopper sales", $"{Fmt.Int(S.machinePicked)} / {Fmt.Money(S.hopperCash)}");
             Stat("Malls cleared", $"{S.maxMallCleared + 1} of {Content.Malls.Length}" + (S.remodelsDone > 0 ? $"  ·  {S.remodelsDone} remodels" : ""));
             Stat("Lucky Pennies earned", Fmt.Num(S.lifetimeLP));
             Section(list, "Permanent value bonuses", "", Pal.Green);
@@ -348,6 +352,34 @@ namespace WishExtractor.UI
         }
 
         // ───────────────────────────── Offline / contract / intro / ending ─────────────────────────────
+
+        public void OpenContract()
+        {
+            const float w = 780, h = 560;
+            var mall = sim.Mall;
+            bool final = sim.IsFinalMall || sim.InRemodel;
+            var next = Content.Malls[(sim.S.mallIndex + 1) % Content.Malls.Length];
+            var c = Open("contract", w, h);
+            Title(c, "Bare concrete!", w, "CONTRACT COMPLETE");
+            CloseX(c, w);
+            var tr = UIKit.Card(c, "Treasure", new Color(1f, 0.96f, 0.84f, 1f), 20, false);
+            tr.TL(32, 100, w - 64, 120);
+            UIKit.Label(tr, "Crown", "♛", 40, Pal.Gold, TextAnchor.MiddleCenter, UIKit.Symbol).rectTransform.TL(16, 20, 64, 80);
+            UIKit.Label(tr, "Name", mall.TreasureName, 22, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold).rectTransform.TL(92, 18, w - 180, 30);
+            UIKit.Label(tr, "Desc", mall.TreasureDesc, 15, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true).rectTransform.TL(92, 50, w - 180, 64);
+            string nextText = final
+                ? "Sign a Remodel contract: every mall again, with a deeper crust and pricier everything."
+                : $"Next contract: <b>{next.Name}</b>\n{next.Tagline}";
+            var body = UIKit.Label(c, "Body",
+                $"Head Office pays <b>{Fmt.Num(sim.PrestigeReward)} Lucky Pennies</b> (spend them in the terminal's Head Office tab) and the treasure adds a permanent +{Fmt.Num(Balance.TreasureBonus * 100)}% to everything you deposit.\n\n{nextText}\n\n" +
+                "You keep Lucky Pennies, Head Office perks, the Wish Journal, relics and achievements. Cash, research, machines and the fountain's upgrades start over.",
+                16, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
+            body.rectTransform.TL(32, 236, w - 64, 220);
+            var later = UIKit.Button(c, "Later", "Not yet", new Color(0, 0, 0, 0.06f), Pal.Ink2, 16, Close);
+            later.Rt.TL(32, h - 32 - 50, 160, 50);
+            var sign = UIKit.Button(c, "Sign", "Sign the contract  →", Pal.Gold, Color.white, 18, () => { Close(); OnSign?.Invoke(); });
+            sign.Rt.TL(w - 32 - 300, h - 32 - 50, 300, 50);
+        }
 
         public void OpenIntro(bool firstTime)
         {

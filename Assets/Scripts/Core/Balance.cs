@@ -56,6 +56,22 @@ namespace WishExtractor.Core
         // Value realised when depositing each processing stage (fraction of full sorted value).
         public const double GunkRate = 0.10;
         public const double WashedRate = 0.35;
+        public const float DigReach = 3.4f;
+        public const double ChunkValue = 1.6;           // a gunk chunk carries this many scoops' worth of sorted loot
+
+        // ── processing ───────────────────────────────────────────────────────────
+        public const int RollSize = 50, BagSize = 20, PalletSize = 40;
+        public const double RollMult = 1.10, BagMult = 1.15, PalletMult = 1.25, MeltMult = 1.35;
+        public const double CompressorValue = 0.6;      // a pressed wish brick is worth this share of the wish
+        public const double RelicChance = 0.004;        // per item sorted, × (1 + 0.35 × stratum)
+        public const double RelicValueScale = 0.05;
+        public static readonly double[] RelicRarityWeight = { 55, 27, 12, 5, 1 };
+
+        // ── mall events ──────────────────────────────────────────────────────────
+        public const double EventMin = 420, EventMax = 780, EventDuration = 60;
+
+        // ── remodel contracts (after the sixth mall) ───────────────────────────────
+        public const double RemodelValueGrowth = 3.0, RemodelCrustGrowth = 1.6;
 
         // ── permanent bonuses (each group multiplies sale value) ─────────────────
         public const double AchievementBonus = 0.01;

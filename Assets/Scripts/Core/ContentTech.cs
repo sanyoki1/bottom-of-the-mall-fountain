@@ -47,6 +47,31 @@ namespace WishExtractor.Core
                 "Stretching exercises from a VHS tape found in the fountain. They work, somehow.", "grab_grabber");
             Lv("grab_fingers", "Nimble Fingers", TechBranch.Tools, TechKind.GrabRate, 0.12, 1.5, 2.0, 10, 1, 1,
                 "You practise picking up pennies from a flat table every night. Your family is worried.");
+            // dig tools (hotbar 2): break the crust by hand
+            for (int i = 1; i < DigTools.Length; i++)
+            {
+                var d = DigTools[i];
+                var t = T("dig_" + d.Id, d.Name, TechBranch.Tools, TechKind.Tool, i, d.Cost, d.Desc, i > 1 ? new[] { "dig_" + DigTools[i - 1].Id } : new string[0]);
+                t.Target = "dig"; t.Col = i - 1; t.Row = 2;
+            }
+            Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.0, 12, 0, 3,
+                "Forty push-ups a day, all of them with a shovel. Every swing and every dig rig bites deeper.", "dig_sandshovel");
+
+            // Head Office: paid in Lucky Pennies (from signing contracts), kept forever
+            TechDef H(string id, string name, TechKind kind, double value, double cost, double growth, int max, int col, int row, string desc, params string[] req)
+            {
+                var t = T(id, name, TechBranch.HeadOffice, kind, value, cost, desc, req);
+                t.LuckyPennies = true; t.CostGrowth = growth; t.MaxLevel = max; t.Col = col; t.Row = row;
+                return t;
+            }
+            H("ho_card", "Company Credit Card", TechKind.StartCash, 25, 2, 1.6, 10, 0, 0, "Head Office fronts you some cash at the start of every contract. Receipts required. Receipts ignored.");
+            H("ho_van", "Company Van", TechKind.StartCarry, 1, 3, 2.2, 5, 1, 0, "Start every contract already owning a bigger container. The van smells of mop.");
+            H("ho_memory", "Institutional Knowledge", TechKind.StartUnlocks, 0, 8, 1, 1, 2, 0, "Start every contract with the cup, grabber, sandbox shovel, hamster wheel, skimmer, belts and hoppers researched.");
+            H("ho_seniority", "Seniority", TechKind.ValueMult, 0.12, 2, 1.45, 25, 0, 1, "Everything you deposit is worth a bit more. Nobody knows why. It's just how seniority works.");
+            H("ho_sneakers", "Union-Issue Sneakers", TechKind.WalkSpeed, 0.05, 2, 1.6, 8, 1, 1, "Comfortable, regulation grey, and seemingly faster than regular sneakers.");
+            H("ho_wishful", "Wishful Thinking", TechKind.Wishability, 3, 3, 1.55, 15, 2, 1, "Head Office runs a billboard campaign: 'Throw Your Money Away (Here)'.");
+            H("ho_relics", "Relic Radar", TechKind.RelicRate, 0.25, 4, 1.7, 10, 3, 1, "A dowsing rod that mostly points at relics and occasionally at the food court.");
+            H("ho_digger", "Excavation Grant", TechKind.DigPower, 0.2, 3, 1.6, 15, 3, 0, "Every contract starts with a bigger digging budget and a smaller sense of caution.");
 
             // fountain beautification ("wishability"): more shoppers, more tosses, fancier tosses
             void F(string id, string name, double wish, double cost, bool tokens, string desc, string req, int col)

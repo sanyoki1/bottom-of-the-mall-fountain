@@ -20,8 +20,12 @@ namespace WishExtractor.Core
         public BuildDef Def;
         public int X, Z, Rot;                 // anchor cell (local 0,0) and rotation 0..3 (local +z → world +z, +x, -z, -x)
         public readonly List<BeltItem> Items = new List<BeltItem>();   // belts
-        public readonly List<ItemStack> Buf = new List<ItemStack>();   // machine buffer
+        public readonly List<ItemStack> Buf = new List<ItemStack>();   // machine buffer (processors: the input queue)
         public int BufCount;
+        public readonly List<ItemStack> Out = new List<ItemStack>();   // processors: finished items waiting to leave
+        public int OutCount;
+        public double PartialCount, PartialValue;                      // rollers, baggers: coins collected toward the next bundle
+        public int PartialType = -1;
         public double Acc, OutAcc;
         public int SplitNext;
         public float Activity;                // 0..1, smoothed, for the view
@@ -132,7 +136,7 @@ namespace WishExtractor.Core
         {
             reason = null;
             if (!BuildUnlocked(d)) { reason = "Not researched yet"; return false; }
-            if (!ignoreCost && S.cash < d.Cost * Mall.ValueScale - 1e-9) { reason = $"Costs {Fmt.Money(d.Cost * Mall.ValueScale)}"; return false; }
+            if (!ignoreCost && S.cash < d.Cost * Scale - 1e-9) { reason = $"Costs {Fmt.Money(d.Cost * Scale)}"; return false; }
             var probe = new Building { Def = d, X = x, Z = z, Rot = rot & 3 };
             bool nearRim = false;
             for (int lx = 0; lx < d.W; lx++)
@@ -166,7 +170,7 @@ namespace WishExtractor.Core
         public Building Place(BuildDef d, int x, int z, int rot, bool free = false)
         {
             if (!CanPlace(d, x, z, rot, out _, free)) return null;
-            if (!free) S.cash -= d.Cost * Mall.ValueScale;
+            if (!free) S.cash -= d.Cost * Scale;
             var b = new Building { Uid = ++uid, Def = d, X = x, Z = z, Rot = rot & 3 };
             AddBuilding(b);
             S.built++;
@@ -198,9 +202,9 @@ namespace WishExtractor.Core
                     var (cx, cz) = b.Cell(lx, lz);
                     grid.Remove(Key(cx, cz));
                 }
-            AddCash(b.Def.Cost * Mall.ValueScale);
-            S.runCash -= b.Def.Cost * Mall.ValueScale;
-            S.lifetimeCash -= b.Def.Cost * Mall.ValueScale;
+            AddCash(b.Def.Cost * Scale);
+            S.runCash -= b.Def.Cost * Scale;
+            S.lifetimeCash -= b.Def.Cost * Scale;
             OnRemoved?.Invoke(b);
             return true;
         }
@@ -338,7 +342,7 @@ namespace WishExtractor.Core
                 else if (d.Cat == BuildCat.Processing) TickProcessor(b, dt, speed);
                 else if (d.Cat == BuildCat.Power) b.Activity = 1;
                 // push buffered output through the output ports
-                if (d.Outputs.Length > 0 && b.BufCount > 0 && !d.IsSplitter && d.Cat != BuildCat.Output) PushOut(b);
+                if (d.Outputs.Length > 0 && (b.BufCount > 0 || b.OutCount > 0) && !d.IsSplitter && d.Cat != BuildCat.Output) PushOut(b);
             }
             if (hopperWindowTime >= 2)
             {
@@ -351,18 +355,45 @@ namespace WishExtractor.Core
 
         void PushOut(Building b)
         {
+            bool proc = b.Def.Cat == BuildCat.Processing;
+            var list = proc ? b.Out : b.Buf;
             foreach (var p in b.Def.Outputs)
             {
-                if (b.BufCount <= 0) return;
+                if (list.Count == 0) return;
                 var (cx, cz) = b.Cell(p.x, p.z);
                 int d = (p.side + b.Rot) & 3;
                 var target = At(cx + Building.DX[d], cz + Building.DZ[d]);
                 if (target == null || target == b) { if (b.Status == "") b.Status = "Output needs a belt"; continue; }
-                var s = b.Buf[0];
+                var s = list[0];
                 double v = s.Count > 0 ? s.Value / s.Count : 0;
-                if (TryDeliver(target, cx, cz, s.Type, v)) BufTake(b, out _, out _);
+                if (TryDeliver(target, cx, cz, s.Type, v))
+                {
+                    if (proc) TakeFrom(b.Out, ref b.OutCount, out _, out _);
+                    else BufTake(b, out _, out _);
+                }
                 else if (b.Status == "") b.Status = "Output blocked";
             }
+        }
+
+        static bool TakeFrom(List<ItemStack> list, ref int count, out int type, out double value)
+        {
+            type = -1; value = 0;
+            if (list.Count == 0) return false;
+            var s = list[0];
+            type = s.Type;
+            value = s.Count > 0 ? s.Value / s.Count : 0;
+            s.Count--;
+            s.Value -= value;
+            count--;
+            if (s.Count <= 0) list.RemoveAt(0);
+            return true;
+        }
+
+        static void AddTo(List<ItemStack> list, ref int count, int type, double value, int n = 1)
+        {
+            count += n;
+            if (list.Count > 0 && list[list.Count - 1].Type == type) { list[list.Count - 1].Count += n; list[list.Count - 1].Value += value; return; }
+            list.Add(new ItemStack { Type = type, Count = n, Value = value });
         }
 
         void TickSplitter(Building b, double dt)
@@ -396,7 +427,7 @@ namespace WishExtractor.Core
             {
                 b.Acc -= 1;
                 BufTake(b, out int type, out double value);
-                cash += value * CatRate(Content.Items[type].Cat) * ValueMult * b.Def.SellMult;
+                cash += value * CatRate(Content.Items[type].Cat) * ValueMult * EventValueMult * b.Def.SellMult;
                 n++;
             }
             if (b.BufCount == 0) b.Acc = Math.Min(b.Acc, 1);
@@ -420,6 +451,7 @@ namespace WishExtractor.Core
             switch (d.Intake)
             {
                 case "skimmer": TickSkimmer(b, dt, speed); break;
+                case "dig": TickDigRig(b, dt, speed); break;
                 case "pump":
                 case "claw":
                 {
@@ -542,6 +574,7 @@ namespace WishExtractor.Core
                 var b = Buildings[i];
                 var sb = new SavedBuilding { id = b.Def.Id, x = b.X, z = b.Z, rot = b.Rot };
                 foreach (var s in b.Buf) sb.buf.Add(new SavedStack { type = slot(s.Type), count = s.Count, value = s.Value });
+                foreach (var s in b.Out) sb.buf.Add(new SavedStack { type = slot(s.Type), count = s.Count, value = s.Value });
                 foreach (var l in b.BotLoad) sb.buf.Add(new SavedStack { type = slot(l.type), count = 1, value = l.value });
                 S.buildings.Add(sb);
                 foreach (var it in b.Items) S.beltItems.Add(new SavedBeltItem { b = i, type = slot(it.Type), pos = it.Pos, value = it.Value });

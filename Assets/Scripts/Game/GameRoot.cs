@@ -133,7 +133,7 @@ namespace WishExtractor.Game
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 330));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 420));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
@@ -211,6 +211,64 @@ namespace WishExtractor.Game
                 if (w.Def.Rarity == Rarity.Legendary) pops.Banner("Legendary wish!", "“" + w.Def.Text + "”", "+" + Fmt.Money(cash), Pal.Gold, 4.5f);
             };
             sim.OnWishEscaped += w => sfx.PlayAt("wish_escape", new Vector3(w.X, view.Fountain.WaterY + 2, w.Z), 0.3f, 0.1f, 0.4f);
+            sim.OnWishCompressed += (w, v) => sfx.Play("compress", 0.35f, 0.1f, 0.4f);
+
+            // the crust, relics, events and the next contract
+            view.Dug += (p, scoops) =>
+            {
+                sfx.PlayAt("dig", p, 0.8f, 0.08f, 0.04f);
+                if (sim.CurStratum.Loose && scoops > 0) sfx.PlayAt("coin", p, 0.4f, 0.12f, 0.05f);
+            };
+            sim.OnStratumReached += s =>
+            {
+                sfx.Play("stratum", 0.9f, 0f, 1f);
+                var st = sim.Mall.Strata[s];
+                pops.Banner($"New layer · {Fmt.Feet(st.StartFrac * sim.Mall.DepthFeet)} down", st.Name, st.Flavor, MeshKit.Hex(st.Color) + new Color(0, 0, 0, 1), 4.8f);
+            };
+            sim.OnRelicFound += (r, v, first) =>
+            {
+                sfx.Play("relic", 0.7f, 0.02f, 0.3f);
+                pops.Toast((first ? "New relic! " : "Relic: ") + r.Name, $"{r.Desc}  ·  worth {Fmt.Money(v)} at the kiosk", Pal.Rarity[(int)r.Rarity], "◆", first ? 5f : 3.6f);
+                if (r.Rarity == Rarity.Legendary) pops.Banner("Legendary find!", r.Name, r.Desc, Pal.Gold, 4.5f);
+            };
+            sim.OnRelicSetComplete += m => { sfx.Play("achievement"); pops.Banner("Collection complete", m.Name + " relics", $"Every relic found: +{Fmt.Num(Balance.RelicSetBonus * 100)}% value forever", Pal.Purple, 4.5f); };
+            sim.OnEventChanged += on =>
+            {
+                if (!on) return;
+                sfx.Play("event", 0.8f, 0, 1f);
+                pops.Banner("Mall event", sim.Mall.Event.Name, sim.Mall.Event.Desc, Pal.Pink, 4f);
+            };
+            sim.OnMallCleared += () =>
+            {
+                sfx.Play("cleared", 1f, 0f, 1f);
+                pops.Banner("Bare concrete!", sim.Mall.TreasureName, sim.Mall.TreasureDesc, Pal.Gold, 6f);
+                StartCoroutine(AfterClear());
+            };
+            sim.OnPrestige += () =>
+            {
+                pops.ClearBanners();
+                sfx.PlayMusicFor(sim.Mall, sim.Remodel);
+                Save();
+            };
+            modals.OnSign = () =>
+            {
+                if (!sim.MallCleared) return;
+                sim.Prestige();
+                modals.OpenIntro(false);
+            };
+        }
+
+        IEnumerator AfterClear()
+        {
+            yield return new WaitForSeconds(3.5f);
+            if (touring) yield break;
+            if (sim.IsFinalMall && !sim.S.endingSeen)
+            {
+                sim.S.endingSeen = true;
+                modals.OpenEnding();
+                while (modals.IsOpen) yield return null;
+            }
+            if (!AnyMenu && sim.MallCleared) modals.OpenContract();
         }
 
         void ResetSave()
@@ -269,7 +327,7 @@ namespace WishExtractor.Game
             if (input.Catalogue && !modal && view.Build.SetActive(true)) { buildMenu.Open(); modal = true; }
             view.Step(input, dt, modal);
 
-            hud.Refresh(dt, view.Current, view.Wading, modal, view.Build);
+            hud.Refresh(dt, view.Current, view.Wading, modal, view.Build, view.DigMode);
             pops.Update(dt);
             modals.Update(dt);
             terminal.Update(dt);
@@ -291,7 +349,11 @@ namespace WishExtractor.Game
             if (devMode && !modal)
             {
                 if (Input.GetKeyDown(KeyCode.F5)) sim.DebugAddCash(Math.Max(10, sim.S.cash * 9));
+                if (Input.GetKeyDown(KeyCode.F6)) sim.DebugFinishMall();
+                if (Input.GetKeyDown(KeyCode.F7)) sim.DebugSetDepth(sim.DepthFrac + 0.1);
+                if (Input.GetKeyDown(KeyCode.F8)) sim.DebugStartEvent();
             }
+            if (!modal && sim.MallCleared && Input.GetKeyDown(KeyCode.C)) modals.OpenContract();
         }
 
         void UpdateCursor(bool modal)
@@ -479,7 +541,7 @@ namespace WishExtractor.Game
 
         IEnumerator Tour()
         {
-            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 540));
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 660));
             scripted = default(FPInput);
             yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
@@ -611,6 +673,49 @@ namespace WishExtractor.Game
             yield return Shot("18_build_catalogue");
             buildMenu.Close();
             view.Build.SetActive(false);
+
+            // the crust: a jackhammer by hand, the gunk strata, a processing line, the ramp, bare concrete
+            sim.DebugSetTech("dig_jackhammer", 1);
+            SetFlag(i => i.Hotbar = 2);
+            yield return null;
+            yield return EnterFountain();
+            var ff = view.Player.Feet;
+            yield return AimAt(view.Fountain.SurfacePoint(ff.x + 0.6f, ff.z + 1.4f));
+            for (int k = 0; k < 8; k++) { Press(false, true); yield return new WaitForSeconds(0.34f); }
+            yield return Shot("19_dig");
+            SetFlag(i => i.Hotbar = 1);
+            sim.DebugSetDepth(0.4);
+            view.Player.Place(new Vector3(0, 0.95f, -8.7f), 0, -35);
+            yield return new WaitForSeconds(3.5f);
+            yield return Shot("20_crust_deep");
+            sim.Place(D("dig_rig"), -12, 0, 1, true);
+            sim.Place(D("belt"), -13, 0, 3, true);
+            sim.Place(D("belt"), -13, -1, 0, true);
+            sim.Place(D("belt"), -14, 0, 3, true);
+            sim.Place(D("proc_tumbler"), -15, 0, 3, true);
+            sim.Place(D("proc_pigeons"), -17, 0, 3, true);
+            sim.Place(D("proc_roller"), -19, 0, 3, true);
+            sim.Place(D("hopper"), -22, 0, 0, true);
+            sim.Place(D("gen_fryer"), -15, 4, 0, true);
+            sim.Place(D("gen_fryer"), -18, 4, 0, true);
+            sim.Place(D("proc_sorter"), -16, -5, 0, true);
+            sim.Place(D("proc_melter"), -19, -5, 0, true);
+            sim.Place(D("proc_compressor"), -22, -5, 0, true);
+            view.Player.Place(new Vector3(-13.5f, 0.05f, -6.5f), 0, 0);
+            yield return new WaitForSeconds(6f);
+            yield return LookAtSmooth(new Vector3(-17f, 0.8f, 0f));
+            yield return Shot("21_processing");
+            Debug.Log($"[TOUR] processing: dug {sim.S.dug:0}, washed {sim.S.washed}, sorted {sim.S.sorted}, relics {sim.S.relicsFound}, bundles {sim.S.bundles}");
+            sim.DebugSetDepth(0.8);
+            view.Player.Place(new Vector3(6.2f, 0.95f, -6.2f), -45, -40);
+            yield return new WaitForSeconds(3.5f);
+            yield return Shot("22_deep_ramp");
+            sim.DebugFinishMall();
+            yield return new WaitForSeconds(3.5f);
+            yield return Shot("23_bare_concrete");
+            modals.OpenContract();
+            yield return Shot("24_contract");
+            modals.Close();
 
             // bigger containers (tech the terminal will sell in M3), shown off in the fountain
             sim.DebugSetTech("carry_bucket", 1);
@@ -966,6 +1071,58 @@ namespace WishExtractor.Game
             SetFlag(i => i.Hotbar = 1);
             yield return null;
             Check(!view.Build.Active, "1 goes back to grabbing");
+
+            // ── the crust: dig by hand, gunk below the loose layer, bare concrete, the next contract ──
+            sim.DebugSetTech("dig_sandshovel", 1);
+            SetFlag(i => i.Hotbar = 2);
+            yield return null;
+            yield return null;
+            Check(view.DigMode, "2 takes out the dig tool");
+            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f);
+            yield return EnterFountain();
+            var df = view.Player.Feet;
+            yield return AimAt(view.Fountain.SurfacePoint(df.x + 0.6f, df.z + 1.3f));
+            Check(view.Current.Kind == TargetKind.Crust, $"crosshair targets the crust (got {view.Current.Kind})");
+            double dug0 = sim.S.dug;
+            int loose0 = sim.Loose.Count;
+            for (int k = 0; k < 8; k++) { Press(false, true); yield return new WaitForSeconds(0.7f); }
+            Check(sim.S.dug >= dug0 + 6, $"swinging the shovel digs the crust ({sim.S.dug - dug0:0} scoops)");
+            Check(sim.Loose.Count > loose0, $"loose-layer loot lands in the water ({sim.Loose.Count - loose0} new items)");
+            sim.DebugSetDepth(0.2);
+            yield return new WaitForSeconds(3f);
+            Check(sim.Stratum >= 1 && view.Fountain.SurfaceY < FountainView.CrustTop - 1f, $"the crust sinks to stratum {sim.Stratum} (surface y {view.Fountain.SurfaceY:0.00})");
+            Check(GameObject.Find("Scaffold Ramp") != null, "a scaffold ramp spirals down the wall");
+            df = view.Player.Feet;
+            yield return AimAt(view.Fountain.SurfacePoint(df.x + 0.6f, df.z + 1.3f));
+            for (int k = 0; k < 6; k++) { Press(false, true); yield return new WaitForSeconds(0.7f); }
+            Check(sim.Loose.Exists(l => Content.Items[l.Type].Cat == ItemCat.Gunk), "below the loose layer the crust comes up as gunk chunks");
+            yield return Shot("ui_dig_gunk");
+            SetFlag(i => i.Hotbar = 1);
+            sim.DebugFinishMall();
+            Check(sim.MallCleared && sim.S.treasures.Contains(sim.Mall.Id), "bare concrete clears the mall and banks its treasure");
+            yield return new WaitForSeconds(4.5f);
+            Check(modals.IsOpen && modals.OpenName == "contract", "the contract opens after bare concrete");
+            yield return Shot("ui_contract");
+            Check(ClickSelectable(FindButton("Sign")), "click 'Sign the contract'");
+            yield return new WaitForSeconds(0.6f);
+            Check(sim.S.mallIndex == 1 && !sim.MallCleared && sim.S.luckyPennies > 0 && sim.Buildings.Count == 0 && sim.S.cash == 0,
+                  $"moved to {sim.Mall.Name} with {sim.S.luckyPennies} Lucky Pennies; factory and cash reset");
+            Check(modals.IsOpen && modals.OpenName == "intro", "the new mall's intro shows");
+            Check(ClickSelectable(FindButton("Go")), "start the new contract");
+            yield return null;
+            yield return GoToTerminal();
+            Press();
+            yield return new WaitForSeconds(0.3f);
+            Check(terminal.IsOpen && ClickSelectable(FindButton("Head Office")), "open the Head Office tab");
+            yield return null;
+            ClickSelectable(FindButton("Node:ho_card"));
+            yield return null;
+            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "buy a Head Office perk with Lucky Pennies");
+            yield return null;
+            Check(sim.TechLevel("ho_card") == 1, "Company Credit Card bought");
+            yield return Shot("ui_head_office");
+            ClickSelectable(FindButton("Close"));
+            yield return null;
 
             // menus
             modals.OpenSettings();

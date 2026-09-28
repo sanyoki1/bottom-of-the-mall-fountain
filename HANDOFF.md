@@ -43,6 +43,17 @@ belt items). `ContentBuild.cs`: 11 buildables + 16 Power/Intake/Logistics tech n
 `WE/Ghost` shader, R, auto-facing, belt drag, X demolish), `UI/BuildMenu.cs` (Tab catalogue). Headless:
 `dotnet run ... -- factory`. uitest 69/69 builds a working skimmer→belt→hopper line through the real input path.
 
+**M5 (verified, committed):** the crust and the processing chain. Core `SimCrust.cs`: `DigCrust` turns scoops
+into loot (loose layer) or gunk chunks (deeper strata, one per `Balance.ChunkValue` scoops); hand swings
+(hotbar 2) and dig rigs/borers; depth mapping (loose layer linear, deeper layers log) drives `FountainView`
+(the crust sinks, water follows, colliders rebuild, a scaffold ramp spirals down the wall); processors
+(tumbler/pigeon sorter/coin sorter/roller/bagger/palletiser/melter/compressor) pass through what they
+can't use; sorting finds relics; mall events (per-mall effects, Jackpot Hour rains gold coins); bare
+concrete → treasure → contract modal → `Prestige()` (Lucky Pennies; non-Head-Office techs, cash, factory
+reset); Head Office perks (`TechDef.LuckyPennies`, saved in `S.headOffice`). `Sim.Scale` = mall value scale
+× remodel growth. uitest 85/85 (dig by hand, gunk, bare concrete, sign, buy a Head Office perk).
+Headless: `dotnet run ... -- crust`.
+
 Session 2 notes (kept for history):
 - Done (session 2):
   - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/

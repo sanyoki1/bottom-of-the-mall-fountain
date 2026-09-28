@@ -40,11 +40,35 @@ namespace WishExtractor.UI
         float messageAge = 99;
         Text keysHint;
 
+        // depth + event
+        RectTransform depthCard, eventChip;
+        Text depthText, stratumText, eventText;
+        UIKit.Bar depthBar;
+        Image stratumDot;
+
+        void BuildDepth()
+        {
+            depthCard = UIKit.Card(root, "Depth", new Color(1, 1, 1, 0.86f), 22, false).Place(new Vector2(1, 1), new Vector2(-20, -20), new Vector2(380, 104));
+            UIKit.Label(depthCard, "Caption", "CRUST", 13, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold).rectTransform.TL(22, 12, 200, 18);
+            depthText = UIKit.Label(depthCard, "Depth", "", 26, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold);
+            depthText.rectTransform.TL(20, 28, 340, 34);
+            stratumDot = UIKit.Dot(depthCard, "Dot", Color.white, 12);
+            stratumDot.rectTransform.TL(22, 68, 12, 12);
+            stratumText = UIKit.Label(depthCard, "Stratum", "", 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold);
+            stratumText.rectTransform.TL(40, 64, 320, 20);
+            depthBar = UIKit.ProgressBar(depthCard, "Bar", new Color(0, 0, 0, 0.08f), Pal.GoldInk);
+            depthBar.Rt.TL(22, 88, 336, 8);
+            eventChip = UIKit.Card(root, "Event", new Color(1f, 0.35f, 0.55f, 0.92f), 18, false).Place(new Vector2(1, 1), new Vector2(-20, -134), new Vector2(380, 56));
+            eventText = UIKit.Label(eventChip, "Text", "", 16, Color.white, TextAnchor.MiddleLeft, UIKit.Bold, true);
+            eventText.rectTransform.Stretch(18, 4, 14, 4);
+        }
+
         public void Build(Canvas canvas, Sim s)
         {
             sim = s;
             root = UIKit.Rect(canvas.transform, "HUD").Stretch();
             BuildCrosshair();
+            BuildDepth();
             BuildWallet();
             BuildGoal();
             BuildCarry();
@@ -178,8 +202,18 @@ namespace WishExtractor.UI
 
         // ───────────────────────────── per-frame ─────────────────────────────
 
-        public void Refresh(float dt, Target target, bool wading, bool frozen, BuildMode build)
+        public void Refresh(float dt, Target target, bool wading, bool frozen, BuildMode build, bool digMode)
         {
+            // depth
+            var mall = sim.Mall;
+            depthText.text = sim.MallCleared ? "BARE CONCRETE!" : $"{Fmt.Feet(sim.DepthFeet)} / {Fmt.Feet(mall.DepthFeet)}";
+            var st = sim.CurStratum;
+            stratumDot.color = MeshKit.Hex(st.Color) + new Color(0, 0, 0, 1);
+            stratumText.text = sim.MallCleared ? mall.TreasureName : $"{st.Name}" + (st.Loose ? "  ·  loose coins" : "  ·  gunk: wash & sort it");
+            depthBar.Set((float)sim.DepthFrac);
+            eventChip.gameObject.SetActive(sim.EventActive);
+            if (sim.EventActive) eventText.text = $"{mall.Event.Name.ToUpperInvariant()}  ·  {sim.EventRemaining:0}s\n<size=12>{mall.Event.Desc}</size>";
+
             // crosshair + prompt
             bool on = target.Kind != TargetKind.None && !frozen;
             ringScale = Mathf.Lerp(ringScale, on ? 1f : 0.55f, 1 - Mathf.Exp(-dt * 14));
@@ -187,8 +221,8 @@ namespace WishExtractor.UI
             ring.color = on ? Pal.A(Color.Lerp(Pal.Accent, Color.white, 0.35f), 0.95f) : new Color(1, 1, 1, 0.35f);
             dot.enabled = !frozen;
             ring.enabled = !frozen;
-            Slot = build.Active ? 3 : 1;
-            prompt.text = frozen ? "" : build.Active ? BuildPrompt(build, target) : PromptFor(target);
+            Slot = build.Active ? 3 : digMode ? 2 : 1;
+            prompt.text = frozen ? "" : build.Active ? BuildPrompt(build, target) : digMode && target.Kind == TargetKind.None ? "<color=#C8C8C8>Aim at the crust in the fountain to dig</color>" : PromptFor(target);
             powerText.text = sim.Buildings.Count > 0 || build.Active
                 ? $"⚡ {sim.PowerGen:0.#} / {sim.PowerUse:0.#} kW" + (sim.PowerRatio < 0.999 ? $"  <color=#FF8FA8>({sim.PowerRatio * 100:0}%)</color>" : "") +
                   (sim.HopperCashRate > 0.0001 ? $"   ·   hoppers {Fmt.Money(sim.HopperCashRate * 60)}/min" : "")
@@ -198,7 +232,7 @@ namespace WishExtractor.UI
             shownCash = Mathf.Abs((float)(sim.S.cash - shownCash)) < 0.005 ? sim.S.cash : shownCash + (sim.S.cash - shownCash) * (1 - Mathf.Exp(-dt * 10));
             cashText.text = Fmt.Money(shownCash);
             rateText.text = sim.EarnRate > 0.0001 ? $"+{Fmt.Money(sim.EarnRate * 60)}/min" : "";
-            tokenText.text = sim.S.wishTokens > 0 ? $"✦ {Fmt.Num(sim.S.wishTokens)} tokens" : "";
+            tokenText.text = (sim.S.wishTokens > 0 ? $"✦ {Fmt.Num(sim.S.wishTokens)}" : "") + (sim.S.luckyPennies > 0 ? $"   ¢ {Fmt.Num(sim.S.luckyPennies)} LP" : "");
             wishText.text = $"Wishability <b>{sim.Wishability:0}</b>  ·  a toss every {sim.TossInterval:0.0}s  ·  {sim.Shoppers.Count} shoppers";
 
             // goal
@@ -247,13 +281,13 @@ namespace WishExtractor.UI
             {
                 var hb = b.HoverBuilding >= 0 ? sim.FindBuilding(b.HoverBuilding) : null;
                 return hb != null
-                    ? $"<color=#FF8FA8><b>[Click]</b> Demolish {hb.Def.Name}</color>  <color=#C8C8C8>(refund {Fmt.Money(hb.Def.Cost * sim.Mall.ValueScale)})</color>"
+                    ? $"<color=#FF8FA8><b>[Click]</b> Demolish {hb.Def.Name}</color>  <color=#C8C8C8>(refund {Fmt.Money(hb.Def.Cost * sim.Scale)})</color>"
                     : "<color=#FF8FA8>DEMOLISH MODE</color>  ·  aim at something you built  ·  X to stop";
             }
             var d = b.Selected;
             if (d == null) return "";
             string power = d.Power > 0 ? $"+{d.Power:0.#} kW" : d.Power < 0 ? $"{d.Power:0.#} kW" : "";
-            string head = $"<b>{d.Name}</b>  <color=#FFE08A>{Fmt.Money(d.Cost * sim.Mall.ValueScale)}</color>  <color=#9CD8FF>{power}</color>";
+            string head = $"<b>{d.Name}</b>  <color=#FFE08A>{Fmt.Money(d.Cost * sim.Scale)}</color>  <color=#9CD8FF>{power}</color>";
             if (!b.HasSpot) return head + "  ·  <color=#C8C8C8>aim at the floor</color>";
             return b.Valid ? head + "  ·  <b>[Click]</b> build" + (d.IsBelt ? " (drag for a line)" : "") : head + $"  ·  <color=#FF8FA8>{b.Reason}</color>";
         }
@@ -289,6 +323,12 @@ namespace WishExtractor.UI
                     return sim.CanAfford(i)
                         ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
                         : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
+                }
+                case TargetKind.Crust:
+                {
+                    var tool = sim.DigTool;
+                    if (sim.MallCleared) return "Bare concrete. Nothing left to dig!";
+                    return $"<b>[Click]</b> Dig with the {tool.Name}  <color=#C8C8C8>· {Fmt.Num(tool.DigPower * sim.DigMult)} scoops/swing · {sim.CurStratum.Name}</color>";
                 }
                 case TargetKind.Building:
                 {

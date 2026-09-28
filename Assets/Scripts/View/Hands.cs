@@ -201,10 +201,58 @@ namespace WishExtractor.View
 
         Vector3 ContainerHome => carryTier == 8 ? new Vector3(-0.3f, -0.3f, 0.3f) : carryTier >= 5 ? new Vector3(-0.05f, -0.8f, 1.15f) : new Vector3(-0.26f, -0.32f, 0.52f);
 
-        // ── the grab tool in your right hand ─────────────────────────────────
+        // ── the grab tool (or dig tool) in your right hand ─────────────────────
 
         Transform tool;
         int toolTier = -1;
+        float swing;
+
+        public void Swing() { swing = 1; }
+
+        /// <summary>Hold a dig tool instead of a grab tool (tier into Content.DigTools).</summary>
+        public void SetDigTool(int tier)
+        {
+            int key = 100 + tier;
+            if (key == toolTier) return;
+            toolTier = key;
+            if (tool != null) Object.Destroy(tool.gameObject);
+            tool = new GameObject("Dig Tool").transform;
+            tool.SetParent(hand, false);
+            var k = new MeshKit();
+            Color wood = C(0x8A5A34), steel = C(0xB8BEC4), dark = C(0x2A2A2A);
+            switch (tier)
+            {
+                case 0: // nothing: an empty hand, making a digging motion, hopefully
+                    break;
+                case 1: // sandbox shovel
+                    k.Tube(new Vector3(0, 0, -0.02f), new Vector3(0, -0.02f, 0.45f), 0.015f, 6, C(0xFFD000));
+                    k.Box(new Vector3(0, -0.04f, 0.55f), new Vector3(0.12f, 0.02f, 0.16f), C(0xFFB000));
+                    break;
+                case 2: // snow shovel
+                    k.Tube(new Vector3(0, 0, -0.05f), new Vector3(0, -0.04f, 0.8f), 0.018f, 6, dark);
+                    k.Box(new Vector3(0, -0.06f, 0.95f), new Vector3(0.4f, 0.03f, 0.3f), C(0x3A7BD5));
+                    break;
+                case 3: // pickaxe
+                    k.Tube(new Vector3(0, 0, -0.05f), new Vector3(0, 0, 0.7f), 0.02f, 6, wood);
+                    k.Push(new Vector3(0, 0, 0.72f), Quaternion.Euler(0, 0, 0));
+                    k.Tube(new Vector3(0, 0.22f, 0), new Vector3(0, -0.22f, 0.05f), 0.025f, 6, steel);
+                    k.Pop();
+                    break;
+                case 4: // jackhammer
+                    k.Box(new Vector3(0, 0, 0.12f), new Vector3(0.14f, 0.14f, 0.35f), C(0xE8C020));
+                    k.Tube(new Vector3(0, 0, 0.3f), new Vector3(0, -0.02f, 0.75f), 0.025f, 6, steel);
+                    k.Box(new Vector3(0, 0.08f, -0.05f), new Vector3(0.3f, 0.03f, 0.03f), dark);
+                    break;
+                default: // handheld borer
+                    k.Cylinder(new Vector3(0, 0, 0.2f), Quaternion.Euler(90, 0, 0), 0.12f, 0.4f, 14, C(0x8A8F96));
+                    k.Cone(new Vector3(0, 0, 0.4f), 0.12f, 0.25f, 14, steel);
+                    k.Push(new Vector3(0, 0, 0.4f), Quaternion.Euler(90, 0, 0));
+                    k.Cone(Vector3.zero, 0.12f, 0.25f, 14, steel);
+                    k.Pop();
+                    break;
+            }
+            if (k.VertexCount > 0) SetLayerNoShadow(k.Build("Model", tool, false));
+        }
 
         public void SetTool(int tier)
         {
@@ -290,13 +338,15 @@ namespace WishExtractor.View
 
             grab = Mathf.Max(0, grab - dt * 5f);
             push = Mathf.Max(0, push - dt * 3f);
+            swing = Mathf.Max(0, swing - dt * 4f);
+            float sw = swing > 0.6f ? (1 - swing) / 0.4f : swing / 0.6f;   // quick raise, heavy drop
             heldPop = Mathf.Max(0, heldPop - dt * 4f);
             float g = Mathf.Sin(grab * Mathf.PI);
             float p = Mathf.Sin(push * Mathf.PI);
             Vector3 basePos = new Vector3(0.25f, -0.27f, 0.4f);
             Vector3 reach = new Vector3(-0.1f, -0.08f, 0.22f) * g + new Vector3(-0.08f, 0.04f, 0.2f) * p;
-            arm.localPosition = basePos + bob + swayOffset + reach;
-            arm.localRotation = Quaternion.Euler(8 + g * 25 - p * 10, -12 - g * 8, -8);
+            arm.localPosition = basePos + bob + swayOffset + reach + new Vector3(-0.05f, 0.1f, -0.05f) * sw;
+            arm.localRotation = Quaternion.Euler(8 + g * 25 - p * 10 - sw * 55 + (swing > 0 && swing < 0.6f ? 30 * (1 - swing / 0.6f) : 0), -12 - g * 8, -8);
             held.localScale = Vector3.one * (1 + heldPop * 0.3f);
             if (container != null && carryTier >= 5 && carryTier != 8)
             {

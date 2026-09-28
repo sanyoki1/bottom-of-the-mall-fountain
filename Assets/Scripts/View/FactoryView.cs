@@ -17,6 +17,7 @@ namespace WishExtractor.View
             public int Rot = -1;
             public int PickSerial;
             public float Puff;
+            public readonly List<Pigeon> Pigeons = new List<Pigeon>();
         }
 
         readonly Dictionary<int, Node> nodes = new Dictionary<int, Node>();
@@ -28,6 +29,7 @@ namespace WishExtractor.View
         Material beltMat;
 
         static Color C(uint hex, float glow = 0) => MeshKit.Hex(hex, glow);
+        static Color C(int hex, float glow = 0) => MeshKit.Hex((uint)hex, glow);
 
         public void Init(Transform parent, ViewContext c)
         {
@@ -178,6 +180,61 @@ namespace WishExtractor.View
                     k.Box(new Vector3(0, 1.0f, -0.2f), new Vector3(1.1f, 0.3f, 0.9f), C(0xC77B43));
                     k.Box(new Vector3(0, 2.4f, 0.6f), new Vector3(0.2f, 0.2f, 1.2f), steel);
                     break;
+                case "dig_rig":
+                    k.Box(new Vector3(0, 0.15f, 0), new Vector3(1.9f, 0.3f, 1.9f), dark);
+                    k.Box(new Vector3(0, 0.7f, -0.3f), new Vector3(1.2f, 0.8f, 1.0f), main);
+                    k.Box(new Vector3(0, 1.2f, -0.3f), new Vector3(0.6f, 0.2f, 0.6f), C(0x3A3A3A));
+                    for (int i = 0; i < 6; i++) k.Box(new Vector3(-0.55f + i * 0.22f, 0.32f, 0.92f), new Vector3(0.1f, 0.03f, 0.06f), i % 2 == 0 ? C(0x1A1A1A) : C(0xFFD000));
+                    break;
+                case "dig_borer":
+                    k.Box(new Vector3(0, 0.2f, 0), new Vector3(1.9f, 0.4f, 2.9f), dark);
+                    k.Cylinder(new Vector3(0, 1.0f, -0.2f), Quaternion.Euler(90, 0, 0), 0.75f, 2.0f, 18, main);
+                    k.Box(new Vector3(0, 1.8f, -0.8f), new Vector3(0.9f, 0.5f, 0.9f), C(0xE8C020));
+                    k.Box(new Vector3(0.2f, 1.9f, -0.34f), new Vector3(0.3f, 0.15f, 0.02f), C(0x6CFF9A, 1f));
+                    break;
+                case "proc_tumbler":
+                    k.Box(new Vector3(0, 0.55f, 0), new Vector3(1.8f, 1.1f, 1.8f), C(0xE8E4DA));
+                    k.Cylinder(new Vector3(0, 0.65f, 0.91f), Quaternion.Euler(90, 0, 0), 0.5f, 0.04f, 20, C(0x2A2C30));
+                    k.Cylinder(new Vector3(0, 0.65f, 0.935f), Quaternion.Euler(90, 0, 0), 0.4f, 0.02f, 20, new Color(0.55f, 0.75f, 0.35f, 0.35f));
+                    k.Box(new Vector3(0.6f, 1.15f, 0.5f), new Vector3(0.4f, 0.1f, 0.3f), main);
+                    k.Box(new Vector3(-0.5f, 1.12f, -0.4f), new Vector3(0.3f, 0.06f, 0.3f), C(0xD8283A));
+                    break;
+                case "proc_pigeons":
+                    k.Box(new Vector3(0, 0.3f, 0), new Vector3(1.8f, 0.6f, 1.8f), C(0x8A5A34));
+                    k.Box(new Vector3(0, 0.61f, 0), new Vector3(1.6f, 0.02f, 1.6f), C(0xC8C0A8));
+                    k.Tube(new Vector3(-0.8f, 0.6f, -0.8f), new Vector3(-0.8f, 1.6f, -0.8f), 0.04f, 6, steel);
+                    k.Tube(new Vector3(0.8f, 0.6f, -0.8f), new Vector3(0.8f, 1.6f, -0.8f), 0.04f, 6, steel);
+                    k.Tube(new Vector3(-0.8f, 1.6f, -0.8f), new Vector3(0.8f, 1.6f, -0.8f), 0.04f, 6, steel);
+                    break;
+                case "proc_sorter":
+                    k.Box(new Vector3(0, 0.6f, 0), new Vector3(1.8f, 1.2f, 1.6f), main);
+                    for (int i = 0; i < 5; i++) k.Box(new Vector3(-0.64f + i * 0.32f, 0.35f, 0.81f), new Vector3(0.24f, 0.4f, 0.02f), C(i % 2 == 0 ? 0xC77B43 : 0xD4D8DC));
+                    k.Box(new Vector3(0, 1.0f, 0.81f), new Vector3(0.7f, 0.2f, 0.02f), C(0x6CFF9A, 0.8f));
+                    k.Frustum(new Vector3(0, 1.4f, -0.3f), 0.2f, 0.5f, 0.4f, 12, steel);
+                    break;
+                case "proc_roller":
+                case "proc_bagger":
+                    k.Box(new Vector3(0, 0.5f, 0), new Vector3(1.8f, 1.0f, 1.8f), main);
+                    k.Cylinder(new Vector3(0, 1.1f, 0), Quaternion.Euler(0, 0, 90), 0.25f, 1.4f, 14, C(0xF4F0E6));
+                    k.Box(new Vector3(0, 0.6f, 0.91f), new Vector3(1.0f, 0.3f, 0.02f), dark);
+                    break;
+                case "proc_pallet":
+                    k.Box(new Vector3(0, 0.2f, 0), new Vector3(2.8f, 0.4f, 2.8f), C(0x8A5A34));
+                    k.Box(new Vector3(0, 1.3f, 0), new Vector3(0.2f, 2.2f, 0.2f), steel);
+                    k.Box(new Vector3(0, 2.4f, 0), new Vector3(2.6f, 0.15f, 0.2f), steel);
+                    k.Box(new Vector3(0, 0.9f, 0.3f), new Vector3(1.4f, 1.0f, 1.4f), new Color(0.85f, 0.9f, 0.95f, 0.1f));
+                    break;
+                case "proc_melter":
+                    k.Frustum(new Vector3(0, 0.6f, 0), 0.9f, 0.7f, 1.2f, 16, C(0x3A3A3A));
+                    k.Cylinder(new Vector3(0, 1.21f, 0), 0.6f, 0.02f, 16, C(0xFF8A20, 1f));
+                    k.Box(new Vector3(0, 0.4f, 0.85f), new Vector3(0.5f, 0.3f, 0.2f), main);
+                    break;
+                case "proc_compressor":
+                    k.Box(new Vector3(0, 0.3f, 0), new Vector3(1.8f, 0.6f, 1.8f), C(0x3A3F48));
+                    k.Cylinder(new Vector3(0, 1.0f, 0), 0.55f, 0.9f, 18, main);
+                    k.Box(new Vector3(0, 1.55f, 0), new Vector3(1.3f, 0.2f, 1.3f), C(0x2A2C30));
+                    k.Sphere(new Vector3(0, 1.85f, 0), 0.25f, 6, 10, C(0xC8A0FF, 1f));
+                    break;
                 case "hopper":
                 case "hopper2":
                 {
@@ -224,6 +281,39 @@ namespace WishExtractor.View
                 bk.Box(new Vector3(0, 0.07f, 0.24f), new Vector3(0.12f, 0.03f, 0.03f), C(0x6CFF9A, 1f));
                 bk.Sphere(new Vector3(0, 0.1f, 0), 0.08f, 4, 8, C(0x39E5D0));
                 n.Bot = bk.Build("Skimmer Bot", root, false).transform;
+            }
+            if (b.Def.Id == "proc_pigeons")
+            {
+                var rng = new System.Random(b.Uid);
+                for (int i = 0; i < 6; i++)
+                {
+                    var pg = Actors.MakePigeon(n.T, 1.2f, rng);
+                    pg.Root.localPosition = new Vector3(-0.6f + (i % 3) * 0.6f, 0.62f, -0.4f + (i / 3) * 0.7f);
+                    pg.Root.localRotation = Quaternion.Euler(0, rng.Next(360), 0);
+                    n.Pigeons.Add(pg);
+                }
+            }
+            if (b.Def.Intake == "dig")
+            {
+                n.Arm = new GameObject("Arm").transform;
+                n.Arm.SetParent(root, false);
+                var ak = new MeshKit();
+                ak.Cylinder(new Vector3(0, 0.5f, 0), 0.12f, 1f, 10, C(0xE8C020));
+                ak.Build("Segment", n.Arm, false);
+                var ck = new MeshKit();
+                if (b.Def.Id == "dig_rig")
+                {
+                    ck.Box(new Vector3(0, 0.35f, 0), new Vector3(0.3f, 0.4f, 0.3f), C(0xE8C020));
+                    ck.Tube(new Vector3(0, 0.15f, 0), new Vector3(0, -0.35f, 0), 0.04f, 6, C(0xB8BEC4));
+                }
+                else
+                {
+                    ck.Cylinder(new Vector3(0, 0.3f, 0), 0.5f, 0.4f, 16, C(0x8A8F96));
+                    ck.Push(new Vector3(0, 0.1f, 0), Quaternion.Euler(180, 0, 0));
+                    ck.Cone(Vector3.zero, 0.5f, 0.5f, 16, C(0xB8BEC4));
+                    ck.Pop();
+                }
+                n.Claw = ck.Build("Head", root, false).transform;
             }
             if (b.Def.Intake == "pump" || b.Def.Intake == "claw")
             {
@@ -287,12 +377,20 @@ namespace WishExtractor.View
                 if (n.Arm != null)
                 {
                     // pump hose / crane arm from the machine's top over the rim to where it's working
-                    var start = n.T.position + Vector3.up * (b.Def.Intake == "pump" ? 1.5f : 2.4f);
+                    var start = n.T.position + Vector3.up * (b.Def.Intake == "pump" ? 1.5f : b.Def.Intake == "dig" ? 1.3f : 2.4f);
                     Vector3 end;
                     if (b.Def.Intake == "pump")
                     {
                         var (sx, sz) = sim.SuctionPoint(b);
                         end = new Vector3(sx, ctx.Fountain.HeightAt(sx, sz) + 0.1f, sz);
+                    }
+                    else if (b.Def.Intake == "dig")
+                    {
+                        var (sx, sz) = sim.SuctionPoint(b);
+                        float bounce = act > 0.5f ? Mathf.Abs(Mathf.Sin(time * (b.Def.Id == "dig_rig" ? 30 : 8))) * (b.Def.Id == "dig_rig" ? 0.12f : 0.05f) : 0;
+                        end = new Vector3(sx, ctx.Fountain.HeightAt(sx, sz) + 0.35f + bounce, sz);
+                        if (act > 0.5f && Random.value < dt * 6) ctx.Fx.Dust(end + Vector3.down * 0.3f, MeshKit.Hex(sim.CurStratum.Color), 2, 0.7f, 0.5f, 1f);
+                        if (b.Def.Id == "dig_borer") n.Claw.rotation = Quaternion.Euler(0, time * 400, 0);
                     }
                     else
                     {
@@ -303,14 +401,17 @@ namespace WishExtractor.View
                     // two straight segments via the arch point
                     PlaceSegment(n.Arm, start, mid, end);
                     n.Claw.position = end;
-                    n.Claw.rotation = Quaternion.identity;
+                    if (b.Def.Id != "dig_borer") n.Claw.rotation = Quaternion.identity;
                 }
+                foreach (var pg in n.Pigeons) Actors.AnimatePigeon(pg, time, act);
+                if (b.Def.Id == "proc_tumbler" || b.Def.Id == "proc_roller" || b.Def.Id == "proc_bagger")
+                    n.T.localScale = new Vector3(1, 1 + Mathf.Sin(time * 25) * 0.01f * act, 1);
                 if (b.PickSerial != n.PickSerial)
                 {
                     n.PickSerial = b.PickSerial;
                     var p = new Vector3(b.LastPickX, ctx.Fountain.WaterY, b.LastPickZ);
                     ctx.Fx.Sparks(p, new Color(0.85f, 0.95f, 1f), 5, 2f, 0.06f, 0.4f);
-                    if (b.Def.Intake != "skimmer")
+                    if (b.Def.Intake != "skimmer" && b.Def.Intake != "dig")
                         ctx.Fx.Fly(p, () => n.T != null ? n.T.position + Vector3.up * 1.2f : p, Loot.Tinted(ItemShape.Coin, new Color(0.78f, 0.48f, 0.26f)), 1f, 0.5f, 1.5f);
                 }
             }

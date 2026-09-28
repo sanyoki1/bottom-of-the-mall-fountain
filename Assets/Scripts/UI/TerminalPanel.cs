@@ -43,7 +43,7 @@ namespace WishExtractor.UI
         {
             (TechBranch.Carry, "Carry"), (TechBranch.Tools, "Tools"), (TechBranch.Fountain, "Fountain"),
             (TechBranch.Power, "Power"), (TechBranch.Intake, "Intake"), (TechBranch.Logistics, "Logistics"),
-            (TechBranch.Processing, "Processing"), (TechBranch.Security, "Security"),
+            (TechBranch.Processing, "Processing"), (TechBranch.HeadOffice, "Head Office"),
         };
 
         public void Build(Canvas canvas, Sim s)
@@ -229,7 +229,7 @@ namespace WishExtractor.UI
             Refresh();
         }
 
-        public static string CostText(TechDef t, double cost) => t.WishTokens ? $"✦ {Fmt.Num(cost)}" : Fmt.Money(cost);
+        public static string CostText(TechDef t, double cost) => t.LuckyPennies ? $"¢ {Fmt.Num(cost)} LP" : t.WishTokens ? $"✦ {Fmt.Num(cost)}" : Fmt.Money(cost);
 
         public static string EffectText(TechDef t)
         {
@@ -263,7 +263,13 @@ namespace WishExtractor.UI
                 case TechKind.BeltSpeed: return "Faster conveyor belts";
                 case TechKind.DepositMult: return $"+{t.Value * 100:0}% value for {t.Target} per level";
                 case TechKind.GuardFine: return $"-{t.Value * 100:0}% security fines per level";
-                case TechKind.Unlock: return "Unlocks: " + t.Target;
+                case TechKind.Unlock:
+                    return Content.BuildIndex.TryGetValue(t.Target ?? "", out int bi) ? $"Unlocks the {Content.Buildables[bi].Name} in build mode" : "Unlocks: " + t.Target;
+                case TechKind.DigPower: return $"+{t.Value * 100:0}% scoops per swing and per dig rig, per level";
+                case TechKind.RelicRate: return $"+{t.Value * 100:0}% relic chance per level";
+                case TechKind.StartCash: return $"Start every contract with ${t.Value:0} per level (× the mall's prices)";
+                case TechKind.StartCarry: return "Start every contract already owning container tier = level";
+                case TechKind.StartUnlocks: return "Start every contract with the basic kit researched";
             }
             return "";
         }
@@ -279,7 +285,7 @@ namespace WishExtractor.UI
 
         void Refresh()
         {
-            statsText.text = $"CASH {Fmt.Money(sim.S.cash)}   ✦ {Fmt.Num(sim.S.wishTokens)}   WISHABILITY {sim.Wishability:0}";
+            statsText.text = $"CASH {Fmt.Money(sim.S.cash)}   ✦ {Fmt.Num(sim.S.wishTokens)}   ¢ {Fmt.Num(sim.S.luckyPennies)} LP   WISH {sim.Wishability:0}";
             for (int i = 0; i < tabs.Count; i++)
             {
                 bool on = Branches[i].b == branch;
@@ -327,7 +333,8 @@ namespace WishExtractor.UI
             buyBtn.Rt.gameObject.SetActive(!maxedSel);
             bool can = sim.CanBuyTech(selected);
             buyBtn.Interactable = can;
-            buyBtn.Label.text = !sim.TechUnlocked(selected) ? "LOCKED" : !sim.CanAfford(selected) ? (st.WishTokens ? "NEED MORE WISH TOKENS" : "NEED MORE CASH") : L > 0 ? "UPGRADE" : "INSTALL";
+            buyBtn.Label.text = !sim.TechUnlocked(selected) ? "LOCKED" : !sim.CanAfford(selected) ? (st.LuckyPennies ? "NEED MORE LUCKY PENNIES" : st.WishTokens ? "NEED MORE WISH TOKENS" : "NEED MORE CASH") : L > 0 ? "UPGRADE" : "INSTALL";
+            if (st.Persistent) dKind.text = "HEAD OFFICE PERK  ·  KEPT FOREVER";
         }
     }
 }
