@@ -1,6 +1,6 @@
 // The fountain basin: rim, mosaic walls (which reveal faint bands of every stratum you dig
-// through), the tiered centrepiece, and the crust heightfield that sinks with depth and
-// dents where you click. Loose junk props sit on the crust and get swapped per stratum.
+// through), the tiered centrepiece, the crust heightfield that sinks with depth, the shallow
+// water on top of it, and the colliders you walk on in first person.
 using System.Collections.Generic;
 using UnityEngine;
 using WishExtractor.Core;
@@ -11,11 +11,15 @@ namespace WishExtractor.View
     {
         public const float RimInner = 8.0f, RimOuter = 9.4f, RimTop = 0.9f;
         public const float BasinFloor = -7.0f, CrustTop = 0.55f;
+        public const float WaterDepth = 0.3f;
         const int Rings = 38, Segs = 104;
+        const int ColRings = 12, ColSegs = 40;
         const float InnerR = 0.72f, OuterR = 7.97f;
 
         public Transform Root { get; private set; }
         public float SurfaceY { get; private set; } = CrustTop;
+        /// <summary>Height of the water surface: a shallow layer that follows the crust down.</summary>
+        public float WaterY => Mathf.Min(SurfaceY + WaterDepth, RimTop - 0.12f);
         float targetY = CrustTop;
         bool cleared;
         float clearedBlend;
@@ -30,17 +34,10 @@ namespace WishExtractor.View
         int stratum = -1;
         Color baseCol, speckCol, baseTarget, speckTarget;
         float coinAmount = 0.7f;
-
-        readonly List<Prop> props = new List<Prop>();
-        readonly System.Random rng = new System.Random(11);
-        Transform propRoot;
-
-        sealed class Prop
-        {
-            public Transform T;
-            public float X, Z, Sink, Tilt, Yaw, Life, Fade;
-            public bool Dying;
-        }
+        Transform water;
+        MeshCollider crustCollider;
+        Mesh crustColMesh;
+        float colliderY = float.NaN;
 
         static Color C(uint hex, float glow = 0) => MeshKit.Hex(hex, glow);
 
@@ -52,17 +49,156 @@ namespace WishExtractor.View
             if (Root != null) Object.Destroy(Root.gameObject);
             Root = new GameObject("Fountain").transform;
             Root.SetParent(parent, false);
-            props.Clear();
-            propRoot = new GameObject("Crust Props").transform;
-            propRoot.SetParent(Root, false);
             BuildRim(m.Theme);
             BuildWall(m);
             BuildCenterpiece(m.Theme);
             BuildFloor();
             BuildCrust();
+            BuildWater(m.Theme);
+            BuildColliders(m.Theme);
             BuildWorkLight(m.Theme);
             stratum = -1;
             dirty = true;
+            colliderY = float.NaN;
+        }
+
+        void BuildWater(ThemeDef th)
+        {
+            // planar UVs in world metres + tangents, so the ripple normals line up with the world
+            const int seg = 96;
+            var v = new List<Vector3>();
+            var uv = new List<Vector2>();
+            var tri = new List<int>();
+            float r0 = 0.5f, r1 = RimInner - 0.01f;
+            for (int i = 0; i <= seg; i++)
+            {
+                float a = i * Mathf.PI * 2 / seg;
+                var d = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a));
+                v.Add(d * r0); v.Add(d * r1);
+                uv.Add(new Vector2(d.x * r0, d.z * r0)); uv.Add(new Vector2(d.x * r1, d.z * r1));
+            }
+            for (int i = 0; i < seg; i++)
+            {
+                int a = i * 2, b = a + 2;
+                tri.Add(a); tri.Add(b); tri.Add(a + 1);
+                tri.Add(a + 1); tri.Add(b); tri.Add(b + 1);
+            }
+            var mesh = new Mesh { name = "Water" };
+            mesh.SetVertices(v);
+            mesh.SetUVs(0, uv);
+            mesh.SetTriangles(tri, 0);
+            var n = new Vector3[v.Count];
+            for (int i = 0; i < n.Length; i++) n[i] = Vector3.up;
+            mesh.normals = n;
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+            var go = new GameObject("Water");
+            go.transform.SetParent(Root, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            Color tint = Color.Lerp(C(th.BasinTileA), new Color(0.35f, 0.7f, 0.8f), 0.6f);
+            mr.sharedMaterial = Mats.NewFountainWater(tint);
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            water = go.transform;
+            water.localPosition = new Vector3(0, WaterY, 0);
+        }
+
+        /// <summary>
+        /// Walkable physics: a ring of boxes for the rim and basin wall, stepping stones outside it,
+        /// the centrepiece mesh, and a coarse crust heightfield (rebuilt as the crust sinks).
+        /// </summary>
+        void BuildColliders(ThemeDef th)
+        {
+            var root = new GameObject("Colliders").transform;
+            root.SetParent(Root, false);
+            const int n = 48;
+            float mid = (RimInner + RimOuter) / 2, thick = RimOuter - RimInner;
+            float chord = 2 * RimOuter * Mathf.Tan(Mathf.PI / n) + 0.05f;
+            float h = RimTop - (BasinFloor - 1);
+            for (int i = 0; i < n; i++)
+            {
+                float a = i * 360f / n;
+                var go = new GameObject("Rim " + i);
+                go.transform.SetParent(root, false);
+                go.transform.localPosition = new Vector3(Mathf.Cos(a * Mathf.Deg2Rad) * mid, RimTop - h / 2, Mathf.Sin(a * Mathf.Deg2Rad) * mid);
+                go.transform.localRotation = Quaternion.Euler(0, 90 - a, 0);
+                var bc = go.AddComponent<BoxCollider>();
+                bc.size = new Vector3(chord, h, thick);
+            }
+
+            // stepping stones outside the rim
+            var k = new MeshKit();
+            Color stone = Color.Lerp(C(th.Rim), new Color(0.55f, 0.53f, 0.5f), 0.5f);
+            float[] angles = { -90, -30, -150, 30, 150, 90 };
+            foreach (float a in angles)
+            {
+                Vector3 p = new Vector3(Mathf.Cos(a * Mathf.Deg2Rad), 0, Mathf.Sin(a * Mathf.Deg2Rad)) * (RimOuter + 0.55f);
+                var rot = Quaternion.Euler(0, 90 - a, 0);
+                k.Push(p, rot);
+                k.Box(new Vector3(0, 0.22f, 0), new Vector3(1.3f, 0.44f, 0.9f), stone);
+                k.Box(new Vector3(0, 0.445f, 0), new Vector3(1.2f, 0.01f, 0.8f), Color.Lerp(stone, Color.white, 0.2f));
+                k.Pop();
+                var go = new GameObject("Step");
+                go.transform.SetParent(root, false);
+                go.transform.localPosition = p + new Vector3(0, 0.22f, 0);
+                go.transform.localRotation = rot;
+                go.AddComponent<BoxCollider>().size = new Vector3(1.3f, 0.44f, 0.9f);
+            }
+            k.Build("Stepping Stones", Root);
+
+            // centrepiece: its own render mesh, as a static mesh collider
+            var cp = Root.Find("Centerpiece");
+            if (cp != null) cp.gameObject.AddComponent<MeshCollider>().sharedMesh = cp.GetComponent<MeshFilter>().sharedMesh;
+
+            var cgo = new GameObject("Crust Collider");
+            cgo.transform.SetParent(root, false);
+            crustColMesh = new Mesh { name = "Crust Collider" };
+            crustCollider = cgo.AddComponent<MeshCollider>();
+        }
+
+        void RebuildCrustCollider()
+        {
+            float bs = BumpScale;
+            var v = new Vector3[(ColRings + 1) * (ColSegs + 1)];
+            var tri = new List<int>(ColRings * ColSegs * 6);
+            for (int i = 0; i <= ColRings; i++)
+            {
+                float r = Mathf.Lerp(0.3f, RimInner + 0.1f, i / (float)ColRings);
+                for (int j = 0; j <= ColSegs; j++)
+                {
+                    float a = j / (float)ColSegs * Mathf.PI * 2;
+                    float x = Mathf.Cos(a) * r, z = Mathf.Sin(a) * r;
+                    float y = Mathf.Max(SurfaceY + BumpAt(x, z) * bs, BasinFloor + 0.02f);
+                    v[i * (ColSegs + 1) + j] = new Vector3(x, y, z);
+                }
+            }
+            for (int i = 0; i < ColRings; i++)
+                for (int j = 0; j < ColSegs; j++)
+                {
+                    int a = i * (ColSegs + 1) + j, b = a + ColSegs + 1;
+                    tri.Add(a); tri.Add(a + 1); tri.Add(b + 1);
+                    tri.Add(a); tri.Add(b + 1); tri.Add(b);
+                }
+            crustColMesh.Clear();
+            crustColMesh.vertices = v;
+            crustColMesh.SetTriangles(tri, 0);
+            crustColMesh.RecalculateBounds();
+            crustCollider.sharedMesh = null;
+            crustCollider.sharedMesh = crustColMesh;
+            colliderY = SurfaceY;
+        }
+
+        /// <summary>The same noise the render crust uses, without click dents.</summary>
+        static float BumpAt(float x, float z)
+        {
+            float r = Mathf.Sqrt(x * x + z * z);
+            float nb = (Mathf.PerlinNoise(x * 0.23f + 13, z * 0.23f + 7) - 0.5f) * 0.55f
+                     + (Mathf.PerlinNoise(x * 0.9f + 3, z * 0.9f + 9) - 0.5f) * 0.18f;
+            float rc = Mathf.Min(r, OuterR);
+            float mound = 0.22f * (1 - (rc / OuterR) * (rc / OuterR));
+            float edge = 0.38f * Mathf.SmoothStep(0, 1, Mathf.InverseLerp(6.3f, OuterR, rc));
+            return nb + mound + edge;
         }
 
         Light workLight;
@@ -279,9 +415,9 @@ namespace WishExtractor.View
             var st = m.Strata[Mathf.Clamp(s, 0, m.Strata.Length - 1)];
             baseTarget = C(st.Color);
             speckTarget = C(st.Speck);
-            coinAmount = st.Loose ? 0.85f : 0.62f + 0.04f * s;
+            // no painted coins in first person: every coin you see is a real, pick-up-able item
+            coinAmount = 0f;
             if (instant || !changed) { baseCol = baseTarget; speckCol = speckTarget; }
-            RespawnProps(m, s, changed);
         }
 
         /// <summary>Punch a crater at a world position. strength ~ 0.2 (tap) .. 1.5 (explosion).</summary>
@@ -298,11 +434,6 @@ namespace WishExtractor.View
                 dent[i] = Mathf.Max(-1.3f, dent[i] - strength * fall);
             }
             dirty = true;
-            foreach (var pr in props)
-            {
-                float dx = pr.X - p.x, dz = pr.Z - p.z;
-                if (dx * dx + dz * dz < rr * 0.35f && !pr.Dying) { pr.Dying = true; pr.Life = 0.6f; }
-            }
         }
 
         public string RendererDiagnostics()
@@ -422,52 +553,14 @@ namespace WishExtractor.View
                 crustMesh.RecalculateNormals();
                 dirty = false;
             }
-            UpdateProps(dt);
+            if (water != null) water.localPosition = new Vector3(0, WaterY, 0);
+            if (crustCollider != null && (float.IsNaN(colliderY) || Mathf.Abs(SurfaceY - colliderY) > 0.04f)) RebuildCrustCollider();
         }
 
-        // ── loose junk on the crust ─────────────────────────────────────────
+        /// <summary>True when a point (feet) is standing in the fountain water.</summary>
+        public bool InWater(Vector3 p) => p.x * p.x + p.z * p.z < RimInner * RimInner && p.y < WaterY - 0.02f;
 
-        void RespawnProps(MallDef m, int s, bool animateOut)
-        {
-            foreach (var p in props) { p.Dying = true; p.Life = animateOut ? 0.8f : 0f; }
-            if (cleared) return;
-            int count = 14;
-            for (int i = 0; i < count; i++)
-            {
-                var item = m.Items[rng.Next(m.Items.Length)];
-                float a = (float)rng.NextDouble() * Mathf.PI * 2, r = Mathf.Lerp(1.8f, 7.2f, Mathf.Sqrt((float)rng.NextDouble()));
-                var go = Loot.MakeItemMesh(item.Shape, MeshKit.Hex(item.Color), 1.9f, propRoot);
-                var pr = new Prop
-                {
-                    T = go.transform, X = Mathf.Cos(a) * r, Z = Mathf.Sin(a) * r, Sink = 0.05f + (float)rng.NextDouble() * 0.12f,
-                    Tilt = (float)rng.NextDouble() * 50 - 25, Yaw = (float)rng.NextDouble() * 360, Fade = 0
-                };
-                props.Add(pr);
-            }
-        }
-
-        void UpdateProps(float dt)
-        {
-            for (int i = props.Count - 1; i >= 0; i--)
-            {
-                var p = props[i];
-                if (p.T == null) { props.RemoveAt(i); continue; }
-                if (p.Dying)
-                {
-                    p.Life -= dt;
-                    float s = Mathf.Clamp01(p.Life / 0.6f);
-                    p.T.localScale = Vector3.one * s;
-                    if (p.Life <= 0) { Object.Destroy(p.T.gameObject); props.RemoveAt(i); continue; }
-                }
-                else
-                {
-                    p.Fade = Mathf.MoveTowards(p.Fade, 1, dt * 2);
-                    p.T.localScale = Vector3.one * p.Fade;
-                }
-                float y = HeightAt(p.X, p.Z) - p.Sink;
-                p.T.localPosition = new Vector3(p.X, y, p.Z);
-                p.T.localRotation = Quaternion.Euler(p.Tilt, p.Yaw, p.Tilt * 0.5f);
-            }
-        }
+        /// <summary>True when a point is inside the basin (horizontally).</summary>
+        public static bool InBasin(Vector3 p) => p.x * p.x + p.z * p.z < RimInner * RimInner;
     }
 }

@@ -18,41 +18,24 @@ namespace WishExtractor.Core
         }
 
         /// <summary>
-        /// Stratum boundaries (cumulative items) fitted by Tools/BalanceSim "fit" so the bot spends a
-        /// planned share of each mall in every layer. Regenerate after any balance change.
+        /// Crust boundaries (cumulative scoops at the top of each stratum, then the bottom) fitted by
+        /// Tools/BalanceSim "fit" so the bot spends a planned share of each mall in every layer.
+        /// Regenerate after any balance change. Null rows fall back to DefaultBounds.
         /// </summary>
         static readonly double[][] FittedBounds =
         {
             // <fitted-bounds> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
-            new double[] { 0, 4.4415e4, 3.1321e5, 2.5501e6, 1.1813e7, 1.8945e7, 4.5285e7, 3.0896e8, 1.2911e9 },  // Crestview Commons
-            new double[] { 0, 1.2287e5, 3.1861e7, 4.3076e9, 4.0725e11, 1.525e12, 9.0453e13, 5.7919e14, 1.2683e15 },  // Neon Galaxy Mega-Mall
-            new double[] { 0, 1.0472e7, 6.0041e9, 1.3084e12, 4.3864e12, 6.3077e14, 1.6587e15, 7.4959e16, 1.9819e17 },  // Galleria Aurelia
-            new double[] { 0, 5.4631e6, 3.5476e10, 4.8162e12, 1.7713e16, 6.3818e16, 3.2256e18, 9.2863e18, 2.472e19 },  // Skyport Terminal C
-            new double[] { 0, 2.8868e8, 4.827e11, 4.8705e15, 9.2451e17, 5.8414e19, 1.2263e20, 3.1856e20, 6.9035e20 },  // The Lucky Lagoon
-            new double[] { 0, 1.5204e8, 2.2514e12, 4.9387e16, 4.0128e20, 6.1561e22, 1.8134e23, 3.4138e23, 5.7164e23 },  // Eternity Plaza
+            null, null, null, null, null, null,
             // </fitted-bounds>
         };
 
-        /// <summary>Stratum boundaries for the first Remodel lap of each mall (same fitting, continued after the finale).</summary>
-        static readonly double[][] FittedRemodelBounds =
-        {
-            // <fitted-remodel-bounds>
-            new double[] { 0, 4.4415e4, 1.7601e9, 7.6582e12, 1.2301e15, 5.2101e17, 9.4148e17, 1.8468e18, 3.5303e18 },  // Crestview Commons
-            new double[] { 0, 1.2287e5, 1.6643e11, 2.7332e16, 8.5955e18, 3.4011e20, 1.4462e21, 3.4518e21, 5.3508e21 },  // Neon Galaxy Mega-Mall
-            new double[] { 0, 1.0472e7, 2.0314e11, 2.5117e16, 8.3668e18, 1.3126e21, 2.8195e21, 6.0087e21, 9.782e21 },  // Galleria Aurelia
-            new double[] { 0, 5.4631e6, 1.5183e11, 9.4554e16, 7.0507e18, 1.3115e21, 3.9134e21, 6.0991e21, 9.3981e21 },  // Skyport Terminal C
-            new double[] { 0, 2.8868e8, 3.2486e11, 5.6057e17, 9.6013e19, 5.3827e21, 1.2806e22, 4.2592e22, 9.2969e22 },  // The Lucky Lagoon
-            new double[] { 0, 1.5204e8, 3.2419e12, 1.1818e18, 1.6652e20, 3.0632e22, 8.0702e22, 1.5241e23, 2.1912e23 },  // Eternity Plaza
-            // </fitted-remodel-bounds>
-        };
-
-        /// <summary>Fallback: loose layer of looseItems, then geometric growth up to total.</summary>
-        public static double[] DefaultBounds(double total, double looseItems, int strata)
+        /// <summary>Fallback: a loose layer of looseScoops, then geometric growth down to total.</summary>
+        public static double[] DefaultBounds(double total, double looseScoops, int strata)
         {
             var b = new double[strata + 1];
             b[0] = 0;
-            b[1] = looseItems;
-            double ratio = Math.Pow(total / looseItems, 1.0 / (strata - 1));
+            b[1] = looseScoops;
+            double ratio = Math.Pow(total / looseScoops, 1.0 / (strata - 1));
             for (int i = 2; i <= strata; i++) b[i] = b[i - 1] * ratio;
             b[strata] = total;
             return b;
@@ -76,13 +59,11 @@ namespace WishExtractor.Core
                 Tagline = "The Suburban Dead Mall — now 40% leased!",
                 Intro = "A dry, cracked, 30-foot concrete basin packed solid with forty years of pennies, gum and calcified mall. You have a piece of chewed bubblegum on a string. Good luck.",
                 DepthFeet = 30,
-                TotalItems = 3e8,
-                CostScale = 1,
-                Generosity = 1,
+                CrustScoops = 6e4,
                 LuckyPennies = 6,
                 TreasureName = "The Founder's Penny",
                 TreasureDesc = "A 1985 penny super-glued to the drain by the mall's founder, labeled FOR LUCK. It did not work.",
-                Event = new MallEventDef("Mall Walker Rush Hour", "dig", 3, "Tracksuits everywhere. All digging ×3!"),
+                Event = new MallEventDef("Mall Walker Rush Hour", "toss", 3, "Tracksuits everywhere. Coins fly into the fountain three times as often!"),
                 Strata = Strata(
                     ("Fresh Toss Layer", true, 0x8C8A6A, 0xD99A5B, "Pennies tossed this week. Still shiny. Still worthless."),
                     ("The Syrup Seal", false, 0xC8742E, 0xF2C14E, "A glossy crust of Orange Julius, Mountain Dew and regret. Everything below here is glued together."),
@@ -165,9 +146,7 @@ namespace WishExtractor.Core
                 Tagline = "The 1980s Mega-Mall — totally radical since 1983",
                 Intro = "Four storeys of neon, a laser show that has not been switched off since 1989, and a 45-foot fountain full of slap bracelets, Walkmans and seriously valuable vintage tokens.",
                 DepthFeet = 45,
-                TotalItems = 1.9e14,
-                CostScale = 1e4,
-                Generosity = 1.5,
+                CrustScoops = 1.5e5,
                 LuckyPennies = 14,
                 TreasureName = "Golden Arcade Token #0001",
                 TreasureDesc = "The first token this mall ever dispensed. Good for one free game of eternity.",
@@ -250,9 +229,7 @@ namespace WishExtractor.Core
                 Tagline = "The High-End Luxury Galleria — by appointment only",
                 Intro = "Marble, gold leaf and a 60-foot fountain that people toss gold coins into because pennies are 'vulgar'. Rumour says the bottom is solid gold.",
                 DepthFeet = 60,
-                TotalItems = 4e16,
-                CostScale = 1e8,
-                Generosity = 2,
+                CrustScoops = 3e5,
                 LuckyPennies = 30,
                 TreasureName = "The Platinum Membership Card",
                 TreasureDesc = "Grants lifetime access to a VIP lounge that does not exist.",
@@ -333,9 +310,7 @@ namespace WishExtractor.Core
                 Tagline = "The Airport Concourse Fountain — now boarding all zones",
                 Intro = "A 75-foot fountain in the middle of a concourse where every flight is delayed. It is full of coins from ninety countries, lost passports and an alarming amount of Toblerone.",
                 DepthFeet = 75,
-                TotalItems = 3.2e18,
-                CostScale = 1e12,
-                Generosity = 2.5,
+                CrustScoops = 6e5,
                 LuckyPennies = 60,
                 TreasureName = "The Lost Passport of Everyone",
                 TreasureDesc = "A single passport with a stamp from every country on Earth and a very, very tired photo.",
@@ -419,9 +394,7 @@ namespace WishExtractor.Core
                 Tagline = "The Casino Resort Fountain — the house always digs",
                 Intro = "A 90-foot fountain under a chandelier the size of a bus. Gamblers have been tossing chips, dice and wedding rings in here since 1966. Some of it was on purpose.",
                 DepthFeet = 90,
-                TotalItems = 3.7e19,
-                CostScale = 1e16,
-                Generosity = 3,
+                CrustScoops = 1.2e6,
                 LuckyPennies = 110,
                 TreasureName = "The Lucky Die",
                 TreasureDesc = "It rolls a seven. Every face is a seven. Nobody at the casino wants to talk about it.",
@@ -504,9 +477,7 @@ namespace WishExtractor.Core
                 Tagline = "The World's First Mall Fountain — est. 1956",
                 Intro = "The oldest mall fountain in the world, 120 feet deep. The blueprints say it was poured over 'an existing well'. Nobody at corporate knows what that means.",
                 DepthFeet = 120,
-                TotalItems = 1.9e22,
-                CostScale = 1e20,
-                Generosity = 4,
+                CrustScoops = 2.5e6,
                 LuckyPennies = 200,
                 TreasureName = "The First Wish",
                 TreasureDesc = "A tiny, ancient coin that hums in your hand. Whoever tossed it wished for 'more wishes'. It worked.",
@@ -585,13 +556,9 @@ namespace WishExtractor.Core
                 var mall = malls[m];
                 mall.ComputeEV();
                 if (m < FittedBounds.Length && FittedBounds[m] != null) mall.Bounds = (double[])FittedBounds[m].Clone();
-                else mall.Bounds = DefaultBounds(mall.TotalItems, Balance.LooseLayerItems, mall.Strata.Length);
-                mall.TotalItems = mall.Bounds[mall.Bounds.Length - 1];
-                if (m < FittedRemodelBounds.Length && FittedRemodelBounds[m] != null) mall.RemodelBounds = (double[])FittedRemodelBounds[m].Clone();
+                else mall.Bounds = DefaultBounds(mall.CrustScoops, Balance.LooseLayerScoops, mall.Strata.Length);
+                mall.CrustScoops = mall.Bounds[mall.Bounds.Length - 1];
             }
-            // Every mall pays (Crestview value per item) × CostScale × Generosity, whatever its loot is.
-            double ev0 = malls[0].BaseEV;
-            foreach (var mall in malls) mall.ContractRate = mall.Generosity * mall.CostScale * ev0 / mall.BaseEV;
 
             for (int m = 0; m < malls.Count; m++)
             {

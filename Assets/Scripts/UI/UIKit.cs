@@ -45,6 +45,8 @@ namespace WishExtractor.UI
         public static Font Semibold => semibold ??= MakeFont(new[] { "Segoe UI Semibold", "Segoe UI", "Arial" });
         public static Font Bold => bold ??= MakeFont(new[] { "Segoe UI Bold", "Segoe UI Black", "Segoe UI", "Arial" });
         public static Font Symbol => symbol ??= MakeFont(new[] { "Segoe UI Symbol", "Segoe UI", "Arial" });
+        static Font mono;
+        public static Font Mono => mono ??= MakeFont(new[] { "Consolas", "Courier New", "Lucida Console" });
 
         static Font MakeFont(string[] names)
         {
@@ -259,9 +261,12 @@ namespace WishExtractor.UI
             var bg = Image(holder, "Bg", Rounded, color ?? Pal.Glass, radius);
             bg.rectTransform.Stretch();
             bg.raycastTarget = blocks;
-            var hl = Image(holder, "Rim", Rounded, new Color(1, 1, 1, 0.55f), radius);
-            hl.rectTransform.Stretch(0, 0, 0, 0);
-            hl.fillCenter = false;
+            if (shadowOn)
+            {
+                var hl = Image(holder, "Rim", Rounded, new Color(1, 1, 1, 0.55f), radius);
+                hl.rectTransform.Stretch(0, 0, 0, 0);
+                hl.fillCenter = false;
+            }
             return holder;
         }
 

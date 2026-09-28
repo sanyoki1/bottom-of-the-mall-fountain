@@ -19,7 +19,7 @@ namespace WishExtractor.View
         System.Random rng;
 
         public const float HallMinX = -36, HallMaxX = 36, HallMinZ = -30, HallMaxZ = 32;
-        const float BalconyY = 6.8f, BalconyZ = 26f;
+        const float BalconyY = 6.8f, BalconyZ = 26f, EscalatorX = -29.5f;
 
         static Color C(uint hex, float glow = 0) => MeshKit.Hex(hex, glow);
 
@@ -90,15 +90,146 @@ namespace WishExtractor.View
             Root.SetParent(parent, false);
             var th = mall.Theme;
 
+            colRoot = new GameObject("Colliders").transform;
+            colRoot.SetParent(Root, false);
             BuildLighting(th);
             BuildFloor(th);
             BuildBackWall(th, mall);
             BuildSideWalls(th);
+            BuildSouthWall(th, mall);
+            BuildCeiling(th);
             BuildBalcony(th, mall);
             BuildPlanters(th);
             BuildEscalator(th);
             BuildBenches(th);
             BuildSignature(mall);
+            BuildHallColliders();
+        }
+
+        // ── colliders ───────────────────────────────────────────────────────
+
+        Transform colRoot;
+
+        public BoxCollider ColBox(Vector3 center, Vector3 size, Quaternion rot, string name = "Box")
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(colRoot, false);
+            go.transform.localPosition = center;
+            go.transform.localRotation = rot;
+            var bc = go.AddComponent<BoxCollider>();
+            bc.size = size;
+            return bc;
+        }
+
+        public BoxCollider ColBox(Vector3 center, Vector3 size) => ColBox(center, size, Quaternion.identity);
+
+        void ColCapsule(Vector3 center, float radius, float height)
+        {
+            var go = new GameObject("Capsule");
+            go.transform.SetParent(colRoot, false);
+            go.transform.localPosition = center;
+            var cc = go.AddComponent<CapsuleCollider>();
+            cc.radius = radius;
+            cc.height = height;
+        }
+
+        /// <summary>Round things (planters) as two boxes rotated 45° apart.</summary>
+        void ColRound(Vector3 center, float radius, float height)
+        {
+            float side = radius * 1.8f;
+            ColBox(center, new Vector3(side, height, side), Quaternion.identity, "Round");
+            ColBox(center, new Vector3(side, height, side), Quaternion.Euler(0, 45, 0), "Round");
+        }
+
+        void BuildHallColliders()
+        {
+            // floor: an annulus mesh, so it never caps the basin once the crust sinks below y = 0
+            var k = new MeshKit();
+            k.Ring(Vector3.zero, FountainView.RimOuter - 0.1f, 60f, 64, Color.white);
+            var fgo = new GameObject("Floor Collider");
+            fgo.transform.SetParent(colRoot, false);
+            fgo.AddComponent<MeshCollider>().sharedMesh = k.ToMesh("floor collider");
+            float w = HallMaxX - HallMinX, d = HallMaxZ - HallMinZ;
+            ColBox(new Vector3(0, 9, HallMaxZ + 0.5f), new Vector3(w + 4, 20, 1), Quaternion.identity, "Back Wall");
+            ColBox(new Vector3(0, 9, HallMinZ - 0.5f), new Vector3(w + 4, 20, 1), Quaternion.identity, "South Wall");
+            ColBox(new Vector3(HallMinX - 0.5f, 9, 1), new Vector3(1, 20, d + 4), Quaternion.identity, "West Wall");
+            ColBox(new Vector3(HallMaxX + 0.5f, 9, 1), new Vector3(1, 20, d + 4), Quaternion.identity, "East Wall");
+            ColBox(new Vector3(0, CeilingY + 0.3f, 1), new Vector3(w + 4, 0.6f, d + 4), Quaternion.identity, "Ceiling");
+        }
+
+        // ── south wall (behind the player's spawn) with the mall entrance ──────
+
+        const float CeilingY = 18f;
+
+        void BuildSouthWall(ThemeDef th, MallDef mall)
+        {
+            var k = new MeshKit();
+            Color wall = C(th.Wall), trim = C(th.WallTrim);
+            var face = Quaternion.Euler(0, 180, 0);
+            k.Box(new Vector3(0, 9, HallMinZ - 0.5f), new Vector3(HallMaxX - HallMinX + 2, 18, 1), wall);
+            k.Box(new Vector3(0, BalconyY - 0.3f, HallMinZ + 0.05f), new Vector3(HallMaxX - HallMinX, 0.5f, 0.12f), trim);
+            float[] xs = { -27f, -14f, 14f, 27f };
+            for (int i = 0; i < xs.Length; i++)
+            {
+                int si = (i * 2 + 1) % th.Signs.Length;
+                Storefront(k, Root, new Vector3(xs[i], 0, HallMinZ + 0.2f), face, 11.4f, 5.6f, th.Signs[si], C(th.SignColors[si]), th, mall.Id == "crestview" && i == 2);
+            }
+            // entrance: frame, four glass doors glowing with daylight, a welcome mat
+            Color frame = Color.Lerp(trim, Color.black, 0.3f);
+            frame.a = 0;
+            Color day = th.Night ? new Color(0.25f, 0.3f, 0.55f, 0.55f) : new Color(0.85f, 0.93f, 1f, 0.7f);
+            float ez = HallMinZ + 0.15f;
+            k.Box(new Vector3(0, 3.1f, ez), new Vector3(9.6f, 0.4f, 0.4f), frame);
+            k.Box(new Vector3(-4.7f, 1.5f, ez), new Vector3(0.3f, 3.0f, 0.4f), frame);
+            k.Box(new Vector3(4.7f, 1.5f, ez), new Vector3(0.3f, 3.0f, 0.4f), frame);
+            for (int i = 0; i < 4; i++)
+            {
+                float x = -3.45f + i * 2.3f;
+                k.Box(new Vector3(x, 1.45f, ez + 0.02f), new Vector3(2.1f, 2.85f, 0.06f), day);
+                k.Box(new Vector3(x + (i % 2 == 0 ? 0.8f : -0.8f), 1.2f, ez + 0.12f), new Vector3(0.06f, 0.6f, 0.06f), C(0xC8CCD2));
+                k.Box(new Vector3(x, 1.45f, ez + 0.08f), new Vector3(0.08f, 2.85f, 0.04f), frame);
+            }
+            k.Box(new Vector3(0, 0.006f, HallMinZ + 2.2f), new Vector3(6f, 0.012f, 3f), new Color(0.2f, 0.2f, 0.22f, 0));
+            k.Box(new Vector3(0, 3.9f, ez + 0.05f), new Vector3(9.8f, 1.2f, 0.25f), Color.Lerp(wall, Color.black, th.Night ? 0.7f : 0.4f));
+            Color exitGlow = C(0xFF3030, 0.9f);
+            k.Box(new Vector3(3.6f, 3.35f, ez + 0.3f), new Vector3(0.7f, 0.28f, 0.1f), exitGlow);
+            k.Build("South Wall", Root, false);
+            MakeText(Root, mall.Name.ToUpperInvariant(), new Vector3(0, 3.95f, ez + 0.2f), face, 0.55f, C(th.NeonA), 1.6f + th.NeonStrength * 0.6f, SignFontAlt);
+            MakeText(Root, "EXIT", new Vector3(3.6f, 3.35f, ez + 0.37f), face, 0.18f, Color.white, 1.8f, SignFont);
+            MakeText(Root, "WELCOME", new Vector3(0, 0.02f, HallMinZ + 2.2f), Quaternion.Euler(90, 180, 0), 0.45f, new Color(0.7f, 0.7f, 0.72f), 0.6f, SignFont);
+        }
+
+        void BuildCeiling(ThemeDef th)
+        {
+            var k = new MeshKit();
+            Color ceil = C(th.Ceiling), beam = Color.Lerp(C(th.Ceiling), Color.black, 0.25f);
+            beam.a = 0;
+            float w = HallMaxX - HallMinX, d = HallMaxZ - HallMinZ, cz = (HallMinZ + HallMaxZ) / 2;
+            const float sky = 13f;   // skylight half-size, centred on the fountain
+            // ceiling slab around a square skylight opening
+            k.Box(new Vector3(0, CeilingY + 0.2f, (HallMaxZ + sky) / 2 + 0.5f), new Vector3(w, 0.4f, HallMaxZ - sky - 1), ceil);
+            k.Box(new Vector3(0, CeilingY + 0.2f, (HallMinZ - sky) / 2 + 0.5f), new Vector3(w, 0.4f, -HallMinZ - sky + 1), ceil);
+            k.Box(new Vector3((HallMinX - sky) / 2, CeilingY + 0.2f, 1), new Vector3(-HallMinX - sky, 0.4f, sky * 2), ceil);
+            k.Box(new Vector3((HallMaxX + sky) / 2, CeilingY + 0.2f, 1), new Vector3(HallMaxX - sky, 0.4f, sky * 2), ceil);
+            // coffer beams across the solid part
+            for (float x = HallMinX + 6; x < HallMaxX; x += 12) k.Box(new Vector3(x, CeilingY - 0.25f, cz), new Vector3(0.5f, 0.5f, d), beam);
+            // skylight: glowing glass panes in a steel grid, a little recessed
+            Color glass = th.Night ? new Color(0.12f, 0.15f, 0.32f, 0.35f) : new Color(0.78f, 0.9f, 1f, 0.55f);
+            k.Box(new Vector3(0, CeilingY + 1.2f, 1), new Vector3(sky * 2, 0.1f, sky * 2), glass);
+            Color steel = new Color(0.35f, 0.37f, 0.4f, 0);
+            for (int i = 0; i <= 6; i++)
+            {
+                float t = -sky + i * sky / 3;
+                k.Box(new Vector3(t, CeilingY + 1.1f, 1), new Vector3(0.2f, 0.2f, sky * 2), steel);
+                k.Box(new Vector3(0, CeilingY + 1.1f, 1 + t), new Vector3(sky * 2, 0.2f, 0.2f), steel);
+            }
+            // light well walls
+            k.Box(new Vector3(0, CeilingY + 0.7f, 1 + sky), new Vector3(sky * 2, 1.0f, 0.2f), ceil);
+            k.Box(new Vector3(0, CeilingY + 0.7f, 1 - sky), new Vector3(sky * 2, 1.0f, 0.2f), ceil);
+            k.Box(new Vector3(sky, CeilingY + 0.7f, 1), new Vector3(0.2f, 1.0f, sky * 2), ceil);
+            k.Box(new Vector3(-sky, CeilingY + 0.7f, 1), new Vector3(0.2f, 1.0f, sky * 2), ceil);
+            // shadows off so the sun still lights the hall through the "glass"
+            k.Build("Ceiling", Root, false);
         }
 
         void BuildLighting(ThemeDef th)
@@ -268,6 +399,12 @@ namespace WishExtractor.View
                 k.Cylinder(new Vector3(x, BalconyY - 0.7f, BalconyZ + 0.6f), 0.72f, 0.3f, 16, trim);
             }
             k.Build("Balcony", Root);
+            ColBox(new Vector3(0, BalconyY - 0.3f, BalconyZ + depth / 2), new Vector3(HallMaxX - HallMinX, 0.6f, depth), Quaternion.identity, "Balcony");
+            // front rail, with a gap where the escalator arrives
+            float gapA = EscalatorX - 1.4f, gapB = EscalatorX + 1.4f;
+            ColBox(new Vector3((HallMinX + gapA) / 2, BalconyY + 0.55f, BalconyZ), new Vector3(gapA - HallMinX, 1.1f, 0.2f), Quaternion.identity, "Rail");
+            ColBox(new Vector3((gapB + HallMaxX) / 2, BalconyY + 0.55f, BalconyZ), new Vector3(HallMaxX - gapB, 1.1f, 0.2f), Quaternion.identity, "Rail");
+            for (int i = -2; i <= 2; i++) ColCapsule(new Vector3(i * 13.5f, 8.5f, BalconyZ + 0.6f), 0.6f, 17f);
             // big hanging banner with the mall name
             var bn = new MeshKit();
             Color bannerCol = C(th.Accent);
@@ -330,6 +467,7 @@ namespace WishExtractor.View
                 k.Cylinder(c + Vector3.up * 0.92f, 2.0f, 0.08f, 20, trim);
                 k.Cylinder(c + Vector3.up * 0.93f, 1.7f, 0.04f, 20, soil);
                 Palm(k, c + Vector3.up * 0.9f, 5.5f + (float)rng.NextDouble() * 1.5f, trunk, leaf, 6 + (float)rng.NextDouble() * 6);
+                ColRound(c + Vector3.up * 0.48f, 2.0f, 0.96f);
             }
             k.Build("Planters", Root);
         }
@@ -340,10 +478,18 @@ namespace WishExtractor.View
             Color steel = new Color(0.62f, 0.64f, 0.68f, 0), dark = new Color(0.18f, 0.18f, 0.2f, 0);
             Color glow = C(th.NeonB);
             glow.a = 0.7f * th.NeonStrength;
-            Vector3 bottom = new Vector3(-29.5f, 0, -2f), top = new Vector3(-29.5f, BalconyY, BalconyZ - 1f);
+            Vector3 bottom = new Vector3(EscalatorX, 0, -2f), top = new Vector3(EscalatorX, BalconyY, BalconyZ - 1f);
             Vector3 d = top - bottom;
             float len = d.magnitude;
             var rot = Quaternion.LookRotation(d.normalized, Vector3.up);
+            // walkable ramp up to the balcony, a little longer than the steps so it meets the slab
+            {
+                Vector3 cb = new Vector3(EscalatorX, -0.25f, -2.6f), ct = new Vector3(EscalatorX, BalconyY - 0.25f, BalconyZ + 0.6f);
+                Vector3 cd = ct - cb;
+                ColBox((cb + ct) / 2, new Vector3(2.3f, 0.5f, cd.magnitude), Quaternion.LookRotation(cd.normalized, Vector3.up), "Escalator");
+                ColBox((bottom + top) / 2 + rot * new Vector3(-1.25f, 0.6f, 0), new Vector3(0.15f, 1.3f, len), rot, "Escalator Rail");
+                ColBox((bottom + top) / 2 + rot * new Vector3(1.25f, 0.6f, 0), new Vector3(0.15f, 1.3f, len), rot, "Escalator Rail");
+            }
             k.Push((bottom + top) * 0.5f, rot);
             k.Box(new Vector3(0, -0.3f, 0), new Vector3(2.4f, 0.6f, len), dark);
             k.Box(new Vector3(-1.25f, 0.4f, 0), new Vector3(0.15f, 1.2f, len), steel);
@@ -376,6 +522,7 @@ namespace WishExtractor.View
                 k.Box(new Vector3(-1f, 0.24f, 0), new Vector3(0.08f, 0.48f, 0.6f), metal);
                 k.Box(new Vector3(1f, 0.24f, 0), new Vector3(0.08f, 0.48f, 0.6f), metal);
                 k.Pop();
+                ColBox(s + new Vector3(0, 0.55f, 0), new Vector3(2.4f, 1.1f, 0.75f), Quaternion.Euler(0, ang, 0), "Bench");
             }
             k.Build("Benches", Root);
         }
@@ -398,6 +545,7 @@ namespace WishExtractor.View
                     k.Tube(new Vector3(0, 0.6f, 0), new Vector3(0, 2.6f, 0), 0.05f, 6, C(0xC8C8C8));
                     k.Box(new Vector3(0, 0.9f, -0.62f), new Vector3(0.5f, 0.4f, 0.1f), C(0xFFD34D, 0.6f));
                     k.Pop();
+                    ColBox(new Vector3(24, 0.8f, 3), new Vector3(1.6f, 1.6f, 1.6f), Quaternion.Euler(0, -120, 0), "Kiddie Ride");
                     k.Push(new Vector3(-12, 0, -12), Quaternion.Euler(0, 20, 0));
                     k.Box(new Vector3(0, 0.55f, 0.18f), new Vector3(0.7f, 1.1f, 0.04f), C(0xFFD000));
                     k.Box(new Vector3(0, 0.55f, -0.18f), new Vector3(0.7f, 1.1f, 0.04f), C(0xFFD000));
@@ -417,6 +565,7 @@ namespace WishExtractor.View
                         k.Box(new Vector3(0, 2.1f, -0.5f), new Vector3(1.3f, 0.25f, 0.1f), C(0xFFE066, 0.9f));
                         k.Box(new Vector3(0, 0.95f, -0.62f), new Vector3(1.2f, 0.12f, 0.35f), C(0x222222));
                         k.Pop();
+                        ColBox(p + new Vector3(0, 1.1f, 0), new Vector3(1.1f, 2.2f, 1.4f), Quaternion.identity, "Arcade");
                     }
                     MakeText(Root, "ARCADE ZONE", new Vector3(-31, 3.2f, -8.5f), Quaternion.Euler(0, -90, 0), 0.7f, C(0xFF3FD0), 2.6f, SignFontAlt);
                     {
@@ -479,6 +628,7 @@ namespace WishExtractor.View
                             k.Tube(new Vector3(0.7f, 1.0f, 0), new Vector3(0.75f, 1.8f, 0), 0.04f, 6, C(0xC0C0C0));
                             k.Sphere(new Vector3(0.75f, 1.85f, 0), 0.1f, 4, 6, C(0xFF3048, 0.5f));
                             k.Pop();
+                            ColBox(p + new Vector3(0, 1f, 0), new Vector3(1.0f, 2.0f, 1.3f), Quaternion.identity, "Slot");
                         }
                     {
                         var ch = new MeshKit().Glossy(true);

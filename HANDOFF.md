@@ -1,12 +1,52 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-27 (first build session)._
+_Last updated 2026-09-27 (session 2, stopped early in Milestone 1 at Nico's request)._
 
-## NEXT: first-person pivot
+## NEXT: first-person pivot — M1 done (session 3), continuing with M2
 
 Nico wants the game reworked into a first-person, Find The Needle–style factory game with NPCs throwing
-coins into the fountain. Plan: `PIVOT_FPS.md`. Ready-to-paste session prompt: `NEXT_SESSION_PROMPT.md`.
-Everything below describes the current (v1, overhead auto-clicker) build.
+coins into the fountain. Plan and confirmed decisions: `PIVOT_FPS.md`. Session prompt: `NEXT_SESSION_PROMPT.md`.
+
+**Git:** nested repo in this folder, baseline commit `96a8f81` = complete v1. Commit after each verified
+milestone (authorized by Nico).
+
+**M1 (verified, committed):** first-person controller (`View/FirstPerson.cs`, injectable `FPInput`),
+view-model hands (`Hands.cs`), instanced loose items (`ItemRenderer.cs`), COIN-O-MATIC 3000 (`Kiosk.cs`),
+WE/Water shader, south wall + skylight ceiling + colliders (`WorldBuilder`), water/rim/stepping-stone/crust
+colliders (`FountainView`), FP HUD, Core `Sim` v2 (loose items, carry, deposit, tech levels), SaveData v2.
+Tour: 18 screenshots; uitest 28/28; loadtest restores pose, cash, carry tier and loose items.
+Lessons: a lit mesh at exactly zero scale makes NaN pixels that bloom turns into black squares; world
+text colours must have alpha 1 (`Mats.NewText` now forces it — v1's coloured signs were invisible);
+the player sits on the Ignore Raycast layer so the aim ray doesn't hit its own capsule.
+
+Session 2 notes (kept for history):
+- Done (session 2):
+  - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/
+    TechBranch, ObjectiveDef with a flat reward. MallDef now has CrustScoops, ValueScale, LootTypes and
+    GunkTypes.
+  - `Core/Balance.cs` rewritten (tosses, tier curve, wishes, crust, deposit rates).
+  - `Core/ContentWorld.cs` added: item registry (9 coin tiers, 19 oddities, per-mall loot, gunk and relic
+    types, processed goods), 10 carry tiers, 7 grab tools, 6 dig tools, receipt and "hands full" jokes.
+  - `Core/ContentMalls.cs` trimmed: v1 fitted bounds gone, CrustScoops per mall (placeholders), Crestview
+    event now boosts tosses.
+- Still to do before M1 compiles:
+  - `Content.cs`: after BuildMalls, call BuildCoins, BuildOddities and BuildMallTypes; expose the `types`
+    list as an `Items` array; add Carry, GrabTools and DigTools; drop Machines, Tools, Upgrades and
+    HeadOffice.
+  - `ContentMeta.cs`: achievements and objectives against the new Sim.
+  - `SaveData.cs` v2: player pose, carried and loose items with a type-id table, tech levels, stats,
+    mouse sensitivity and FOV settings.
+  - `Sim.cs` v2: loose items, toss scheduler, pickup, deposit, crust.
+  - Remove the v1-only files with `git rm`, including their `.meta`: SimShop, ContentShop, MachineVisuals,
+    Stations, CameraRig, Clickables (keep RarityColors), ShopPanel.
+  - Rewrite GameView, HUD, Modals and GameRoot (FP autotour, uitest and loadtest).
+  - New view code: first-person controller, first-person hands, instanced item renderer, COIN-O-MATIC kiosk,
+    water shader.
+  - WorldBuilder: south wall, ceiling, colliders. FountainView: water, crust collider, ramp.
+  - Stub `Tools/BalanceSim/Program.cs` against the new Core so it compiles until M6.
+- Note: `ContentMalls.cs` was edited once with a PowerShell `WriteAllText`. Use Write/Edit for file changes.
+
+Everything below describes the v1 (overhead auto-clicker) build at commit `96a8f81`.
 
 ## State
 

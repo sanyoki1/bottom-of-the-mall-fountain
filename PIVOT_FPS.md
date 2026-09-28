@@ -70,8 +70,48 @@ Performance: thousands of coins → instanced rendering (Graphics.RenderMeshInst
 5. Processing chain + crust digging/strata/prestige to next mall (port v1 content).
 6. Humour/juice pass (NPC archetypes, receipts, barks, sounds), balance bot + fit to ≥ 24 h, docs.
 
-## Decisions to confirm with Nico at session start
+## Decisions (confirmed by Nico, 2026-09-27; do not re-ask)
 
-- Keep v1 (auto-clicker) playable as a mode, or replace it? (Recommend: replace; keep code in git history.)
-- Co-op? (Recommend: no, single player.)
-- Hazards (security guard, rival diver)? (Recommend: yes, light, toggleable.)
+- **Replace v1.** v1 lives on only in git history (baseline commit `96a8f81`).
+- **Single player.**
+- **Hazards always on**: security guard and rival diver, no settings toggle. Keep them light and funny.
+- **Git**: this folder is now its own nested repo (branch `master`). Nico authorized **one commit after each
+  verified milestone** (build + tour + uitest pass). WIP or unverified states still need his OK.
+
+## Spec decided in session 2 (build on this, don't re-derive)
+
+- **Modest numbers.** No v1-style ×1e4 cost scale per mall. `MallDef.ValueScale` (default 1) stays as a
+  tunable for the balance bot. Malls differ by crust size (`CrustScoops`), content and Head Office perks.
+- **Tosses**: a global coin ladder: penny, nickel, dime, quarter, loonie, toonie, silver dollar, gold coin,
+  diamond, each unlocked at a Wishability threshold. Then 19 oddities (`ContentWorld.cs`). The tier weight
+  is a Gaussian around mu = Wishability × `TierPerWish` (+ NPC archetype bias).
+- **Crust = the finite goal per mall.** Stratum 0 is loose: shovelling it yields coins directly. Deeper
+  strata yield gunk chunks. Gunk deposits at 10% of value, rinsed ("washed") at 35%, sorted at 100%. This is
+  v1's Dredge → Dissolve → Sort → Sell made physical. Relics come from sorting.
+- **Item values**: each item stores its base value (stratum and mall included) when it's created.
+  Multipliers apply at deposit.
+- **Carry capacity counts physical items.** Bundles (roll = 50 coins, bag = 1,000, pallet = 40,000) let carry
+  and belts scale.
+- **Two tool ladders**: grab tools (reach, area, rate) and dig tools (scoops per swing). Hotbar: [1] grab,
+  [2] dig, [3] build (M4).
+- **Layout**: player spawns at (0, 0, −18) facing the fountain. COIN-O-MATIC 3000 kiosk at (−6.5, 0, −15).
+  Maintenance Terminal (laptop on a folding table) at (6.5, 0, −15).
+- **v1's hall has no south wall and no ceiling** (the camera was overhead). FP needs both: a south wall with
+  storefronts and the mall entrance, and a skylight ceiling with shadows off so the sun still lights the hall.
+- **Colliders** (v1 had none): floor = MeshCollider of the grout annulus; rim and basin wall; coarse crust
+  heightfield MeshCollider rebuilt when the depth changes; capsule for the centrepiece; boxes for walls,
+  planters, benches, balcony, escalator ramp and props.
+- **Water** is a shallow layer (0.4 m) that follows the crust down. It needs a new transparent `WE/Water`
+  shader. Wading multiplies speed by 0.72.
+- **Getting in and out**: stepping stones outside the rim, and a spiral scaffold ramp along the inner wall
+  that lengthens as the crust sinks.
+- **Coins read at about 10 cm** in first person (Loot mesh scale 0.36–0.6).
+- **Loose items live in Core** (x, z, and an airborne → sinking → resting state driven by timers). The view
+  derives heights from `FountainView.HeightAt`.
+- **Rendering**: `Graphics.RenderMeshInstanced` per item type. Materials are created at runtime, so set
+  `m_InstancingStripping: 2` (Keep All) in `ProjectSettings/GraphicsSettings.asset`, and check that `WE/Lit`
+  gets instancing variants (read the player log for errors).
+- **Factory (M4) lives in Core** as a pure-data grid sim: 1 m cells, belts with a direction, machines with
+  footprints, ports and buffers, and a global power budget. That way BalanceSim can run it.
+- **First-person input** goes through an injectable input struct, so `-uitest` can walk, aim and interact
+  through the real code path. The project uses the legacy Input Manager (`activeInputHandler: 0`).

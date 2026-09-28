@@ -4,38 +4,37 @@ using System;
 
 namespace WishExtractor.Core
 {
-    public enum Stage { Dig = 0, Wash = 1, Sort = 2 }
-
     public enum Rarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4 }
 
-    public enum ItemShape { Coin, Wad, Stick, Paper, Gem, Chip, Cube }
-
-    public enum UpgradeKind
+    /// <summary>Procedural mesh used for an item (see View/Loot.cs).</summary>
+    public enum ItemShape
     {
-        MachineMult,    // Target = machine id, Value = multiplier
-        StageMult,      // Target = stage name, Value = multiplier
-        AllRateMult,    // Value = multiplier on every machine
-        ValueMult,      // Value = multiplier on all sale value
-        ClickMult,      // Value = multiplier on tool click power
-        ClickPctOfDig,  // Value = fraction of auto dig/s added to every click
-        ComboMax,       // Value = added to the combo multiplier cap
-        WishFreq,       // Value = multiplier on wish spawn rate
-        WishValue,      // Value = multiplier on wish value
-        WishLife,       // Value = multiplier on wish lifetime
-        RelicRate,      // Value = multiplier on relic find rate
-        RelicValue,     // Value = multiplier on relic value
-        GoldenFreq,     // Value = multiplier on golden penny frequency
-        GoldenPower,    // Value = multiplier on golden penny effect strength
-        AutoSell,       // unlocks automatic selling of sorted loot
-        ScrapRate,      // Value = added to raw/washed dump rates
-        CompressorEff,  // Value = added capture chance for the wish compressor
+        Coin, Wad, Stick, Paper, Gem, Chip, Cube,
+        // v2 shapes
+        Chunk, Roll, Bag, Bar, Brick, Keys, Teeth, Phone, Ball, Toaster, Fish, Trophy, Shoe, Wallet, Duck, Vending, Diamond
     }
 
-    public enum HOKind
+    /// <summary>What an item is, for routing, processing and value rules.</summary>
+    public enum ItemCat { Coin, Oddity, Gunk, Washed, Loot, Relic, Roll, Bag, Bar, Brick, Junk, Pallet }
+
+    /// <summary>Every physical thing that can lie in the fountain, sit on a belt or be carried.</summary>
+    public sealed class ItemType
     {
-        SeedMoney, StartTool, RateMult, ValueMult, WishLife, WishValue, GoldenFreq,
-        OfflineHours, AutoSellStart, VeteranCrew, ScrapRate, RelicRate, ComboMax,
-        CostDiscount, GoldenPower, ClickMult, OfflineEff, CompressorStart
+        public int Index;
+        public string Id;
+        public string Name;
+        public string Desc;
+        public ItemCat Cat;
+        public ItemShape Shape;
+        public uint Color;
+        public float Scale = 1f;       // visual scale of the Loot mesh
+        public double BaseValue;       // Crestview dollars per item before multipliers (tosses, loot)
+        public double Units = 1;       // coins represented (rolls, bags, pallets)
+        public int Tier = -1;          // coin tier (tosses), -1 otherwise
+        public int Mall = -1;          // mall index for mall-specific loot/relic/gunk types
+        public int Stratum = -1;       // gunk: stratum it came from
+        public Rarity Rarity;          // oddities / relics
+        public bool Heavy;             // takes two carry slots
     }
 
     public sealed class ItemKind
@@ -54,8 +53,8 @@ namespace WishExtractor.Core
         public string Name;
         public string Flavor;
         public double StartFrac;   // depth fraction where this layer begins
-        public double ValueMult;   // multiplies the mall's base item value
-        public bool Loose;         // loose layers skip washing and sorting
+        public double ValueMult;   // multiplies the loot value of this layer
+        public bool Loose;         // loose layers shovel straight into coins (no washing)
         public uint Color;         // crust tint
         public uint Speck;         // glint / debris tint
         public StratumDef(string name, double start, double valueMult, bool loose, uint color, uint speck, string flavor)
@@ -82,6 +81,7 @@ namespace WishExtractor.Core
         public ItemShape Shape;
         public uint Color;
         public int MallIndex;
+        public int ItemType;           // registry index of this relic's physical item
         public RelicDef(Rarity r, double value, string name, string desc, ItemShape shape, uint color)
         { Rarity = r; BaseValue = value; Name = name; Desc = desc; Shape = shape; Color = color; }
     }
@@ -106,7 +106,7 @@ namespace WishExtractor.Core
     {
         public string Name;
         public string Desc;
-        public string Effect; // "dig", "wish", "relic", "sell", "golden", "all"
+        public string Effect; // "toss", "wish", "relic", "sell", "golden", "all"
         public double Mult;
         public MallEventDef(string name, string effect, double mult, string desc) { Name = name; Effect = effect; Mult = mult; Desc = desc; }
     }
@@ -118,15 +118,12 @@ namespace WishExtractor.Core
         public string Tagline;
         public string Intro;
         public double DepthFeet;
-        public double TotalItems;
-        public double[] Bounds;        // cumulative items at the top of each stratum; last entry = TotalItems
-        public double[] RemodelBounds; // the same for the first Remodel lap (later laps grow from it)
-        public double CostScale = 1;   // every price in this mall is (Crestview price) × CostScale
-        public double Generosity = 1;  // sale value per item relative to Crestview, after scaling
-        public double ContractRate;    // multiplier on every sale in this mall (derived in BuildMalls)
+        public double CrustScoops;     // total crust work (scoops) from the top to bare concrete
+        public double[] Bounds;        // cumulative scoops at the top of each stratum; last entry = CrustScoops
+        public double ValueScale = 1;  // every value and price in this mall is (Crestview amount) × ValueScale
         public int LuckyPennies;       // prestige reward for clearing it
         public StratumDef[] Strata;
-        public ItemKind[] Items;
+        public ItemKind[] Items;       // crust loot
         public WishDef[] Wishes;
         public RelicDef[] Relics;
         public string TreasureName;
@@ -134,6 +131,8 @@ namespace WishExtractor.Core
         public MallEventDef Event;
         public ThemeDef Theme;
         public double BaseEV;          // computed from Items
+        public int[] LootTypes;        // registry index per Items entry
+        public int[] GunkTypes;        // registry index per stratum
 
         public void ComputeEV()
         {
@@ -143,67 +142,88 @@ namespace WishExtractor.Core
         }
     }
 
-    public sealed class MachineDef
+    /// <summary>A rung of the carry ladder: how many items one trip holds.</summary>
+    public sealed class CarryDef
     {
         public string Id;
         public string Name;
         public string Desc;
-        public Stage Stage;
-        public int Tier;
-        public double BaseCost;
-        public double BaseRate;       // items per second per unit
-        public double CostGrowth = 1.15;
-        public int UnlockMall;        // first mall (0-based) it can be built in
-        public int UnlockStratum;     // stratum in the unlock mall that reveals it
-        public bool IsCompressor;
-        public bool IsMega;           // single-structure global boosters
-        public string MegaEffect;     // "rate", "value", "wish"
-        public double MegaPerLevel;
-        public int MaxCount = int.MaxValue;
+        public int Capacity;
+        public double Cost;
+        public float SpeedMult = 1f;    // wheelbarrows and carts slow you down
+        public bool NoJump;             // pushing a cart
+        public float AutoRadius;        // shop-vac: vacuums items within this radius while held
         public int Index;
     }
 
+    /// <summary>A pickup tool: reach, grab area, grab rate, crust digging.</summary>
     public sealed class ToolDef
     {
         public string Id;
         public string Name;
         public string Desc;
         public double Cost;
-        public double Power;          // items per click
+        public float Reach = 2.6f;      // metres from the eye
+        public float Area;              // grab radius at the aim point (0 = single item)
+        public float Rate = 4f;         // grabs per second while held
+        public double DigPower;         // crust scoops per swing (0 = can't dig)
         public int Index;
     }
 
-    public sealed class UpgradeDef
+    /// <summary>Who throws what into the fountain.</summary>
+    public sealed class ArchetypeDef
+    {
+        public string Id;
+        public string Name;
+        public uint Shirt, Pants, Hat, Skin;
+        public bool HardHat, Headband;
+        public float Scale = 1f;
+        public double MinWish;          // wishability needed before they show up
+        public double Weight = 1;
+        public double TierBias;         // + shifts their tosses toward richer tiers
+        public string[] Oddities;       // oddity item ids they sometimes throw
+        public string[] Barks;          // what they say while throwing
+    }
+
+    public enum TechKind
+    {
+        Carry,          // sets carry tier = Value
+        Tool,           // sets tool tier = Value
+        Wishability,    // + Value wishability per level
+        ValueMult,      // × (1 + Value) sale value per level
+        TossRate,       // × (1 + Value) toss frequency per level
+        WalkSpeed,      // × (1 + Value) walk speed per level
+        Reach,          // + Value metres reach per level
+        GrabRate,       // × (1 + Value) grab speed per level
+        WishLife,       // × (1 + Value) wish orb lifetime per level
+        Unlock,         // unlocks a buildable (Target) or feature
+        MachineSpeed,   // × (1 + Value) speed for buildables in Target category ("" = all)
+        BeltSpeed,      // belt tier = level
+        DepositMult,    // × (1 + Value) for a category (Target = ItemCat name)
+        GuardFine,      // × (1 - Value) security fines per level
+    }
+
+    public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security }
+
+    /// <summary>A node on the Maintenance Terminal's tech tree. Levelled nodes repeat with growing cost.</summary>
+    public sealed class TechDef
     {
         public string Id;
         public string Name;
         public string Desc;
-        public double Cost;
-        public UpgradeKind Kind;
+        public TechBranch Branch;
+        public TechKind Kind;
         public string Target;
         public double Value;
-        // requirements
-        public string ReqMachine;
-        public int ReqCount;
-        public int ReqMall = 0;       // must be in this mall or later
-        public bool MallOnly;         // themed upgrade: only sold inside ReqMall (and its remodels)
-        public int ReqStratum = -1;   // reached this stratum in the current mall (only if ReqMall == current)
-        public int ReqTool = -1;
+        public double Cost;             // first level, Crestview dollars (× mall ValueScale)
+        public double CostGrowth = 2.2;
+        public int MaxLevel = 1;
+        public bool WishTokens;         // paid in Wish Tokens instead of cash
+        public string[] Requires = Array.Empty<string>();
+        public int UnlockMall;          // first mall where it can appear
+        public int Col, Row;            // layout position in the tree view
         public int Index;
-    }
-
-    public sealed class HeadOfficeDef
-    {
-        public string Id;
-        public string Name;
-        public string Desc;
-        public HOKind Kind;
-        public double Value;          // effect per level
-        public int MaxLevel;
-        public double BaseCost;       // lucky pennies
-        public double CostGrowth;
-        public int Index;
-        public double CostAt(int level) { return Math.Ceiling(BaseCost * Math.Pow(CostGrowth, level)); }
+        public double CostAt(int level, double scale) => Math.Round(Cost * Math.Pow(CostGrowth, level) * (WishTokens ? 1 : scale), WishTokens ? 0 : 2);
     }
 
     public sealed class AchievementDef
@@ -222,10 +242,8 @@ namespace WishExtractor.Core
         public string Text;
         public string Hint;
         public Func<Sim, bool> Check;
-        public double RewardSeconds;  // reward = max(flat, income * seconds)
-        public double RewardFlat;
-        public string Focus;          // shop item id the UI can highlight
-        public ObjectiveDef(string id, string text, string hint, double flat, double seconds, string focus, Func<Sim, bool> check)
-        { Id = id; Text = text; Hint = hint; RewardFlat = flat; RewardSeconds = seconds; Focus = focus; Check = check; }
+        public double Reward;
+        public ObjectiveDef(string id, string text, string hint, double reward, Func<Sim, bool> check)
+        { Id = id; Text = text; Hint = hint; Reward = reward; Check = check; }
     }
 }

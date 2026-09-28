@@ -82,7 +82,8 @@ namespace WishExtractor.View
         {
             var m = new Material(Find("WE/Text")) { name = "WE Text" };
             m.mainTexture = font.material.mainTexture;
-            m.SetColor("_Color", color);
+            // callers pass MeshKit.Hex colours (alpha 0 = matte for WE/Lit); text alpha must be opaque
+            m.SetColor("_Color", new Color(color.r, color.g, color.b, 1f));
             m.SetFloat("_Intensity", intensity);
             return m;
         }
@@ -135,6 +136,15 @@ namespace WishExtractor.View
                 }
                 return water;
             }
+        }
+
+        /// <summary>The fountain's transparent water surface (its own instance per mall so it can be tinted).</summary>
+        public static Material NewFountainWater(Color tint)
+        {
+            var m = new Material(Find("WE/Water")) { name = "WE Fountain Water" };
+            m.mainTexture = TexKit.Ripples;
+            m.SetColor("_Color", tint);
+            return m;
         }
 
         public static Material ScrollCustom(Texture tex, Color color, float speed, float glowAmount)

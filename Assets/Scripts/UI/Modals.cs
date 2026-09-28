@@ -226,22 +226,21 @@ namespace WishExtractor.UI
             Section(list, "This contract", sim.Mall.Name, Pal.Accent);
             Stat("Time in this mall", Fmt.Time(S.runTime));
             Stat("Earned in this mall", Fmt.Money(S.runCash));
-            Stat("Depth", $"{Fmt.Feet(sim.DepthFeet)} of {Fmt.Feet(sim.Mall.DepthFeet)}");
-            Stat("Machines owned", Fmt.Int(sim.TotalMachines));
-            Stat("Upgrades owned", Fmt.Int(sim.UpgradesOwnedCount));
-            Stat("Dig / Wash / Sort", $"{Fmt.Rate(sim.DigRateNow)}  ·  {Fmt.Rate(sim.WashRateNow)}  ·  {Fmt.Rate(sim.SortRateNow)}");
+            Stat("Carrying with", $"{sim.CarryDef.Name} ({Fmt.Int(sim.CarryCapacity)} items)");
+            Stat("Grabbing with", sim.Grab.Name);
+            Stat("Items lying in the fountain", Fmt.Int(sim.Loose.Count));
+            Stat("Tech levels bought", Fmt.Int(sim.TechLevelsOwned));
             Section(list, "All time", "", Pal.Gold);
             Stat("Total play time", Fmt.Time(S.playTime));
             Stat("Lifetime earnings", Fmt.Money(S.lifetimeCash));
-            Stat("Items dug", Fmt.Num(S.totalDug));
-            Stat("Clicks", Fmt.Int(S.clicks));
-            Stat("Best combo", $"×{S.bestCombo:0.0}");
-            Stat("Wishes caught / compressed / seen", $"{Fmt.Int(S.wishesCaught)} / {Fmt.Int(S.wishesCompressed)} / {Fmt.Int(S.wishesSeen)}");
+            Stat("Items picked up / deposited", $"{Fmt.Int(S.itemsPicked)} / {Fmt.Int(S.itemsDeposited)}");
+            Stat("Trips to the COIN-O-MATIC", Fmt.Int(S.deposits));
+            Stat("Biggest single deposit", Fmt.Money(S.biggestDeposit));
+            Stat("Distance walked", S.distance < 1000 ? $"{S.distance:0} m" : $"{S.distance / 1000:0.00} km");
+            Stat("Things tossed in by shoppers", Fmt.Int(S.tosses));
+            Stat("Wishes caught / seen", $"{Fmt.Int(S.wishesCaught)} / {Fmt.Int(S.wishesSeen)}");
             Stat("Relics found", Fmt.Int(S.relicsFound));
-            Stat("Golden pennies clicked", Fmt.Int(S.goldenClicked));
-            Stat("Mall rats caught", Fmt.Int(S.ratsCaught));
             Stat("Malls cleared", $"{S.maxMallCleared + 1} of {Content.Malls.Length}" + (S.remodelsDone > 0 ? $"  ·  {S.remodelsDone} remodels" : ""));
-            Stat("Biggest single sale", Fmt.Money(S.biggestSale));
             Stat("Lucky Pennies earned", Fmt.Num(S.lifetimeLP));
             Section(list, "Permanent value bonuses", "", Pal.Green);
             Stat("Achievements", $"+{Fmt.Num(sim.AchievementCount * Balance.AchievementBonus * 100)}%");
@@ -254,29 +253,36 @@ namespace WishExtractor.UI
 
         public void OpenSettings()
         {
-            const float w = 720, h = 760;
+            const float w = 720, h = 800;
             var c = Open("settings", w, h);
-            Title(c, "Settings", w, "WISH EXTRACTOR");
+            Title(c, "Paused", w, "WISH EXTRACTOR");
             CloseX(c, w);
-            float y = 110;
+            float y = 100;
             Slider(c, "Music", sim.S.musicVol, y, v => { sim.S.musicVol = v; OnVolumes?.Invoke(sim.S.musicVol, sim.S.sfxVol); });
-            y += 64;
+            y += 54;
             Slider(c, "Sound effects", sim.S.sfxVol, y, v => { sim.S.sfxVol = v; OnVolumes?.Invoke(sim.S.musicVol, sim.S.sfxVol); });
-            y += 72;
+            y += 54;
+            Slider(c, "Mouse speed", Mathf.InverseLerp(0.2f, 3f, sim.S.mouseSens), y, v => { sim.S.mouseSens = Mathf.Lerp(0.2f, 3f, v); OnSettingsChanged?.Invoke(); });
+            y += 54;
+            Slider(c, "Field of view", Mathf.InverseLerp(60f, 100f, sim.S.fov), y, v => { sim.S.fov = Mathf.Round(Mathf.Lerp(60f, 100f, v)); OnSettingsChanged?.Invoke(); });
+            y += 62;
+            Choice(c, "Invert mouse Y", new[] { "Off", "On" }, sim.S.invertY ? 1 : 0, y, i => { sim.S.invertY = i == 1; OnSettingsChanged?.Invoke(); });
+            y += 54;
+            Choice(c, "Head bob", new[] { "Off", "On" }, sim.S.headBob ? 1 : 0, y, i => { sim.S.headBob = i == 1; OnSettingsChanged?.Invoke(); });
+            y += 54;
             Choice(c, "Numbers", new[] { "1.23M", "1.23e6" }, sim.S.notation, y, i => { sim.S.notation = i; Fmt.Notation = i; OnSettingsChanged?.Invoke(); });
-            y += 62;
+            y += 54;
             Choice(c, "Graphics", new[] { "Low", "Medium", "High" }, sim.S.quality, y, i => { sim.S.quality = i; OnSettingsChanged?.Invoke(); });
-            y += 62;
+            y += 54;
             Choice(c, "Screen shake", new[] { "Off", "On" }, sim.S.screenShake ? 1 : 0, y, i => { sim.S.screenShake = i == 1; OnSettingsChanged?.Invoke(); });
-            y += 72;
+            y += 64;
             var help = UIKit.Label(c, "Help",
-                "<b>Controls</b>\nLeft click: dig, catch wishes, click golden pennies & rats, whack machines\n" +
-                "Hold left click on the crust: keep digging   ·   Space: sell pocket\n" +
-                "Right-drag or Q/E: orbit   ·   Scroll: zoom   ·   WASD / middle-drag: pan   ·   R: reset view\n" +
-                "1-4: shop tabs   ·   B: buy amount   ·   Tab: hide shop   ·   J: journal   ·   Esc: settings",
+                "<b>Controls</b>\nWASD: walk   ·   Mouse: look   ·   Shift: sprint   ·   Space: jump\n" +
+                "E or left click: pick up / deposit / use   ·   Hold left click: keep grabbing\n" +
+                "1-3: hotbar   ·   J: journal   ·   Esc: this menu",
                 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            help.rectTransform.TL(32, y, w - 64, 120);
-            y += 138;
+            help.rectTransform.TL(32, y, w - 64, 90);
+            y += 104;
             UIKit.Btn reset = null;
             reset = UIKit.Button(c, "Reset", "Reset save…", new Color(1f, 0.27f, 0.23f, 0.12f), Pal.Red, 15, () =>
             {
@@ -343,49 +349,6 @@ namespace WishExtractor.UI
 
         // ───────────────────────────── Offline / contract / intro / ending ─────────────────────────────
 
-        public void OpenOffline(OfflineReport rep)
-        {
-            const float w = 620, h = 400;
-            var c = Open("offline", w, h);
-            Title(c, "While you were away…", w, $"GONE FOR {Fmt.Time(rep.Seconds).ToUpperInvariant()}");
-            string pocket = rep.Pocket > 0 ? $"\n<b>{Fmt.Money(rep.Pocket)}</b> of loot waiting in your pocket. Sell it at the vending machine!" : "";
-            var body = UIKit.Label(c, "Body",
-                $"The crews kept digging at {Fmt.Pct(sim.OfflineEfficiency)} efficiency.\n\n" +
-                $"<b>{Fmt.Money(rep.Cash)}</b> earned{pocket}\n{Fmt.Num(rep.Dug)} items dredged\n{rep.Relics} relics found\n{rep.Wishes} wishes compressed into bricks",
-                17, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            body.rectTransform.TL(32, 100, w - 64, 200);
-            var ok = UIKit.Button(c, "OK", "Back to digging", Pal.Accent, Color.white, 17, Close);
-            ok.Rt.TL(w - 32 - 240, h - 32 - 50, 240, 50);
-        }
-
-        public void OpenContract()
-        {
-            const float w = 760, h = 520;
-            var mall = sim.Mall;
-            bool final = sim.IsFinalMall || sim.InRemodel;
-            var next = Content.Malls[(sim.S.mallIndex + 1) % Content.Malls.Length];
-            var c = Open("contract", w, h);
-            Title(c, "Bare concrete!", w, "CONTRACT COMPLETE");
-            CloseX(c, w);
-            var tr = UIKit.Card(c, "Treasure", new Color(1f, 0.96f, 0.84f, 1f), 20, false);
-            tr.TL(32, 100, w - 64, 120);
-            UIKit.Label(tr, "Crown", "♛", 40, Pal.Gold, TextAnchor.MiddleCenter, UIKit.Symbol).rectTransform.TL(16, 20, 64, 80);
-            UIKit.Label(tr, "Name", mall.TreasureName, 22, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold).rectTransform.TL(92, 18, w - 180, 30);
-            UIKit.Label(tr, "Desc", mall.TreasureDesc, 15, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true).rectTransform.TL(92, 50, w - 180, 64);
-            string nextText = final
-                ? "Sign a Remodel contract: every mall again, bigger, pricier and richer."
-                : $"Next contract: <b>{next.Name}</b>\n{next.Tagline}";
-            var body = UIKit.Label(c, "Body",
-                $"Head Office pays <b>{Fmt.Num(sim.PrestigeReward)} Lucky Pennies</b> and a permanent +{Fmt.Num(Balance.TreasureBonus * 100)}% value bonus for the treasure.\n\n{nextText}\n\n" +
-                "You keep Lucky Pennies, Head Office perks, the Wish Journal, relics and achievements. Cash, machines and upgrades reset.",
-                16, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            body.rectTransform.TL(32, 236, w - 64, 180);
-            var later = UIKit.Button(c, "Later", "Not yet", new Color(0, 0, 0, 0.06f), Pal.Ink2, 16, Close);
-            later.Rt.TL(32, h - 32 - 50, 160, 50);
-            var sign = UIKit.Button(c, "Sign", "Sign the contract  →", Pal.Gold, Color.white, 18, () => { Close(); OnSign?.Invoke(); });
-            sign.Rt.TL(w - 32 - 300, h - 32 - 50, 300, 50);
-        }
-
         public void OpenIntro(bool firstTime)
         {
             const float w = 780, h = 560;
@@ -396,26 +359,17 @@ namespace WishExtractor.UI
             tag.rectTransform.TL(32, 92, w - 64, 26);
             string body = mall.Intro + "\n\n";
             if (firstTime)
-                body += "<b>Dredge</b> the crust by clicking it.  <b>Dissolve</b> the syrup with washing machines.  <b>Sort</b> the treasure from the zinc.  <b>Sell</b> it at the greasy vending machine.  " +
-                        "Then buy bigger machines until the whole thing runs itself.\n\nCatch the glowing <b>True Wishes</b> that float up, click <b>Golden Pennies</b>, grab the <b>mall rat</b>, and dig all the way to bare concrete.";
+                body += "You are the new fountain maintenance contractor. Management says you can keep whatever you fish out. Management has not thought this through.\n\n" +
+                        "Hop over the rim, pick up coins <b>one at a time</b>, and carry them to the <b>COIN-O-MATIC 3000</b> by the entrance. " +
+                        "Buy bigger containers and better tools at the <b>Maintenance Terminal</b>, make the fountain prettier so shoppers throw in more (and weirder) things, " +
+                        "then build machines and conveyor belts until the whole thing runs itself.\n\n<b>WASD</b> walk  ·  <b>mouse</b> look  ·  <b>E / click</b> pick up and deposit  ·  <b>Esc</b> menu";
             else
-                body += $"New here: {NewInThisMall()}\n\nThe fountain is {Fmt.Feet(mall.DepthFeet)} deep. {mall.TreasureName} is waiting at the bottom.";
+                body += $"{sim.Mall.Wishes.Length} new wishes, {sim.Mall.Relics.Length} new relics and the '{sim.Mall.Event.Name}' event.\n\n" +
+                        $"The fountain is {Fmt.Feet(mall.DepthFeet)} deep. {mall.TreasureName} is waiting at the bottom.";
             var b = UIKit.Label(c, "Body", body, 17, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
             b.rectTransform.TL(32, 132, w - 64, 320);
-            var go = UIKit.Button(c, "Go", firstTime ? "Start digging" : "Let's dig", Pal.Accent, Color.white, 18, Close);
+            var go = UIKit.Button(c, "Go", firstTime ? "Clock in" : "Let's dive", Pal.Accent, Color.white, 18, Close);
             go.Rt.TL(w - 32 - 240, h - 32 - 52, 240, 52);
-        }
-
-        string NewInThisMall()
-        {
-            int m = sim.MallDefIndex;
-            var news = new List<string>();
-            foreach (var md in Content.Machines)
-                if (md.UnlockMall == m && m > 0) news.Add(md.Name);
-            news.Add($"{sim.Mall.Wishes.Length} new wishes and {sim.Mall.Relics.Length} new relics");
-            news.Add($"the '{sim.Mall.Event.Name}' event");
-            news.Add("10 themed upgrades you can only buy here");
-            return string.Join(", ", news) + ".";
         }
 
         public void OpenEnding()

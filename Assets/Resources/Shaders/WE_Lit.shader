@@ -19,6 +19,7 @@ Shader "WE/Lit"
         CGPROGRAM
         #pragma surface surf Standard vertex:vert addshadow
         #pragma target 3.0
+        #pragma multi_compile_instancing
 
         sampler2D _MainTex;
         fixed4 _Color;

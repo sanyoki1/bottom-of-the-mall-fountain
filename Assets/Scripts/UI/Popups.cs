@@ -88,7 +88,7 @@ namespace WishExtractor.UI
             var rt = UIKit.Card(root, "Toast", Pal.GlassStrong, 20);
             rt.anchorMin = rt.anchorMax = new Vector2(0, 0);
             rt.pivot = new Vector2(0, 0);
-            rt.sizeDelta = new Vector2(400, 66);
+            rt.sizeDelta = new Vector2(480, 66);
             var g = rt.gameObject.AddComponent<CanvasGroup>();
             g.blocksRaycasts = false;
             var dot = UIKit.Dot(rt, "Icon", d.color, 40);
@@ -96,9 +96,9 @@ namespace WishExtractor.UI
             var gl = UIKit.Label(dot.rectTransform, "G", d.glyph, 22, Color.white, TextAnchor.MiddleCenter, UIKit.Symbol);
             gl.rectTransform.Stretch();
             var t = UIKit.Label(rt, "Title", d.title, 18, Pal.Ink, TextAnchor.UpperLeft, UIKit.Semibold);
-            t.rectTransform.TL(64, 9, 326, 24);
+            t.rectTransform.TL(64, 9, 406, 24);
             var s = UIKit.Label(rt, "Detail", d.detail, 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            s.rectTransform.TL(64, 33, 326, 30);
+            s.rectTransform.TL(64, 33, 406, 30);
             toasts.Add(new ToastCard { Rt = rt, G = g, Life = d.life, Y = 120 });
         }
 

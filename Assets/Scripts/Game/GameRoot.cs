@@ -1,5 +1,6 @@
-// Entry point. Builds the camera, simulation, 3D view, UI and audio; routes input; turns sim
-// events into toasts, banners and sounds; autosaves; and runs the screenshot tour (-autotour).
+// Entry point. Builds the camera, simulation, 3D view, UI and audio; turns keyboard and mouse
+// into an FPInput for the first-person controller; turns sim events into sounds, receipts and
+// toasts; autosaves; and runs the test harnesses (-autotour, -uitest, -loadtest).
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -22,20 +23,15 @@ namespace WishExtractor.Game
         BloomFX bloom;
         AudioHub sfx;
         HUD hud;
-        ShopPanel shop;
         Popups pops;
         Modals modals;
         Canvas uiCanvas, popCanvas, modalCanvas;
-        RectTransform tooltipRt;
-        Text tooltipText;
-        UIKit.Btn shopToggle;
-        float autosave, holdTimer, holdRepeat;
-        bool holding, devMode, touring;
-        Vector3 lastWishPos, lastGoldenPos;
-        readonly Dictionary<string, float> whackCooldown = new Dictionary<string, float>();
-        OfflineReport pendingOffline;
-        bool pendingIntro, pendingFirstIntro;
+        float autosave;
+        bool devMode, touring, testing;
+        bool pendingFirstIntro;
         string shotDir;
+        /// <summary>When set, the test harness drives the player instead of the keyboard and mouse.</summary>
+        FPInput? scripted;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
@@ -43,61 +39,54 @@ namespace WishExtractor.Game
             if (FindAnyObjectByType<GameRoot>() == null) new GameObject("Wish Extractor").AddComponent<GameRoot>();
         }
 
+        static bool HasArg(string a) => Array.IndexOf(Environment.GetCommandLineArgs(), a) >= 0;
+
         void Awake()
         {
             var args = Environment.GetCommandLineArgs();
-            devMode = Application.isEditor || Array.IndexOf(args, "-dev") >= 0;
-            touring = Array.IndexOf(args, "-autotour") >= 0;
+            devMode = Application.isEditor || HasArg("-dev");
+            touring = HasArg("-autotour");
+            testing = touring || HasArg("-uitest") || HasArg("-loadtest");
             int si = Array.IndexOf(args, "-shots");
-            shotDir = si >= 0 && si + 1 < args.Length ? args[si + 1] : Path.Combine(Application.dataPath, "..", "Screenshots");
+            shotDir = Path.GetFullPath(si >= 0 && si + 1 < args.Length ? args[si + 1] : Path.Combine(Application.dataPath, "..", "Screenshots"));
             if (touring) SaveSystem.FileName = "wishextractor_tour.json";
             int sf = Array.IndexOf(args, "-savefile");
             if (sf >= 0 && sf + 1 < args.Length) SaveSystem.FileName = args[sf + 1];
-            if (touring || Array.IndexOf(args, "-fresh") >= 0) SaveSystem.Erase();
+            if (touring || HasArg("-fresh")) SaveSystem.Erase();
 
-            Application.targetFrameRate = 60;
+            Application.targetFrameRate = 144;
             QualitySettings.vSyncCount = 1;
             QualitySettings.shadows = ShadowQuality.All;
             QualitySettings.shadowResolution = ShadowResolution.High;
-            QualitySettings.shadowDistance = 90;
-            QualitySettings.shadowCascades = 2;
-            QualitySettings.pixelLightCount = 1;
+            QualitySettings.shadowDistance = 70;
+            QualitySettings.shadowCascades = 4;
+            QualitySettings.pixelLightCount = 2;
             QualitySettings.antiAliasing = 4;
 
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             cam = camGo.AddComponent<Camera>();
-            cam.fieldOfView = 38;
-            cam.nearClipPlane = 0.3f;
-            cam.farClipPlane = 400;
+            cam.fieldOfView = 75;
+            cam.nearClipPlane = 0.03f;
+            cam.farClipPlane = 300;
             cam.allowHDR = true;
             cam.allowMSAA = true;
             cam.clearFlags = CameraClearFlags.SolidColor;
             camGo.AddComponent<AudioListener>();
             bloom = camGo.AddComponent<BloomFX>();
-            camGo.AddComponent<CameraRig>();
 
             var save = SaveSystem.Load();
-            bool fresh = save == null;
-            int awayArg = Array.IndexOf(args, "-pretendaway");
-            if (save != null && awayArg >= 0 && awayArg + 1 < args.Length && double.TryParse(args[awayArg + 1], out double awaySec))
-                save.lastSaveUnix -= (long)awaySec;
-            sim = new Sim(save ?? new SaveData());
+            bool fresh = save == null || save.version < 2;
+            if (fresh) save = new SaveData();
+            sim = new Sim(save);
             if (fresh) sim.StartRun();
             Fmt.Notation = sim.S.notation;
-            if (!fresh && sim.S.lastSaveUnix > 0)
-            {
-                double away = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - sim.S.lastSaveUnix;
-                if (away > 60)
-                {
-                    var rep = sim.SimulateOffline(away);
-                    if (rep.Cash > 0 || rep.Dug > 0) pendingOffline = rep;
-                }
-            }
 
             var world = new GameObject("World");
             view = world.AddComponent<GameView>();
             view.Init(sim, cam);
+            view.PlacePlayer(sim.S);
             view.FloatText += (p, t, c, s) => pops?.Float(p, t, c, s);
+            view.Player.OnLand += v => { if (v > 6) sfx?.Play("dig", Mathf.Clamp01(v / 14f) * 0.6f, 0.1f, 0.2f, 0.7f); };
 
             UIKit.EnsureEventSystem();
             uiCanvas = UIKit.CreateCanvas("UI", 10);
@@ -105,17 +94,6 @@ namespace WishExtractor.Game
             modalCanvas = UIKit.CreateCanvas("Modals", 30);
             hud = new HUD();
             hud.Build(uiCanvas, sim);
-            hud.OnSell = Sell;
-            hud.OnDumpRaw = () => { if (sim.DumpHopper() > 0) sfx.Play("coin"); };
-            hud.OnDumpWashed = () => { if (sim.DumpTray() > 0) sfx.Play("coin"); };
-            hud.OnContract = () => modals.OpenContract();
-            hud.OnToggleAutoSell = () => { sim.S.autoSellOn = !sim.S.autoSellOn; sfx.Play("ui"); };
-            shop = new ShopPanel();
-            shop.Build(uiCanvas, sim);
-            shop.OnBought = id => { if (id == null) sfx.Play("denied", 0.6f); };
-            shop.OnPrestige = () => modals.OpenContract();
-            BuildTopButtons();
-            BuildTooltip();
             pops = new Popups();
             pops.Build(popCanvas, cam);
             modals = new Modals();
@@ -124,7 +102,6 @@ namespace WishExtractor.Game
             modals.OnSettingsChanged = ApplySettings;
             modals.OnResetSave = ResetSave;
             modals.OnQuit = () => { Save(); Application.Quit(); };
-            modals.OnSign = SignContract;
 
             sfx = gameObject.AddComponent<AudioHub>();
             sfx.Init(sim.S.musicVol, sim.S.sfxVol);
@@ -132,61 +109,21 @@ namespace WishExtractor.Game
             HookEvents();
             ApplySettings();
 
-            if (fresh || (sim.S.clicks == 0 && sim.S.mallIndex == 0)) pendingFirstIntro = true;
+            if (fresh || (sim.S.itemsPicked == 0 && sim.S.mallIndex == 0)) pendingFirstIntro = true;
         }
 
         void Start()
         {
             if (touring) { StartCoroutine(Tour()); return; }
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-loadtest") >= 0)
-            {
-                StartCoroutine(LoadTest());
-                return;
-            }
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-uitest") >= 0)
+            if (HasArg("-loadtest")) { StartCoroutine(LoadTest()); return; }
+            if (HasArg("-uitest"))
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 120));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 150));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
-            else if (pendingOffline != null) modals.OpenOffline(pendingOffline);
-        }
-
-        void BuildTopButtons()
-        {
-            var bar = UIKit.Rect(uiCanvas.transform, "TopButtons").Place(new Vector2(1, 1), new Vector2(-20, -20), new Vector2(500, 50));
-            var journal = UIKit.Button(bar, "Journal", "Journal", Pal.GlassStrong, Pal.Ink, 16, () => { sfx.Play("ui"); modals.OpenJournal(); });
-            journal.Rt.TL(0, 0, 140, 48);
-            var settings = UIKit.Button(bar, "Settings", "Settings", Pal.GlassStrong, Pal.Ink, 16, () => { sfx.Play("ui"); modals.OpenSettings(); });
-            settings.Rt.TL(150, 0, 140, 48);
-            shopToggle = UIKit.Button(bar, "ShopToggle", "Hide shop", Pal.Accent, Color.white, 16, ToggleShop);
-            shopToggle.Rt.TL(300, 0, 200, 48);
-            foreach (var b in new[] { journal, settings })
-            {
-                var sh = b.Rt.gameObject.AddComponent<Shadow>();
-                sh.effectColor = new Color(0, 0, 0, 0.12f);
-                sh.effectDistance = new Vector2(0, -3);
-            }
-        }
-
-        void BuildTooltip()
-        {
-            tooltipRt = UIKit.Card(uiCanvas.transform, "Tooltip", new Color(0.1f, 0.1f, 0.12f, 0.88f), 14, false, false);
-            tooltipRt.anchorMin = tooltipRt.anchorMax = new Vector2(0, 0);
-            tooltipRt.pivot = new Vector2(0, 0);
-            tooltipRt.sizeDelta = new Vector2(380, 40);
-            tooltipText = UIKit.Label(tooltipRt, "T", "", 15, Color.white, TextAnchor.MiddleLeft, UIKit.Semibold);
-            tooltipText.rectTransform.Stretch(14, 0, 14, 0);
-            tooltipRt.gameObject.SetActive(false);
-        }
-
-        void ToggleShop()
-        {
-            sfx.Play("ui");
-            shop.SetVisible(!shop.Visible);
-            shopToggle.Label.text = shop.Visible ? "Hide shop" : "Show shop";
         }
 
         void ApplySettings()
@@ -199,47 +136,26 @@ namespace WishExtractor.Game
             QualitySettings.antiAliasing = q >= 2 ? 4 : q == 1 ? 2 : 0;
             view.Fx.Quality = q == 0 ? 0.4f : q == 1 ? 0.7f : 1f;
             Fmt.Notation = sim.S.notation;
-            if (view.Rig != null) view.Rig.enabled = true;
+            view.ApplySettings(sim.S);
         }
 
         // ───────────────────────────── events → feedback ─────────────────────────────
 
         void HookEvents()
         {
-            sim.OnWishSpawned += w => sfx.Play("wish_spawn", 0.5f, 0.1f, 0.3f);
-            sim.OnWishCaught += (w, v, first) =>
+            sim.OnPickup += (t, n, v) =>
             {
-                sfx.Play("wish_catch", 0.9f, 0.04f, 0.05f, 1f + (int)w.Def.Rarity * 0.03f);
-                pops.WishQuote(lastWishPos, w.Def, v, first);
-                if (w.Def.Rarity == Rarity.Legendary) pops.Banner("Legendary wish!", "“" + w.Def.Text + "”", "+" + Fmt.Money(v), Pal.Gold, 4.5f);
+                float pitch = t.Cat == ItemCat.Coin ? 1f + Mathf.Min(0.5f, t.Tier * 0.06f) : 0.8f;
+                sfx.Play("coin", n > 1 ? 0.8f : 0.6f, 0.08f, 0.03f, pitch);
             };
-            sim.OnWishCompressed += (w, v) => sfx.Play("compress", 0.35f, 0.1f, 0.4f);
-            sim.OnWishEscaped += w => sfx.Play("wish_escape", 0.3f, 0.1f, 0.4f);
-            sim.OnRelicFound += (r, v, first) =>
+            sim.OnPickupFail += line => { hud.ShowMessage(line); sfx.Play("denied", 0.4f, 0.05f, 0.4f); };
+            sim.OnDeposit += (cash, n, joke) =>
             {
-                sfx.Play("relic", 0.7f, 0.02f, 0.3f);
-                pops.Toast((first ? "New relic! " : "Rare find: ") + r.Name, $"{r.Desc}  ·  +{Fmt.Money(v)}", Pal.Rarity[(int)r.Rarity], "◆", first ? 5f : 3.6f);
-                if (r.Rarity == Rarity.Legendary) pops.Banner("Legendary find!", r.Name, r.Desc, Pal.Gold, 4.5f);
+                sfx.Play("register", 0.8f, 0.03f, 0.1f);
+                sfx.Play("coin", 0.5f, 0.1f, 0.02f, 0.9f);
+                hud.ShowReceipt(cash, n, joke);
             };
-            sim.OnRelicSetComplete += m => { sfx.Play("achievement"); pops.Banner("Collection complete", m.Name + " relics", $"Every relic found: +{Fmt.Num(Balance.RelicSetBonus * 100)}% value forever", Pal.Purple, 4.5f); };
-            sim.OnStratumReached += s =>
-            {
-                sfx.Play("stratum", 0.9f, 0f, 1f);
-                var st = sim.Mall.Strata[s];
-                pops.Banner($"New layer · {Fmt.Feet(st.StartFrac * sim.Mall.DepthFeet)} down", st.Name, st.Flavor, MeshKit.Hex(st.Color), 4.8f);
-                if (view.Rig != null && sim.S.screenShake) view.Rig.Shake(0.4f);
-            };
-            sim.OnMallCleared += () =>
-            {
-                sfx.Play("cleared", 1f, 0f, 1f);
-                pops.Banner("Bare concrete!", sim.Mall.TreasureName, sim.Mall.TreasureDesc, Pal.Gold, 6f);
-                StartCoroutine(AfterClear());
-            };
-            sim.OnSold += (amt, src) =>
-            {
-                if (src == 3) sfx.Play("register", 0.25f, 0.05f, 1.2f);
-                else sfx.Play("register", 0.8f, 0.03f, 0.1f);
-            };
+            sim.OnDepositEmpty += line => { hud.ShowMessage("COIN-O-MATIC: \"" + line + "\""); sfx.Play("denied", 0.5f, 0.05f, 0.4f); };
             sim.OnAchievement += a =>
             {
                 sfx.Play("achievement", 0.8f, 0.02f, 0.2f);
@@ -250,54 +166,7 @@ namespace WishExtractor.Game
                 sfx.Play("buy_big", 0.6f, 0f, 0.2f);
                 pops.Toast("Goal complete!", reward > 0 ? $"{o.Text}  ·  +{Fmt.Money(reward)}" : o.Text, Pal.Green, "✓", 3.2f);
             };
-            sim.OnGoldenSpawned += g => sfx.Play("golden_spawn", 0.7f, 0.05f, 0.3f);
-            sim.OnGoldenClaimed += (g, title, detail) =>
-            {
-                sfx.Play("golden", 1f, 0.02f, 0.1f);
-                pops.Toast(title, detail, Pal.Gold, "¢", 4f);
-                pops.Float(lastGoldenPos + Vector3.up, title, new Color(1f, 0.85f, 0.3f), 1.5f);
-            };
-            sim.OnRatSpawned += r => sfx.Play("squeak", 0.5f, 0.1f, 1f);
-            sim.OnRatCaught += r => { sfx.Play("squeak", 1f, 0.05f, 0.1f, 1.2f); pops.Toast("Mall rat caught!", "It dropped something shiny…", Pal.Ink2, "✋", 3f); };
-            sim.OnEventChanged += on =>
-            {
-                if (!on) return;
-                sfx.Play("event", 0.8f, 0, 1f);
-                pops.Banner("Mall event", sim.Mall.Event.Name, sim.Mall.Event.Desc, Pal.Pink, 4f);
-            };
-            sim.OnPurchase += id =>
-            {
-                bool big = Content.MachineIndex.ContainsKey(id) && Sim.NextMilestone(sim.MachineCount(id) - 1) == sim.MachineCount(id);
-                sfx.Play(big ? "buy_big" : "buy", 0.7f, 0.05f, 0.04f);
-                if (big) pops.Toast($"{Content.NameOf(id)} milestone!", $"{sim.MachineCount(id)} owned: output ×2", Pal.Accent, "↑", 3f);
-            };
-            sim.OnPrestige += () =>
-            {
-                pops.ClearBanners();
-                sfx.PlayMusicFor(sim.Mall, sim.Remodel);
-                Save();
-            };
-        }
-
-        IEnumerator AfterClear()
-        {
-            yield return new WaitForSeconds(3.5f);
-            if (touring) yield break;
-            if (sim.IsFinalMall && !sim.S.endingSeen)
-            {
-                sim.S.endingSeen = true;
-                modals.OpenEnding();
-                while (modals.IsOpen) yield return null;
-            }
-            if (!modals.IsOpen && sim.MallCleared) modals.OpenContract();
-        }
-
-        void SignContract()
-        {
-            if (!sim.MallCleared) return;
-            sim.Prestige();
-            shop.SetTab(ShopPanel.Tab.HeadOffice);
-            modals.OpenIntro(false);
+            sim.OnTechBought += t => sfx.Play("buy", 0.7f, 0.05f, 0.04f);
         }
 
         void ResetSave()
@@ -306,6 +175,7 @@ namespace WishExtractor.Game
             sim.Load(new SaveData());
             sim.StartRun();
             view.RebuildMall();
+            view.PlacePlayer(sim.S);
             sfx.PlayMusicFor(sim.Mall, sim.Remodel);
             modals.OpenIntro(true);
         }
@@ -313,61 +183,13 @@ namespace WishExtractor.Game
         void Save()
         {
             if (sim == null) return;
+            view.StorePose(sim.S);
             SaveSystem.Save(sim.Snapshot());
         }
 
         void OnApplicationQuit() => Save();
         void OnApplicationPause(bool paused) { if (paused) Save(); }
-        void OnApplicationFocus(bool focus) { if (!focus) Save(); }
-
-        // ───────────────────────────── actions ─────────────────────────────
-
-        void Sell()
-        {
-            if (sim.S.pocketValue <= 0) { sfx.Play("denied", 0.6f); return; }
-            sim.SellPocket();
-        }
-
-        void DoDig(Vector3 point)
-        {
-            if (sim.MallCleared)
-            {
-                pops.Float(point + Vector3.up, "Bare concrete! Sign the next contract.", Pal.Gold, 0.9f);
-                return;
-            }
-            bool loose = sim.CurStratum.Loose;
-            double unitValue = sim.CurrentEV * sim.ValueNow;
-            double amount = sim.Click();
-            if (amount <= 0) return;
-            view.ShowDig(point, amount, loose, amount * unitValue);
-            sfx.Play("dig", 0.75f, 0.08f, 0.05f);
-            if (loose) sfx.Play("coin", 0.45f, 0.1f, 0.06f);
-        }
-
-        void Whack(string id)
-        {
-            if (!Content.MachineIndex.TryGetValue(id, out int mi)) return;
-            float now = Time.time;
-            if (whackCooldown.TryGetValue(id, out var until) && now < until) return;
-            whackCooldown[id] = now + 0.4f;
-            var m = Content.Machines[mi];
-            if (!m.IsCompressor && !m.IsMega) sim.Whack(m.Stage, 0.15);
-            view.WhackMachine(id);
-            sfx.Play("whack", 0.55f, 0.1f, 0.05f);
-        }
-
-        void HandlePick(GameView.ClickResult r)
-        {
-            switch (r.Kind)
-            {
-                case GameView.ClickKind.Wish: lastWishPos = r.Point; sim.CatchWish(r.Uid); break;
-                case GameView.ClickKind.Golden: lastGoldenPos = r.Point; sim.ClaimGolden(r.Uid); break;
-                case GameView.ClickKind.Rat: sim.CatchRat(); break;
-                case GameView.ClickKind.Vending: Sell(); break;
-                case GameView.ClickKind.Machine: Whack(r.Id); break;
-                case GameView.ClickKind.Crust: DoDig(r.Point); break;
-            }
-        }
+        void OnApplicationFocus(bool focus) { if (!focus && !testing) Save(); }
 
         // ───────────────────────────── frame ─────────────────────────────
 
@@ -382,112 +204,165 @@ namespace WishExtractor.Game
                 left -= step;
             }
 
-            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
             bool modal = modals.IsOpen;
-            if (!touring) HandleInput(dt, overUI, modal);
-            view.Rig.HandleInput(dt, overUI || modal);
-            view.Rig.ScreenShiftX = shop.Visible ? 0.045f : -0.02f;
-            if (view.Rig != null && !sim.S.screenShake) view.Rig.Shake(0);
+            if (!testing) HandleKeys(modal);
+            modal = modals.IsOpen;
+            UpdateCursor(modal);
 
-            hud.Refresh(dt);
-            shop.Refresh(dt, sim.CurrentObjective?.Focus);
+            FPInput input = scripted ?? (testing ? default : ReadInput());
+            if (scripted.HasValue)
+            {
+                var s = scripted.Value;
+                s.Interact = false;
+                s.PrimaryDown = false;
+                s.Look = Vector2.zero;
+                s.Hotbar = 0;
+                scripted = s;
+            }
+            if (input.Hotbar > 0) hud.Slot = input.Hotbar;
+            view.Step(input, dt, modal);
+
+            hud.Refresh(dt, view.Current, view.Wading, modal);
             pops.Update(dt);
             modals.Update(dt);
-            UpdateTooltip(overUI || modal);
 
             autosave += dt;
             if (autosave >= Balance.AutosaveSeconds) { autosave = 0; Save(); }
         }
 
-        void HandleInput(float dt, bool overUI, bool modal)
+        void HandleKeys(bool modal)
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (modal) { if (modals.OpenName != "intro") modals.Close(); }
                 else modals.OpenSettings();
             }
-            if (modal) { holding = false; return; }
-            if (Input.GetMouseButtonDown(0) && !overUI)
+            if (Input.GetKeyDown(KeyCode.J) && !modal) { sfx.Play("ui"); modals.OpenJournal(); }
+            if (devMode && !modal)
             {
-                var r = view.Pick(Input.mousePosition);
-                HandlePick(r);
-                holding = r.Kind == GameView.ClickKind.Crust;
-                holdTimer = 0;
-                holdRepeat = 0;
-            }
-            if (Input.GetMouseButton(0) && holding && !overUI)
-            {
-                holdTimer += dt;
-                if (holdTimer > 0.3f)
-                {
-                    holdRepeat += dt;
-                    const float interval = 1f / 6f;
-                    while (holdRepeat >= interval)
-                    {
-                        holdRepeat -= interval;
-                        var r = view.Pick(Input.mousePosition);
-                        if (r.Kind == GameView.ClickKind.Crust) DoDig(r.Point);
-                    }
-                }
-            }
-            if (Input.GetMouseButtonUp(0)) holding = false;
-
-            if (Input.GetKeyDown(KeyCode.Space)) Sell();
-            if (Input.GetKeyDown(KeyCode.Tab)) ToggleShop();
-            if (Input.GetKeyDown(KeyCode.J)) { sfx.Play("ui"); modals.OpenJournal(); }
-            if (Input.GetKeyDown(KeyCode.B)) { shop.CycleBuyAmount(); sfx.Play("ui"); }
-            if (Input.GetKeyDown(KeyCode.Alpha1)) { EnsureShop(); shop.SetTab(ShopPanel.Tab.Tools); }
-            if (Input.GetKeyDown(KeyCode.Alpha2)) { EnsureShop(); shop.SetTab(ShopPanel.Tab.Machines); }
-            if (Input.GetKeyDown(KeyCode.Alpha3)) { EnsureShop(); shop.SetTab(ShopPanel.Tab.Upgrades); }
-            if (Input.GetKeyDown(KeyCode.Alpha4)) { EnsureShop(); shop.SetTab(ShopPanel.Tab.HeadOffice); }
-
-            if (devMode)
-            {
-                if (Input.GetKeyDown(KeyCode.F5)) sim.DebugAddCash(Math.Max(1000 * sim.CostScale, sim.S.cash * 9));
-                if (Input.GetKeyDown(KeyCode.F6)) sim.DebugFinishMall();
-                if (Input.GetKeyDown(KeyCode.F7)) sim.DebugSetDug(sim.DepthFrac + 0.1);
-                if (Input.GetKeyDown(KeyCode.F8)) sim.SpawnGolden();
-                if (Input.GetKeyDown(KeyCode.F9)) sim.WishStorm(6);
+                if (Input.GetKeyDown(KeyCode.F5)) sim.DebugAddCash(Math.Max(10, sim.S.cash * 9));
             }
         }
 
-        void EnsureShop() { if (!shop.Visible) ToggleShop(); }
-
-        void UpdateTooltip(bool blocked)
+        void UpdateCursor(bool modal)
         {
-            if (blocked || touring) { tooltipRt.gameObject.SetActive(false); return; }
-            var r = view.Pick(Input.mousePosition);
-            string text = null;
-            switch (r.Kind)
+            bool wantLock = !modal && !testing && Application.isFocused;
+            if (wantLock && Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0)) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
+            if (wantLock && Cursor.lockState != CursorLockMode.Locked && lockedBefore) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
+            if (!wantLock && Cursor.lockState != CursorLockMode.None) { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; }
+            lockedBefore = wantLock;
+        }
+        bool lockedBefore;
+
+        FPInput ReadInput()
+        {
+            var i = new FPInput();
+            if (Cursor.lockState != CursorLockMode.Locked) return i;
+            float x = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1 : 0) - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1 : 0);
+            float y = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1 : 0) - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1 : 0);
+            i.Move = new Vector2(x, y);
+            float sens = sim.S.mouseSens * 2.2f;
+            i.Look = new Vector2(Input.GetAxisRaw("Mouse X") * sens, Input.GetAxisRaw("Mouse Y") * sens * (sim.S.invertY ? -1 : 1));
+            i.Jump = Input.GetKeyDown(KeyCode.Space);
+            i.Sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            i.Primary = Input.GetMouseButton(0);
+            i.PrimaryDown = Input.GetMouseButtonDown(0);
+            i.Interact = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.F);
+            if (Input.GetKeyDown(KeyCode.Alpha1)) i.Hotbar = 1;
+            if (Input.GetKeyDown(KeyCode.Alpha2)) i.Hotbar = 2;
+            if (Input.GetKeyDown(KeyCode.Alpha3)) i.Hotbar = 3;
+            return i;
+        }
+
+        // ───────────────────────────── scripted movement (tests, tour) ─────────────────────────────
+
+        void Drive(Vector2 move, bool jump = false, bool sprint = false)
+        {
+            var s = scripted ?? default;
+            s.Move = move;
+            s.Jump = jump;
+            s.Sprint = sprint;
+            scripted = s;
+        }
+
+        void Press(bool interact = true, bool primary = false)
+        {
+            var s = scripted ?? default;
+            s.Interact = interact;
+            s.PrimaryDown = primary;
+            scripted = s;
+        }
+
+        /// <summary>Walk (through the real controller) until the feet are within tol of target (xz).</summary>
+        IEnumerator WalkTo(Vector3 target, float tol = 0.5f, float timeout = 20f, bool sprint = true)
+        {
+            float t = 0, stuck = 0;
+            Vector3 last = view.Player.Feet;
+            while (t < timeout)
             {
-                case GameView.ClickKind.Machine:
-                    if (Content.MachineIndex.TryGetValue(r.Id ?? "", out int mi))
-                    {
-                        var m = Content.Machines[mi];
-                        int n = sim.MachineCount(mi);
-                        text = m.IsCompressor || m.IsMega ? $"{m.Name}  ·  level {n}" : $"{m.Name} ×{n}  ·  {Fmt.Rate(sim.MachineUnitRate[mi] * n)}  ·  click to whack";
-                    }
-                    break;
-                case GameView.ClickKind.Vending:
-                    text = sim.S.pocketValue > 0 ? $"Greasy Vending Machine  ·  click to sell {Fmt.Money(sim.PocketWorth)}" : "Greasy Vending Machine  ·  your pocket is empty";
-                    break;
-                case GameView.ClickKind.Wish:
-                    var w = sim.Wishes.Find(x => x.Uid == r.Uid);
-                    if (w != null) text = $"{RarityColors.Names[(int)w.Def.Rarity]} True Wish  ·  {Fmt.Money(w.Value)}  ·  click to catch!";
-                    break;
-                case GameView.ClickKind.Golden: text = "Golden Penny  ·  click it!"; break;
-                case GameView.ClickKind.Rat: text = "A mall rat with stolen loot  ·  catch it!"; break;
-                case GameView.ClickKind.Crust:
-                    if (sim.S.clicks < 30 && !sim.MallCleared) text = $"Click to dig  ·  {Fmt.Num(sim.ClickPowerNow)} per click";
-                    break;
+                var feet = view.Player.Feet;
+                Vector3 d = target - feet;
+                d.y = 0;
+                if (d.magnitude <= tol) break;
+                float want = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
+                view.Player.Yaw = Mathf.MoveTowardsAngle(view.Player.Yaw, want, 540 * Time.deltaTime);
+                float moved = (feet - last).magnitude;
+                last = feet;
+                stuck = moved < 0.01f ? stuck + Time.deltaTime : 0;
+                Drive(new Vector2(0, 1), stuck > 0.25f, sprint && d.magnitude > 2);
+                t += Time.deltaTime;
+                yield return null;
             }
-            if (text == null) { tooltipRt.gameObject.SetActive(false); return; }
-            tooltipRt.gameObject.SetActive(true);
-            tooltipText.text = text;
-            tooltipRt.sizeDelta = new Vector2(tooltipText.preferredWidth + 30, 40);
-            RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)uiCanvas.transform, Input.mousePosition, null, out var local);
-            var size = ((RectTransform)uiCanvas.transform).rect.size;
-            tooltipRt.anchoredPosition = new Vector2(Mathf.Min(local.x + size.x / 2 + 18, size.x - tooltipRt.sizeDelta.x - 10), local.y + size.y / 2 + 18);
+            Drive(Vector2.zero);
+            yield return null;
+            yield return null;
+        }
+
+        /// <summary>Smoothly turn the view toward a world point.</summary>
+        IEnumerator LookAtSmooth(Vector3 world, float seconds = 0.35f)
+        {
+            float y0 = view.Player.Yaw, p0 = view.Player.Pitch;
+            view.Player.LookAt(world);
+            float y1 = view.Player.Yaw, p1 = view.Player.Pitch;
+            for (float t = 0; t < seconds; t += Time.deltaTime)
+            {
+                float k = Mathf.SmoothStep(0, 1, t / seconds);
+                view.Player.Yaw = Mathf.LerpAngle(y0, y1, k);
+                view.Player.Pitch = Mathf.Lerp(p0, p1, k);
+                Drive(Vector2.zero);
+                yield return null;
+            }
+            view.Player.LookAt(world);
+            yield return null;
+        }
+
+        LooseItem NearestLoose(Vector3 from, Func<LooseItem, bool> ok = null)
+        {
+            LooseItem best = null;
+            float bd = float.MaxValue;
+            foreach (var it in sim.Loose)
+            {
+                if (it.State != LooseState.Resting || (ok != null && !ok(it))) continue;
+                float d = (new Vector3(it.X, 0, it.Z) - new Vector3(from.x, 0, from.z)).sqrMagnitude;
+                if (d < bd) { bd = d; best = it; }
+            }
+            return best;
+        }
+
+        /// <summary>Walk into the fountain over the south stepping stone.</summary>
+        IEnumerator EnterFountain()
+        {
+            yield return WalkTo(new Vector3(0, 0, -11.2f), 0.4f);
+            yield return WalkTo(new Vector3(0, 0, -6.5f), 0.4f, 8f, false);
+        }
+
+        /// <summary>Walk out of the fountain and up to the COIN-O-MATIC.</summary>
+        IEnumerator GoToKiosk()
+        {
+            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f);
+            Vector3 front = view.Kiosk.Root.position + view.Kiosk.Root.forward * 1.5f;
+            yield return WalkTo(front, 0.35f);
+            yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.2f);
         }
 
         // ───────────────────────────── screenshot tour (-autotour) ─────────────────────────────
@@ -495,158 +370,117 @@ namespace WishExtractor.Game
         IEnumerator Shot(string name)
         {
             Directory.CreateDirectory(shotDir);
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(0.25f);
             yield return new WaitForEndOfFrame();
             ScreenCapture.CaptureScreenshot(Path.Combine(shotDir, name + ".png"));
             yield return null;
             yield return null;
         }
 
-        IEnumerator ClickCrust(int times, float interval)
-        {
-            for (int i = 0; i < times; i++)
-            {
-                float a = UnityEngine.Random.value * Mathf.PI * 2, r = UnityEngine.Random.Range(2.5f, 6f);
-                var p = view.Fountain.SurfacePoint(Mathf.Cos(a) * r, Mathf.Sin(a) * r - 1);
-                DoDig(p);
-                yield return new WaitForSeconds(interval);
-            }
-        }
-
         IEnumerator Tour()
         {
-            float timeout = Time.realtimeSinceStartup + 240;
-            StartCoroutine(Watchdog(timeout));
-            yield return new WaitForSeconds(2.5f);
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 240));
+            scripted = default(FPInput);
+            yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
             yield return Shot("00_intro");
             modals.Close();
-            yield return Shot("01_start");
-            yield return ClickCrust(40, 0.07f);
-            yield return Shot("02_first_clicks");
+            view.Player.Place(new Vector3(0, 0.05f, -18), 0, 0);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("01_spawn");
+            yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.2f);
+            yield return WalkTo(view.Kiosk.Root.position + view.Kiosk.Root.forward * 2.2f, 0.4f);
+            yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.3f);
+            yield return Shot("02_kiosk");
 
-            // Phase 2: syrup seal, first washers and sorters, a wish in the air
-            sim.DebugAddCash(4000);
-            sim.BuyNextTool(); sim.BuyNextTool();
-            sim.DebugSetDug(0.16);
-            sim.DebugSetMachine("pogo", 8);
-            sim.DebugSetMachine("tumbler", 6);
-            sim.DebugSetMachine("pigeons", 3);
-            sim.DebugSetMachine("walkers", 4);
-            view.RebuildMall();
-            yield return new WaitForSeconds(1.5f);
-            // a low, close camera shows off the crust and the little workers
-            var rig = view.Rig;
-            rig.enabled = false;
-            cam.transform.SetPositionAndRotation(new Vector3(2, 4.5f, -14f), Quaternion.Euler(24, -4, 0));
-            yield return ClickCrust(6, 0.12f);
-            yield return Shot("02c_low_angle");
-            rig.enabled = true;
-            sim.WishStorm(4);
-            sim.SpawnGolden();
-            yield return ClickCrust(15, 0.08f);
-            yield return new WaitForSeconds(1.2f);
-            yield return Shot("03_phase2");
+            yield return EnterFountain();
+            var it = NearestLoose(view.Player.Feet);
+            if (it != null)
+            {
+                yield return WalkTo(new Vector3(it.X, 0, it.Z) - (new Vector3(it.X, 0, it.Z) - view.Player.Feet).normalized * 1.0f, 0.3f, 6f, false);
+                yield return LookAtSmooth(view.Items.PositionOf(it));
+            }
+            yield return Shot("03_aim_coin");
+            Press();
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot("04_holding");
+            var it2 = NearestLoose(view.Player.Feet);
+            if (it2 != null) { yield return LookAtSmooth(view.Items.PositionOf(it2)); Press(); }
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot("05_hands_full");
+            yield return LookAtSmooth(new Vector3(0, 0.6f, 4));
+            yield return Shot("06_in_fountain");
 
-            // Phase 3: the industrial mega-factory
-            sim.DebugAddCash(5e7);
-            sim.DebugSetDug(0.66);
-            foreach (var id in new[] { "dishwasher", "coinstar" }) sim.DebugSetMachine(id, 4);
-            foreach (var id in new[] { "jackhammer", "acid", "lasers" }) sim.DebugSetMachine(id, 3);
-            sim.DebugSetMachine("compressor", 2);
-            sim.DebugSetMachine("pigeons", 12);
-            view.RebuildMall();
-            yield return new WaitForSeconds(2.5f);
-            sim.WishStorm(3);
-            yield return new WaitForSeconds(1.0f);
-            yield return Shot("04_phase3");
+            yield return GoToKiosk();
+            Press();
+            yield return new WaitForSeconds(1.4f);
+            yield return Shot("07_deposit");
+
+            // bigger containers (tech the terminal will sell in M3), shown off in the fountain
+            sim.DebugSetTech("carry_bucket", 1);
+            sim.DebugSetTech("carry_cup", 1);
+            sim.DebugSetTech("carry_pail", 1);
+            sim.DebugSetTech("grab_grabber", 1);
+            sim.DebugSetTech("grab_net", 1);
+            yield return EnterFountain();
+            var it3 = NearestLoose(view.Player.Feet);
+            if (it3 != null) yield return LookAtSmooth(view.Items.PositionOf(it3));
+            for (int i = 0; i < 6; i++) { Press(); yield return new WaitForSeconds(0.3f); }
+            yield return Shot("08_net_bucket");
+
+            // overview from the balcony
+            view.Player.Place(new Vector3(-17, 6.85f, 27f), 180, -28);
+            yield return new WaitForSeconds(0.8f);
+            yield return LookAtSmooth(new Vector3(0, 0, 0));
+            yield return Shot("09_balcony");
+            view.Player.Place(new Vector3(8.7f, 0.95f, 0), -90, -22);
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("10_rim_view");
             float fpsT = 0;
             int frames = 0;
             while (fpsT < 3f) { fpsT += Time.unscaledDeltaTime; frames++; yield return null; }
-            Debug.Log($"[TOUR] phase-3 average FPS {frames / fpsT:0.0}");
-            sim.SpawnGolden();
-            sim.DebugSpawnRat();
-            sim.WishStorm(3);
-            yield return new WaitForSeconds(1.4f);
-            yield return Shot("04b_clickables");
-            // catch a wish and claim the golden penny through the real picking path
-            if (sim.Wishes.Count > 0)
-            {
-                var w = sim.Wishes[0];
-                HandlePick(view.Pick(cam.WorldToScreenPoint(view.WishPosition(w.Uid))));
-            }
-            if (sim.Goldens.Count > 0)
-            {
-                var g = sim.Goldens[0];
-                HandlePick(view.Pick(cam.WorldToScreenPoint(view.GoldenPosition(g.Uid))));
-            }
-            yield return new WaitForSeconds(0.7f);
-            yield return Shot("04c_caught");
-            shop.SetTab(ShopPanel.Tab.Upgrades);
-            yield return new WaitForSeconds(0.5f);
-            yield return Shot("05_upgrades");
-            shop.SetTab(ShopPanel.Tab.Machines);
-            modals.OpenJournal(0);
-            yield return Shot("06_journal");
-            modals.OpenJournal(1);
-            yield return Shot("07_relics");
+            Debug.Log($"[TOUR] average FPS {frames / fpsT:0.0} with {sim.Loose.Count} loose items ({view.Items.Drawn} drawn)");
+
             modals.OpenSettings();
-            yield return Shot("08_settings");
+            yield return Shot("11_settings");
+            modals.OpenJournal(3);
+            yield return Shot("12_journal_stats");
             modals.Close();
 
-            // Every other mall, mid-dig with a few machines
-            string[] ids = { "pogo", "walkers", "tumbler", "dishwasher", "pigeons", "coinstar", "jackhammer", "acid", "lasers", "claw", "carwash", "prizebots", "borer", "jacuzzi", "sieve", "carousel", "slots", "wishengine", "compressor" };
             for (int m = 1; m < Content.Malls.Length; m++)
             {
                 sim.DebugJumpToMall(m);
-                sim.DebugSetDug(0.45);
-                foreach (var id in ids)
-                    if (sim.MachineUnlocked(Content.MachineIndex[id]) || Content.Machines[Content.MachineIndex[id]].UnlockMall <= m)
-                        sim.DebugSetMachine(id, Content.Machines[Content.MachineIndex[id]].IsMega ? 2 : 3);
                 view.RebuildMall();
-                modals.OpenIntro(false);
-                yield return new WaitForSeconds(1.0f);
-                if (m == 1) yield return Shot("09_mall2_intro");
-                modals.Close();
-                yield return new WaitForSeconds(1.8f);
-                sim.WishStorm(2);
-                yield return ClickCrust(6, 0.1f);
-                yield return new WaitForSeconds(0.8f);
-                yield return Shot($"1{m}_mall{m + 1}");
+                sfx.PlayMusicFor(sim.Mall, sim.Remodel);
+                view.Player.Place(new Vector3(0, 0.05f, -18), 0, -4);
+                yield return new WaitForSeconds(1.2f);
+                yield return Shot($"2{m}_mall{m + 1}");
             }
-            sim.DebugFinishMall();
-            yield return new WaitForSeconds(3f);
-            yield return Shot("20_cleared");
-            modals.OpenContract();
-            yield return Shot("21_contract");
             Application.Quit();
         }
 
         IEnumerator Watchdog(float deadline)
         {
             while (Time.realtimeSinceStartup < deadline) yield return null;
+            Debug.Log("[WATCHDOG] time limit reached, quitting");
             Application.Quit();
         }
 
-        /// <summary>-loadtest: report what came back from the save (and any offline earnings), then quit.</summary>
+        /// <summary>-loadtest: report what came back from the save, then quit.</summary>
         IEnumerator LoadTest()
         {
-            Debug.Log($"[LOADTEST] cash={Fmt.Money(sim.S.cash)} tool={Content.Tools[sim.S.tool].Name} pogo={sim.MachineCount("pogo")} " +
-                      $"clicks={sim.S.clicks} dug={Fmt.Num(sim.S.totalDug)} depth={Fmt.Feet(sim.DepthFeet)} achievements={sim.AchievementCount} objective={sim.S.objective}");
-            if (pendingOffline != null)
-            {
-                Debug.Log($"[LOADTEST] offline: {Fmt.Time(pendingOffline.Seconds)} cash+{Fmt.Money(pendingOffline.Cash)} dug+{Fmt.Num(pendingOffline.Dug)}");
-                modals.OpenOffline(pendingOffline);
-            }
-            else Debug.Log("[LOADTEST] no offline report");
-            yield return new WaitForSeconds(1.5f);
-            yield return Shot("ui_offline");
+            yield return new WaitForSeconds(1.0f);
+            var p = view.Player.Feet;
+            Debug.Log($"[LOADTEST] cash={Fmt.Money(sim.S.cash)} carried={sim.CarriedCount} ({Fmt.Money(sim.CarriedValue)}) loose={sim.Loose.Count} " +
+                      $"pos=({p.x:0.0},{p.y:0.0},{p.z:0.0}) yaw={view.Player.Yaw:0} picked={sim.S.itemsPicked} deposits={sim.S.deposits} " +
+                      $"carryTier={sim.CarryTier} objective={sim.S.objective} achievements={sim.AchievementCount}");
+            yield return Shot("ui_loadtest");
             Application.Quit();
         }
 
         // ───────────────────────────── UI / input self-test (-uitest) ─────────────────────────────
-        // Drives the real uGUI event pipeline (EventSystem raycast at the button's screen position,
-        // then a pointer click) and the real world-picking path, and logs PASS/FAIL per step.
+        // Drives the real controller through FPInput (walk, look, interact), the real crosshair
+        // targeting, and the real uGUI event pipeline for menus. Logs PASS/FAIL per step.
 
         int uiPass, uiFail;
 
@@ -702,103 +536,137 @@ namespace WishExtractor.Game
 
         IEnumerator UiTest()
         {
+            scripted = default(FPInput);
             yield return new WaitForSeconds(2.5f);
             Check(modals.IsOpen && modals.OpenName == "intro", "intro shown on a fresh save");
-            Check(ClickSelectable(FindButton("Go")), "click 'Start digging'");
+            Check(ClickSelectable(FindButton("Go")), "click 'Clock in'");
             yield return null;
             Check(!modals.IsOpen, "intro closed");
+            Check(sim.Loose.Count >= Balance.SeedCoins * 0.9, $"fountain seeded with loose coins ({sim.Loose.Count})");
 
-            var spot = cam.WorldToScreenPoint(view.Fountain.SurfacePoint(1.5f, -2.5f));
-            Check(!PointerOverUI(spot), "fountain centre is not covered by UI");
-            double dug0 = sim.S.totalDug;
-            for (int i = 0; i < 45; i++)
+            // mouse look through FPInput
+            float yaw0 = view.Player.Yaw;
+            var s = scripted.Value; s.Look = new Vector2(30, 0); scripted = s;
+            yield return null;
+            yield return null;
+            Check(Mathf.Abs(Mathf.DeltaAngle(yaw0, view.Player.Yaw) - 30) < 0.5f, $"mouse look turns the view ({Mathf.DeltaAngle(yaw0, view.Player.Yaw):0.0}°)");
+            view.Player.Yaw = 0;
+
+            // walking
+            Vector3 start = view.Player.Feet;
+            Drive(new Vector2(0, 1));
+            yield return new WaitForSeconds(0.8f);
+            Drive(Vector2.zero);
+            Check(view.Player.Feet.z > start.z + 1.5f, $"W walks forward ({view.Player.Feet.z - start.z:0.00} m)");
+
+            // empty deposit
+            yield return GoToKiosk();
+            Check(view.Current.Kind == TargetKind.Kiosk, $"crosshair targets the COIN-O-MATIC (got {view.Current.Kind})");
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.S.deposits == 0 && sim.S.cash == 0, "depositing with empty hands pays nothing");
+
+            // into the fountain over the stepping stone
+            yield return EnterFountain();
+            var feet = view.Player.Feet;
+            Check(FountainView.InBasin(feet), $"walked over the rim into the fountain (r={new Vector2(feet.x, feet.z).magnitude:0.0} m, y={feet.y:0.00})");
+            Check(view.Wading, "wading in the water slows you down");
+
+            // pick up one coin
+            var it = NearestLoose(view.Player.Feet);
+            Check(it != null, "there is a coin nearby");
+            if (it != null)
             {
-                var r = view.Pick((Vector2)spot + UnityEngine.Random.insideUnitCircle * 40f);
-                if (i == 0) Check(r.Kind == GameView.ClickKind.Crust, $"picking the fountain hits the crust (got {r.Kind})");
-                HandlePick(r);
-                yield return new WaitForSeconds(0.06f);
+                Vector3 flat = new Vector3(it.X, 0, it.Z);
+                yield return WalkTo(flat - (flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).normalized * 0.9f, 0.3f, 6f, false);
+                yield return LookAtSmooth(view.Items.PositionOf(it));
+                Check(view.Current.Kind == TargetKind.Item && view.Current.Uid == it.Uid, $"crosshair targets the coin (got {view.Current.Kind})");
+                Press();
+                yield return null;
+                yield return null;
+                Check(sim.CarriedCount == 1 && sim.FindLoose(it.Uid) == null, "E picks the coin up");
             }
-            Check(sim.S.totalDug > dug0, $"clicking digs ({Fmt.Num(sim.S.totalDug - dug0)} items)");
-            Check(sim.S.pocketValue > 0, "loose layer loot lands in the pocket");
+            // hands full
+            var it2 = NearestLoose(view.Player.Feet);
+            if (it2 != null)
+            {
+                yield return LookAtSmooth(view.Items.PositionOf(it2));
+                Press(false, true);
+                yield return null;
+                yield return null;
+                Check(sim.CarriedCount == 1 && sim.FindLoose(it2.Uid) != null, "bare hands hold only one thing (left click refused)");
+            }
 
+            // deposit
+            yield return GoToKiosk();
             double cash0 = sim.S.cash;
-            Check(ClickSelectable(FindButton("Sell")), "click SELL in the pipeline card");
+            Press();
             yield return null;
-            Check(sim.S.cash > cash0, $"selling pays out ({Fmt.Money(sim.S.cash - cash0)})");
-
-            Check(ClickSelectable(FindButton("Tools")), "open the Tools tab");
-            yield return new WaitForSeconds(0.5f);
-            sim.DebugAddCash(5);
-            yield return new WaitForSeconds(0.4f);
-            int tool0 = sim.S.tool;
-            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "click a Buy button on a tool card");
             yield return null;
-            Check(sim.S.tool == tool0 + 1, "the Butter Knife was bought");
+            Check(sim.S.cash > cash0 && sim.CarriedCount == 0, $"deposit pays out ({Fmt.Money(sim.S.cash - cash0)})");
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("ui_deposit");
 
-            Check(ClickSelectable(FindButton("Machines")), "open the Machines tab");
-            sim.DebugAddCash(10);
-            yield return new WaitForSeconds(0.6f);
-            int pogo0 = sim.MachineCount("pogo");
-            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "click Buy on the pogo stick card");
-            yield return null;
-            Check(sim.MachineCount("pogo") == pogo0 + 1, "a pogo stick was bought");
-
-            // world clicks on the vending machine (sell) and a machine (whack)
-            for (int i = 0; i < 20; i++) { HandlePick(view.Pick((Vector2)spot)); yield return new WaitForSeconds(0.03f); }
-            var vend = cam.WorldToScreenPoint(view.VendingPosition + Vector3.up * 1.5f);
-            var vr = view.Pick(vend);
-            Check(vr.Kind == GameView.ClickKind.Vending, $"picking the vending machine hits it (got {vr.Kind})");
+            // a bigger container carries more per trip
+            sim.DebugSetTech("carry_cup", 1);
+            Check(sim.CarryCapacity == 5, $"paper cup holds 5 (got {sim.CarryCapacity})");
+            yield return EnterFountain();
+            int got = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                var c = NearestLoose(view.Player.Feet);
+                if (c == null) break;
+                Vector3 flat = new Vector3(c.X, 0, c.Z);
+                if ((flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).magnitude > 1.6f)
+                    yield return WalkTo(flat - (flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).normalized * 0.9f, 0.3f, 6f, false);
+                yield return LookAtSmooth(view.Items.PositionOf(c), 0.15f);
+                int before = sim.CarriedCount;
+                Press();
+                yield return null;
+                yield return null;
+                if (sim.CarriedCount > before) got++;
+            }
+            Check(got == 5 && sim.CarriedCount == 5, $"picked up five coins into the cup ({got})");
+            yield return GoToKiosk();
             double cash1 = sim.S.cash;
-            HandlePick(vr);
-            Check(sim.S.cash > cash1, "clicking the vending machine sells");
-
-            Check(ClickSelectable(FindButton("Journal")), "open the Journal");
-            yield return new WaitForSeconds(0.3f);
-            Check(modals.IsOpen && modals.OpenName == "journal", "journal is open");
-            Check(ClickSelectable(FindButton("Relic Museum")), "switch to the Relic Museum tab");
-            yield return new WaitForSeconds(0.2f);
-            yield return Shot("ui_journal_relics");
-            Check(ClickSelectable(FindButton("Close")), "close the journal with X");
+            Press();
             yield return null;
-            Check(!modals.IsOpen, "journal closed");
+            yield return null;
+            Check(sim.S.cash > cash1 && sim.S.deposits == 2, "second deposit pays for all five");
 
-            Check(ClickSelectable(FindButton("Settings")), "open Settings");
+            // menus
+            modals.OpenSettings();
             yield return new WaitForSeconds(0.3f);
+            Check(modals.IsOpen && modals.OpenName == "settings", "Esc menu opens");
             Check(ClickSelectable(FindButton("1.23e6")), "switch number format");
             Check(sim.S.notation == 1, "notation setting changed");
             ClickSelectable(FindButton("1.23M"));
+            var fwd0 = view.Player.Feet;
+            Drive(new Vector2(0, 1));
+            yield return new WaitForSeconds(0.3f);
+            Drive(Vector2.zero);
+            Check((view.Player.Feet - fwd0).magnitude < 0.05f, "the player can't walk while a menu is open");
             Check(ClickSelectable(FindButton("Close")), "close settings");
             yield return null;
-
-            Check(ClickSelectable(FindButton("ShopToggle")), "hide the shop");
+            Check(!modals.IsOpen, "settings closed");
+            modals.OpenJournal(0);
+            yield return new WaitForSeconds(0.3f);
+            Check(ClickSelectable(FindButton("Relic Museum")), "switch to the Relic Museum tab");
+            yield return new WaitForSeconds(0.2f);
+            Check(ClickSelectable(FindButton("Stats")), "switch to the Stats tab");
+            yield return new WaitForSeconds(0.2f);
+            yield return Shot("ui_journal_stats");
+            Check(ClickSelectable(FindButton("Close")), "close the journal");
             yield return null;
-            Check(!shop.Visible, "shop hidden");
-            ClickSelectable(FindButton("ShopToggle"));
-            yield return null;
-            Check(shop.Visible, "shop shown again");
 
+            // save round trip (the -loadtest run reads this file back)
+            view.StorePose(sim.S);
+            var snap = JsonUtility.ToJson(sim.Snapshot());
+            var back = new Sim(JsonUtility.FromJson<SaveData>(snap));
+            Check(Math.Abs(back.S.cash - sim.S.cash) < 1e-9 && back.Loose.Count == sim.Loose.Count && back.CarryTier == sim.CarryTier,
+                  $"save → load keeps cash, {back.Loose.Count} loose items and the carry tier");
             yield return Shot("ui_after_test");
-
-            // clear the mall, sign the next contract, spend Lucky Pennies at Head Office
-            sim.DebugFinishMall();
-            Check(sim.MallCleared, "mall cleared");
-            yield return new WaitForSeconds(4.5f);
-            Check(modals.IsOpen && modals.OpenName == "contract", "contract dialog opens after bare concrete");
-            yield return Shot("ui_contract");
-            Check(ClickSelectable(FindButton("Sign")), "click 'Sign the contract'");
-            yield return new WaitForSeconds(0.6f);
-            Check(sim.S.mallIndex == 1 && !sim.MallCleared, $"moved to the next mall ({sim.Mall.Name})");
-            Check(sim.S.luckyPennies > 0, $"earned Lucky Pennies ({sim.S.luckyPennies})");
-            Check(modals.IsOpen && modals.OpenName == "intro", "new mall intro shown");
-            Check(ClickSelectable(FindButton("Go")), "start digging in the new mall");
-            yield return new WaitForSeconds(0.6f);
-            Check(shop.Current == ShopPanel.Tab.HeadOffice, "shop opened on Head Office");
-            int ho0 = sim.HOTotalLevels;
-            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "click Buy on a Head Office perk");
-            yield return null;
-            Check(sim.HOTotalLevels == ho0 + 1, "Head Office perk bought");
-            yield return new WaitForSeconds(1.5f);
-            yield return Shot("ui_mall2");
             Debug.Log($"[UITEST] done: {uiPass} passed, {uiFail} failed");
             Save();
             Application.Quit();
