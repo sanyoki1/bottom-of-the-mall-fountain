@@ -4,14 +4,18 @@ Paste this into a new Claude Code session opened in `C:\Users\niczm\Bottom of th
 
 Continue the first-person pivot of Wish Extractor (Unity 6000.4.2f1, this repo). Read `CLAUDE.md`, then `HANDOFF.md`, then `PIVOT_FPS.md`. `PIVOT_FPS.md` is the design and milestone plan and the source of truth. Its "Decisions" and "Spec decided in session 2" sections are settled, so don't ask me those again.
 
-Where things stand: session 2 stopped partway through Milestone 1. The working tree has uncommitted work and **does not compile yet**. `HANDOFF.md` lists what's done (Core `Defs.cs`, `Balance.cs`, `ContentWorld.cs`, trimmed `ContentMalls.cs`) and exactly what's left before M1 compiles. Start there. Build on the existing WIP; don't redo it.
+Where things stand: milestones M1–M5 are done, verified and committed (`f37e470` … `053f424`). M6 is in progress as **uncommitted work that compiles and passes the existing uitest (85/85)**: hazards (Officer Doug, Chad the rival diver), the Security tech branch, the goldfish, footsteps and more jokes, a rewritten balance bot with a `fit` command, and a round of economy fixes. `HANDOFF.md` ("NEXT: finish M6") lists exactly what's done and what's left. Build on that WIP; don't redo it.
 
-What I want (unchanged): a first-person fountain factory game like Find The Needle. Pick up coins by hand one at a time and carry them to the COIN-O-MATIC 3000 deposit kiosk. Buy equipment that carries more per trip. A tech tree on the Maintenance Terminal unlocks tools, generators, machines and conveyor belts for automated assembly lines. NPC shoppers constantly throw coins into the fountain, and beautification makes them throw more often and better things (nickels → dimes → quarters → loonies → gold → diamonds → ridiculous items). Lots of humour. Hazards (security guard, rival diver) are always on. Keep the six malls, strata, wishes and relics from v1, and a total length of at least 24 hours (verify with a rewritten balance bot). You have creative liberty.
+What's left for M6:
+1. Run the fitter (`dotnet run -c Release --project Tools/BalanceSim -- fit --apply`), then the 40 h engaged and casual reports. The engaged bot must total at least 24 hours (unfitted it's 11.1 h). Read the per-mall logs for runaway income or dead stretches, and fix the economy if needed, not just the crust sizes.
+2. Check the early pacing against `PIVOT_FPS.md`.
+3. Extend `-autotour` and `-uitest` to cover the hazards and the goldfish; build, run tour, uitest and loadtest, look at every screenshot, and fix what's wrong.
+4. Commit M6 once verified.
+5. Update HANDOFF.md, CLAUDE.md, DESIGN.md and README.md for the new game (HANDOFF lists the lessons to add to CLAUDE.md).
+
+What I want (unchanged): a first-person fountain factory game like Find The Needle. Pick up coins by hand and carry them to the COIN-O-MATIC 3000; buy equipment that carries more per trip; a Maintenance Terminal tech tree unlocking tools, generators, machines and conveyor belts; NPC shoppers throwing ever-better (and more ridiculous) things as the fountain gets fancier; lots of humour; hazards always on; the six malls, strata, wishes and relics from v1; at least 24 hours total, verified by the balance bot. You have creative liberty.
 
 How to work:
-- Finish M1, then go milestone by milestone (M2–M6 in `PIVOT_FPS.md`).
-- Reuse the v1 pieces the plan lists (procedural meshes, shaders, mall builder, fountain, audio synth, UI kit, save, test flags) instead of rewriting them.
-- After each milestone: batch build, run `-autotour` screenshots (tour updated for first person) and an updated `-uitest`, look at the screenshots, and fix what's wrong. Then commit (you're authorized to commit each verified milestone; ask before committing anything unverified), and continue.
+- You're authorized to commit a verified milestone (build + tour + uitest pass); ask before committing anything unverified.
 - Follow the CLAUDE.md rules: vertex alpha = emission; no commands that trigger permission prompts (file changes through Write/Edit only, no rm, no `sed -i`, no `cd` chains); never kill processes.
-- Give me a one-line status update at each milestone.
-- At the end, update HANDOFF.md, CLAUDE.md, DESIGN.md and README.md for the new game.
+- Give me a one-line status update when M6 is done.

@@ -18,15 +18,15 @@ namespace WishExtractor.Core
         }
 
         /// <summary>
-        /// Crust boundaries (cumulative scoops at the top of each stratum, then the bottom) fitted by
-        /// Tools/BalanceSim "fit" so the bot spends a planned share of each mall in every layer.
-        /// Regenerate after any balance change. Null rows fall back to DefaultBounds.
+        /// Total crust (scoops from the top to bare concrete) per mall, fitted by Tools/BalanceSim "fit"
+        /// so the engaged bot takes the planned hours in each mall. Regenerate after any balance change.
+        /// Zero falls back to the CrustScoops placeholder in the mall's definition.
         /// </summary>
-        static readonly double[][] FittedBounds =
+        static readonly double[] FittedScoops =
         {
-            // <fitted-bounds> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
-            null, null, null, null, null, null,
-            // </fitted-bounds>
+            // <fitted-scoops> (written by: dotnet run -c Release --project Tools/BalanceSim -- fit --apply)
+            0, 0, 0, 0, 0, 0,
+            // </fitted-scoops>
         };
 
         /// <summary>Fallback: a loose layer of looseScoops, then geometric growth down to total.</summary>
@@ -39,6 +39,13 @@ namespace WishExtractor.Core
             for (int i = 2; i <= strata; i++) b[i] = b[i - 1] * ratio;
             b[strata] = total;
             return b;
+        }
+
+        /// <summary>Resize a mall's crust (the balance fitter calls this between runs).</summary>
+        public static void SetCrust(MallDef mall, double scoops)
+        {
+            mall.CrustScoops = Math.Max(Balance.LooseLayerScoops * 3, scoops);
+            mall.Bounds = DefaultBounds(mall.CrustScoops, Balance.LooseLayerScoops, mall.Strata.Length);
         }
 
         static WishDef W(Rarity r, double v, string text) => new WishDef(r, v, text);
@@ -551,13 +558,26 @@ namespace WishExtractor.Core
                 },
             });
 
+            // v1 sized each mall's values for a ×10⁴-per-mall economy; scale them back so later malls are
+            // somewhat richer than Crestview (crust ≈ ×1.6 per mall) rather than astronomically richer
+            double[] lootScale = { 1, 25, 225, 28, 60, 40 };
+            double[] storyScale = { 1, 10, 84, 83, 110, 118 };
+            for (int m = 0; m < malls.Count; m++)
+            {
+                var mall = malls[m];
+                mall.LootScale = lootScale[m];
+                mall.StoryScale = storyScale[m];
+                foreach (var it in mall.Items) it.Value /= mall.LootScale;
+                foreach (var w in mall.Wishes) w.BaseValue /= mall.StoryScale;
+                foreach (var r in mall.Relics) r.BaseValue /= mall.StoryScale;
+            }
+
             for (int m = 0; m < malls.Count; m++)
             {
                 var mall = malls[m];
                 mall.ComputeEV();
-                if (m < FittedBounds.Length && FittedBounds[m] != null) mall.Bounds = (double[])FittedBounds[m].Clone();
-                else mall.Bounds = DefaultBounds(mall.CrustScoops, Balance.LooseLayerScoops, mall.Strata.Length);
-                mall.CrustScoops = mall.Bounds[mall.Bounds.Length - 1];
+                if (m < FittedScoops.Length && FittedScoops[m] > 0) mall.CrustScoops = FittedScoops[m];
+                SetCrust(mall, mall.CrustScoops);
             }
 
             for (int m = 0; m < malls.Count; m++)

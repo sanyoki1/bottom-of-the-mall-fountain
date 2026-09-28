@@ -19,7 +19,7 @@ namespace WishExtractor.Core
                 return b;
             }
             // ── power ──
-            B("gen_hamster", "Hamster Wheel", BuildCat.Power, 1, 1, 5, 3, "unlock_hamster", 0xC8A070,
+            B("gen_hamster", "Hamster Wheel", BuildCat.Power, 1, 1, 3, 3, "unlock_hamster", 0xC8A070,
                 "Gerald runs. The lights flicker. Gerald is paid in sunflower seeds and is unionising.");
             B("gen_diesel", "Diesel Generator", BuildCat.Power, 2, 2, 150, 25, "unlock_diesel", 0xE8C020,
                 "Loud, smoky, and technically not allowed indoors. Mall management has been told it's a 'fog machine'.");
@@ -29,7 +29,7 @@ namespace WishExtractor.Core
                 "A light pipe from the skylight into a very confident box. It works at night. Don't ask.");
 
             // ── intakes: stand at the rim, reach into the fountain, output out the back ──
-            var sk = B("intake_skimmer", "Pool Skimmer Bot", BuildCat.Intake, 1, 2, 25, -3, "unlock_skimmer", 0x39E5D0,
+            var sk = B("intake_skimmer", "Pool Skimmer Bot", BuildCat.Intake, 1, 2, 15, -3, "unlock_skimmer", 0x39E5D0,
                 "A pool-cleaning robot that roams the fountain eating coins, then trundles home to its dock to unload.");
             sk.RimOnly = true; sk.Intake = "skimmer"; sk.Rate = 1.2; sk.Capacity = 12; sk.Reach = 8;
             sk.Outputs = new[] { (0, 0, 2) };
@@ -121,14 +121,14 @@ namespace WishExtractor.Core
                 return t;
             }
             // power
-            U("unlock_hamster", "Hamster Wheel Power", TechBranch.Power, "gen_hamster", 15, 0, 0, "Adopt Gerald. Gerald wants to help.");
+            U("unlock_hamster", "Hamster Wheel Power", TechBranch.Power, "gen_hamster", 10, 0, 0, "Adopt Gerald. Gerald wants to help.");
             U("unlock_diesel", "Diesel Generator", TechBranch.Power, "gen_diesel", 300, 1, 0, "Proper power, improper fumes.", "unlock_hamster");
             U("unlock_fryer", "Fryer-Oil Generator", TechBranch.Power, "gen_fryer", 4000, 2, 0, "The food court throws out forty litres of oil a day. Not any more.", "unlock_diesel");
             U("unlock_solar", "Skylight Solar", TechBranch.Power, "gen_solar", 50000, 3, 0, "The skylight was always there. You just had to believe in it.", "unlock_fryer");
             Lv("power_overclock", "Overclocked Generators", TechBranch.Power, TechKind.MachineSpeed, "Power", 0.1, 80, 1.9, 15, 0, 1,
                 "Wires, rewired. Fuses, replaced with pennies. Output goes up. So does the risk.", "unlock_hamster");
             // intake
-            U("unlock_skimmer", "Pool Skimmer Bot", TechBranch.Intake, "intake_skimmer", 25, 0, 0, "A second-hand pool robot. It has seen things in pools.", "unlock_hamster");
+            U("unlock_skimmer", "Pool Skimmer Bot", TechBranch.Intake, "intake_skimmer", 18, 0, 0, "A second-hand pool robot. It has seen things in pools.", "unlock_hamster");
             U("unlock_pump", "Fountain Drain Pump", TechBranch.Intake, "intake_pump", 900, 1, 0, "Industrial suction for a commercial fountain.", "unlock_skimmer", "unlock_diesel");
             U("unlock_claw", "Claw Machine Crane", TechBranch.Intake, "intake_claw", 12000, 2, 0, "Bought from the arcade when it closed. Finally, a claw that doesn't cheat.", "unlock_pump");
             Lv("intake_firmware", "Intake Firmware", TechBranch.Intake, TechKind.MachineSpeed, "Intake", 0.15, 60, 1.8, 15, 0, 1,
@@ -148,7 +148,7 @@ namespace WishExtractor.Core
                 "A consultant rearranged the machines. Everything is 15% faster. The consultant charged 40% more.", "unlock_tumbler");
             // logistics
             U("unlock_belts", "Conveyor Belts", TechBranch.Logistics, "belt", 8, 0, 0, "Move things without walking. Revolutionary.");
-            U("unlock_hopper", "Wired Deposit", TechBranch.Logistics, "hopper", 30, 1, 0, "Head Office agrees to take deposits from a box. Build hoppers anywhere.", "unlock_belts");
+            U("unlock_hopper", "Wired Deposit", TechBranch.Logistics, "hopper", 20, 1, 0, "Head Office agrees to take deposits from a box. Build hoppers anywhere.", "unlock_belts");
             U("unlock_splitter", "Belt Splitter", TechBranch.Logistics, "splitter", 150, 2, 0, "One belt becomes three. Physics is fine with this.", "unlock_belts");
             U("unlock_hopper2", "Armoured Hopper", TechBranch.Logistics, "hopper2", 6000, 3, 0, "For when the regular hopper can't keep up with your success.", "unlock_hopper");
             var fast = Lv("belt_fast", "Fast Belts", TechBranch.Logistics, TechKind.BeltSpeed, null, 1, 600, 1, 1, 0, 1, "Every belt runs twice as fast. The ketchup smell intensifies.", "unlock_belts");

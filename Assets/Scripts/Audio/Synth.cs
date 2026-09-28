@@ -112,6 +112,55 @@ namespace WishExtractor.Audio
             return b;
         }
 
+        /// <summary>A soft sneaker footfall on terrazzo: a low thump plus a little squeak now and then.</summary>
+        public static float[] Footstep(int seed)
+        {
+            var r = new Random(seed);
+            var b = Buffer(0.14f);
+            float lp = 0;
+            double ph = 0;
+            float f0 = 70 + (float)r.NextDouble() * 30;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                lp += ((float)(r.NextDouble() * 2 - 1) - lp) * 0.08f;
+                ph += f0 / Rate;
+                b[i] = lp * Env(t, 0.002f, 0.025f) * 1.4f + Sin(ph) * Env(t, 0.002f, 0.03f) * 0.6f;
+            }
+            if (seed % 3 == 0)
+            {
+                double sp = 0;
+                for (int i = 0; i < b.Length; i++)
+                {
+                    float t = i / (float)Rate;
+                    sp += (1800 + t * 3000) / Rate;
+                    b[i] += Sin(sp) * Env(t, 0.004f, 0.02f) * 0.08f;
+                }
+            }
+            Normalize(b, 0.5f);
+            Fade(b);
+            return b;
+        }
+
+        /// <summary>A mall cop's whistle: a trilled two-tone blast.</summary>
+        public static float[] Whistle()
+        {
+            var b = Buffer(0.55f);
+            double ph = 0;
+            var r = new Random(9);
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                float trill = (float)Math.Sin(t * 2 * Math.PI * 28) * 60;
+                ph += (2600 + trill) / Rate;
+                float env = t < 0.02f ? t / 0.02f : t > 0.45f ? Math.Max(0, 1 - (t - 0.45f) / 0.1f) : 1;
+                b[i] = (Sin(ph) * 0.8f + (float)(r.NextDouble() * 2 - 1) * 0.12f) * env;
+            }
+            Normalize(b, 0.55f);
+            Fade(b);
+            return b;
+        }
+
         public static float[] Register()
         {
             var b = Buffer(1.4f);

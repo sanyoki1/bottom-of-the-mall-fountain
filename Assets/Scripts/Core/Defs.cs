@@ -121,6 +121,8 @@ namespace WishExtractor.Core
         public double CrustScoops;     // total crust work (scoops) from the top to bare concrete
         public double[] Bounds;        // cumulative scoops at the top of each stratum; last entry = CrustScoops
         public double ValueScale = 1;  // every value and price in this mall is (Crestview amount) × ValueScale
+        public double LootScale = 1;   // v1 crust loot values are divided by this (v1 grew ×10⁴ per mall; v2 keeps numbers modest)
+        public double StoryScale = 1;  // likewise for v1 wish and relic values
         public int LuckyPennies;       // prestige reward for clearing it
         public StratumDef[] Strata;
         public ItemKind[] Items;       // crust loot
@@ -213,6 +215,7 @@ namespace WishExtractor.Core
         StartCash,      // Head Office: start every mall with Value × level dollars (× the mall's value scale)
         StartCarry,     // Head Office: start every mall with this carry tier (level = tier)
         StartUnlocks,   // Head Office: start every mall with the basic factory researched
+        RivalRepel,     // × (1 - Value) rival diver visits per level
     }
 
     public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice }

@@ -43,7 +43,7 @@ namespace WishExtractor.UI
         {
             (TechBranch.Carry, "Carry"), (TechBranch.Tools, "Tools"), (TechBranch.Fountain, "Fountain"),
             (TechBranch.Power, "Power"), (TechBranch.Intake, "Intake"), (TechBranch.Logistics, "Logistics"),
-            (TechBranch.Processing, "Processing"), (TechBranch.HeadOffice, "Head Office"),
+            (TechBranch.Processing, "Processing"), (TechBranch.Security, "Security"), (TechBranch.HeadOffice, "Head Office"),
         };
 
         public void Build(Canvas canvas, Sim s)
@@ -79,8 +79,8 @@ namespace WishExtractor.UI
             for (int i = 0; i < Branches.Length; i++)
             {
                 var br = Branches[i];
-                var b = UIKit.Button(tabBar, br.name, br.name.ToUpperInvariant(), Panel, Dim, 16, () => SetBranch(br.b), 10, UIKit.Mono);
-                b.Rt.TL(i * 172, 0, 164, 44);
+                var b = UIKit.Button(tabBar, br.name, br.name.ToUpperInvariant(), Panel, Dim, 15, () => SetBranch(br.b), 10, UIKit.Mono);
+                b.Rt.TL(i * 152, 0, 146, 44);
                 tabs.Add(b);
             }
 
@@ -262,7 +262,8 @@ namespace WishExtractor.UI
                 case TechKind.MachineSpeed: return $"+{t.Value * 100:0}% speed for {(string.IsNullOrEmpty(t.Target) ? "all machines" : t.Target)} per level";
                 case TechKind.BeltSpeed: return "Faster conveyor belts";
                 case TechKind.DepositMult: return $"+{t.Value * 100:0}% value for {t.Target} per level";
-                case TechKind.GuardFine: return $"-{t.Value * 100:0}% security fines per level";
+                case TechKind.GuardFine: return t.Value >= 0.999 ? "No more wading fines. Ever." : $"-{t.Value * 100:0}% security fines per level";
+                case TechKind.RivalRepel: return $"-{t.Value * 100:0}% rival diver visits per level";
                 case TechKind.Unlock:
                     return Content.BuildIndex.TryGetValue(t.Target ?? "", out int bi) ? $"Unlocks the {Content.Buildables[bi].Name} in build mode" : "Unlocks: " + t.Target;
                 case TechKind.DigPower: return $"+{t.Value * 100:0}% scoops per swing and per dig rig, per level";

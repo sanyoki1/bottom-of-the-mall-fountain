@@ -34,12 +34,12 @@ namespace WishExtractor.Core
             Coin("quarter", "Quarter", 0.25, 0xC9CDD2, 0.47f, 12, "A caribou that has seen things.");
             Coin("loonie", "Loonie", 1.00, 0xD4A83A, 0.50f, 20, "Eleven-sided. Somebody's whole bus fare.");
             Coin("toonie", "Toonie", 2.00, 0xC8C8C8, 0.54f, 30, "Two-tone, two dollars, too good to throw. They threw it.");
-            Coin("silver", "Silver Dollar", 5.00, 0xE6EAEE, 0.60f, 45, "A collector's coin, tossed by someone who is not a collector.");
-            Coin("gold", "Gold Coin", 50.0, 0xF2C230, 0.60f, 65, "Real gold. The person who threw it wished for 'a sign'.");
-            var d = AddType("diamond", "Diamond", ItemCat.Coin, ItemShape.Diamond, 0xDFF4FF, 500, 0.55f, "A loose diamond. Apparently people just have these.");
+            Coin("silver", "Silver Dollar", 5.00, 0xE6EAEE, 0.60f, 55, "A collector's coin, tossed by someone who is not a collector.");
+            Coin("gold", "Gold Coin", 20.0, 0xF2C230, 0.60f, 85, "Real gold. The person who threw it wished for 'a sign'.");
+            var d = AddType("diamond", "Diamond", ItemCat.Coin, ItemShape.Diamond, 0xDFF4FF, 100, 0.55f, "A loose diamond. Apparently people just have these.");
             d.Tier = CoinTiers.Count;
             CoinTiers.Add(d.Index);
-            CoinTierMinWish.Add(90);
+            CoinTierMinWish.Add(120);
         }
 
         /// <summary>The ridiculous things people throw once the fountain is fancy enough.</summary>
@@ -56,25 +56,27 @@ namespace WishExtractor.Core
                 Oddities.Add(t.Index);
                 OddityMinWish.Add(minWish);
             }
-            O("duck", "Rubber Duck", 5, ItemShape.Duck, 0xFFD23A, 1.0f, 18, Rarity.Common, "Squeaks with quiet disapproval.");
-            O("shoe", "Toddler Shoe", 15, ItemShape.Shoe, 0xFF7AA8, 1.0f, 20, Rarity.Common, "Single. Velcro. Light-up. Still blinking.");
-            O("keys", "Car Keys", 40, ItemShape.Keys, 0xC9CDD2, 1.0f, 25, Rarity.Common, "They were in the wrong pocket the whole time. Now they're in the fountain.");
-            O("teeth", "Dentures", 80, ItemShape.Teeth, 0xF4EEE0, 1.0f, 28, Rarity.Uncommon, "Grandma laughed so hard at the mime.");
-            O("timeshare", "Timeshare Contract", 0.5, ItemShape.Paper, 0xE8E0C8, 1.4f, 32, Rarity.Uncommon, "Legally binding. Nobody, not even the fountain, can escape it.");
-            O("phone", "Entire Phone (Mid-Call)", 300, ItemShape.Phone, 0x2A2D34, 1.0f, 35, Rarity.Uncommon, "Somebody's mom is still on the line. She says hi.");
-            O("wallet", "Businessman's Wallet", 250, ItemShape.Wallet, 0x4A3222, 1.0f, 40, Rarity.Uncommon, "$214, a gym card, and a photo of a boat.");
-            O("toaster", "Toaster", 60, ItemShape.Toaster, 0xD8DCE0, 1.0f, 42, Rarity.Uncommon, "Still warm. Please don't.");
-            O("bowling", "Bowling Ball", 120, ItemShape.Ball, 0x3A2A7A, 1.0f, 45, Rarity.Rare, "Sixteen pounds of 'I'm done with this league'.", true);
-            O("trophy", "Bowling Trophy", 200, ItemShape.Trophy, 0xE8B83A, 1.0f, 48, Rarity.Rare, "2nd place, 1997 regionals. Thrown out of spite.");
-            O("ring", "Wedding Ring (Mid-Argument)", 900, ItemShape.Gem, 0xF0D060, 1.3f, 50, Rarity.Rare, "Thrown with remarkable accuracy.");
-            O("beanie", "Beanie Baby", 400, ItemShape.Wad, 0x6A4FA8, 1.6f, 58, Rarity.Rare, "Tag intact. Hopes intact.");
-            O("seed", "Crypto Seed Phrase (On a Napkin)", 1500, ItemShape.Paper, 0xF6F2EA, 1.2f, 62, Rarity.Epic, "Twelve words and a ketchup stain. Might be millions. Might be a grocery list.");
-            O("lottery", "Lottery Ticket (Five Numbers)", 2500, ItemShape.Paper, 0xFFD34D, 1.1f, 70, Rarity.Epic, "Five numbers match. The sixth is under the gum.");
-            O("fridge", "Smart Fridge", 3000, ItemShape.Cube, 0xE8ECEF, 4.2f, 82, Rarity.Epic, "It has been texting the fountain. The fountain has not replied.", true);
-            O("vending", "Vending Machine", 5000, ItemShape.Vending, 0xD8283A, 1.0f, 95, Rarity.Epic, "A bodybuilder wanted a Diet Coke. It wanted to stay.", true);
-            O("goldbar", "Gold Bar", 8000, ItemShape.Bar, 0xF2C230, 1.2f, 110, Rarity.Legendary, "Tossed by a billionaire who 'wanted to feel something'.");
-            O("tiara", "Pageant Tiara", 12000, ItemShape.Gem, 0xE8F4FF, 1.8f, 125, Rarity.Legendary, "The pageant is over. The pageant is never over.");
-            O("moonrock", "Moon Rock (Probably)", 25000, ItemShape.Chunk, 0x9A9A9A, 1.0f, 140, Rarity.Legendary, "Certificate of authenticity signed 'An Astronaut'.");
+            // the silly early ones are worth about a coin of their tier; the truly ridiculous ones come after diamonds
+            O("duck", "Rubber Duck", 0.50, ItemShape.Duck, 0xFFD23A, 1.0f, 18, Rarity.Common, "Squeaks with quiet disapproval.");
+            O("shoe", "Toddler Shoe", 0.75, ItemShape.Shoe, 0xFF7AA8, 1.0f, 20, Rarity.Common, "Single. Velcro. Light-up. Still blinking.");
+            O("goldfish", "Live Goldfish", 0, ItemShape.Fish, 0xFF8A20, 2.0f, 22, Rarity.Uncommon, "Won at a fair, released 'into the wild'. Must be returned to the water. Immediately.");
+            O("keys", "Car Keys", 2, ItemShape.Keys, 0xC9CDD2, 1.0f, 25, Rarity.Common, "They were in the wrong pocket the whole time. Now they're in the fountain.");
+            O("teeth", "Dentures", 3, ItemShape.Teeth, 0xF4EEE0, 1.0f, 28, Rarity.Uncommon, "Grandma laughed so hard at the mime.");
+            O("timeshare", "Timeshare Contract", 0.05, ItemShape.Paper, 0xE8E0C8, 1.4f, 32, Rarity.Uncommon, "Legally binding. Nobody, not even the fountain, can escape it.");
+            O("phone", "Entire Phone (Mid-Call)", 10, ItemShape.Phone, 0x2A2D34, 1.0f, 45, Rarity.Uncommon, "Somebody's mom is still on the line. She says hi.");
+            O("wallet", "Businessman's Wallet", 12, ItemShape.Wallet, 0x4A3222, 1.0f, 50, Rarity.Uncommon, "$214, a gym card, and a photo of a boat. Most of the $214 is Monopoly money.");
+            O("toaster", "Toaster", 6, ItemShape.Toaster, 0xD8DCE0, 1.0f, 55, Rarity.Uncommon, "Still warm. Please don't.");
+            O("bowling", "Bowling Ball", 15, ItemShape.Ball, 0x3A2A7A, 1.0f, 65, Rarity.Rare, "Sixteen pounds of 'I'm done with this league'.", true);
+            O("trophy", "Bowling Trophy", 12, ItemShape.Trophy, 0xE8B83A, 1.0f, 70, Rarity.Rare, "2nd place, 1997 regionals. Thrown out of spite.");
+            O("ring", "Wedding Ring (Mid-Argument)", 40, ItemShape.Gem, 0xF0D060, 1.3f, 80, Rarity.Rare, "Thrown with remarkable accuracy.");
+            O("beanie", "Beanie Baby", 30, ItemShape.Wad, 0x6A4FA8, 1.6f, 90, Rarity.Rare, "Tag intact. Hopes intact.");
+            O("seed", "Crypto Seed Phrase (On a Napkin)", 120, ItemShape.Paper, 0xF6F2EA, 1.2f, 110, Rarity.Epic, "Twelve words and a ketchup stain. Might be millions. Might be a grocery list.");
+            O("lottery", "Lottery Ticket (Five Numbers)", 200, ItemShape.Paper, 0xFFD34D, 1.1f, 125, Rarity.Epic, "Five numbers match. The sixth is under the gum.");
+            O("fridge", "Smart Fridge", 150, ItemShape.Cube, 0xE8ECEF, 4.2f, 140, Rarity.Epic, "It has been texting the fountain. The fountain has not replied.", true);
+            O("vending", "Vending Machine", 250, ItemShape.Vending, 0xD8283A, 1.0f, 150, Rarity.Epic, "A bodybuilder wanted a Diet Coke. It wanted to stay.", true);
+            O("goldbar", "Gold Bar", 600, ItemShape.Bar, 0xF2C230, 1.2f, 165, Rarity.Legendary, "Tossed by a billionaire who 'wanted to feel something'.");
+            O("tiara", "Pageant Tiara", 900, ItemShape.Gem, 0xE8F4FF, 1.8f, 180, Rarity.Legendary, "The pageant is over. The pageant is never over.");
+            O("moonrock", "Moon Rock (Probably)", 2000, ItemShape.Chunk, 0x9A9A9A, 1.0f, 195, Rarity.Legendary, "Certificate of authenticity signed 'An Astronaut'.");
         }
 
         /// <summary>Crust loot, gunk, relics and processed goods, per mall where it matters.</summary>
@@ -134,8 +136,8 @@ namespace WishExtractor.Core
                 => list.Add(new CarryDef { Id = id, Name = name, Capacity = cap, Cost = cost, Desc = desc, SpeedMult = speed, NoJump = noJump, AutoRadius = auto, Index = list.Count });
             C("hands", "Bare Hands", 1, 0, "One coin at a time. Choose wisely.");
             C("cup", "Paper Cup", 5, 0.60, "From the food court. Lightly used. Heavily sticky.");
-            C("pail", "Sand Pail", 20, 4, "Red plastic. Came free with a kids' meal in 1996.");
-            C("bucket", "Mop Bucket", 60, 25, "Borrowed from the custodial closet. The mop is staying.");
+            C("pail", "Sand Pail", 20, 3, "Red plastic. Came free with a kids' meal in 1996.");
+            C("bucket", "Mop Bucket", 60, 15, "Borrowed from the custodial closet. The mop is staying.");
             C("fanny", "Fanny Pack of Holding", 150, 150, "Bigger on the inside. Smells like 1994.");
             C("barrow", "Wheelbarrow", 500, 1200, "Squeaks on every rotation. You are slower, but richer.", 0.85f);
             C("cart", "Shopping Cart", 2000, 9000, "One wheel only turns left. You cannot jump with a cart. Nobody can.", 0.8f, true);
@@ -210,7 +212,7 @@ namespace WishExtractor.Core
             var toddler = A("toddler", "Toddler (Unsupervised)", 5, 2, 0, 0xFFD23A, 0x3A7BD5, 0xFF7AA8, "balloon", new[]
             {
                 "MINE!", "Penny go SPLASH!", "*throws shoe*", "Mommy I wished for a DINOSAUR", "WAAAAH", "again! AGAIN!",
-            }, "shoe", "duck");
+            }, "shoe", "duck", "goldfish");
             toddler.Scale = 0.55f; toddler.Speed = 1.0f; toddler.OddityBoost = 3; toddler.Tosses = 3;
             var suit = A("business", "Businessman", 10, 2, 0.8, 0x2A3140, 0x222630, 0x2A2A2A, "briefcase", new[]
             {
@@ -224,24 +226,24 @@ namespace WishExtractor.Core
                 "Our guidebook said this was a must-see.", "Do they have fountains like this back home? No. No they do not.",
             }, "foreign");
             tourist.OddityBoost = 4;
-            var influencer = A("influencer", "Influencer", 22, 1.5, 0.6, 0xFF7AA8, 0xF4F0EA, 0xFFE0F0, "selfie", new[]
+            var influencer = A("influencer", "Influencer", 35, 1.5, 0.6, 0xFF7AA8, 0xF4F0EA, 0xFFE0F0, "selfie", new[]
             {
                 "Hey besties, wish with me!", "Don't forget to like and subscribe to this fountain!", "Wait, the lighting's wrong. Again.",
                 "Take 47. And... wish!", "#blessed #fountaincore #nofilter",
             }, "phone");
             influencer.OddityBoost = 2;
-            var proposer = A("proposer", "Heartbroken Proposer", 40, 1, 1.0, 0x1D1D22, 0x1D1D22, 0x1D1D22, "rose", new[]
+            var proposer = A("proposer", "Heartbroken Proposer", 65, 1, 1.0, 0x1D1D22, 0x1D1D22, 0x1D1D22, "rose", new[]
             {
                 "Will you... okay. Never mind.", "She said she needs 'space'. The fountain has space.", "It was a promise ring. I'm keeping the promise.",
                 "I rented a flash mob. They're on their break.",
             }, "ring");
             proposer.OddityBoost = 6;
-            var gym = A("bodybuilder", "Bodybuilder", 90, 1, 1.5, 0xE84F4F, 0x2A2A2A, 0x2A2A2A, "dumbbell", new[]
+            var gym = A("bodybuilder", "Bodybuilder", 120, 1, 1.5, 0xE84F4F, 0x2A2A2A, 0x2A2A2A, "dumbbell", new[]
             {
                 "DO YOU EVEN WISH, BRO?", "Leg day tomorrow. Wish me luck.", "HNNNGH!", "Protein. I wished for protein.",
             }, "vending", "bowling", "fridge");
             gym.Scale = 1.2f; gym.OddityBoost = 3;
-            var rich = A("billionaire", "Billionaire", 100, 0.6, 3.0, 0x1A1A1A, 0x1A1A1A, 0x1A1A1A, "tophat", new[]
+            var rich = A("billionaire", "Billionaire", 150, 0.6, 3.0, 0x1A1A1A, 0x1A1A1A, 0x1A1A1A, "tophat", new[]
             {
                 "Money can't buy happiness. It CAN buy fountains.", "Keep the change. All of it.", "I own the mall. And this fountain. And you.",
                 "I wished for a second moon. Let's see.", "Pocket lint. Diamonds. Same thing.",
@@ -276,6 +278,14 @@ namespace WishExtractor.Core
             "COINSTAR IS A TRADEMARK. COIN-O-MATIC IS A LIFESTYLE.",
             "EXCELLENT CHOICE. THE MACHINE IS PROUD OF YOU.",
             "PRINTED ON 100% RECYCLED RECEIPTS FROM 1997.",
+            "TODAY'S LUCKY NUMBER IS 0.01.",
+            "THE COIN-O-MATIC HAS SEEN WHAT YOU DID IN THAT FOUNTAIN.",
+            "ONE OF THESE COINS WAS A WISH. WE ARE LEGALLY OBLIGATED TO SAY NOTHING.",
+            "REMEMBER: IT'S NOT STEALING IF THE MALL SAYS IT'S FINE.",
+            "YOU HAVE DEPOSITED MORE THAN THE FOOD COURT MADE TODAY.",
+            "THIS MACHINE IS 30 YEARS OLD AND STILL SMARTER THAN THE PARKING METERS.",
+            "BEEP BOOP. (THAT'S COIN-O-MATIC FOR 'THANK YOU'.)",
+            "PLEASE DO NOT FEED THE MACHINE GUM. IT HAS TRIED IT. IT DID NOT LIKE IT.",
         };
 
         /// <summary>What the COIN-O-MATIC says when you try to deposit with empty hands.</summary>

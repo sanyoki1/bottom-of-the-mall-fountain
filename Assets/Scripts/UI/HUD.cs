@@ -324,6 +324,8 @@ namespace WishExtractor.UI
                         ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
                         : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
                 }
+                case TargetKind.Rival:
+                    return $"<b>[E]</b> Shoo Chad out of your fountain  <color=#C8C8C8>(he drops everything he took: {sim.Rival.Loot.Count} items)</color>";
                 case TargetKind.Crust:
                 {
                     var tool = sim.DigTool;

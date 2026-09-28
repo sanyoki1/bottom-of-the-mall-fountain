@@ -1,15 +1,24 @@
-// Balance simulator for the first-person game. Compiles the real Core and plays it with a bot.
-// Milestone 1 stub: content counts and a short hand-carry smoke run. The full throughput bot
-// (walking times, tech purchases, factory) arrives with the balance pass.
+// Balance simulator for the first-person game. Compiles the real Core and plays it with a bot
+// (Bot.cs). Usage:
+//   dotnet run -c Release --project Tools/BalanceSim -- [maxHours] [seed] [engaged|casual]   play all six malls
+//   dotnet run -c Release --project Tools/BalanceSim -- fit [--apply]                         fit each mall's crust size
+//   ... -- counts | crowd <wishability> | factory | crust                                     content counts and system checks
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using WishExtractor.Core;
 
 static class Program
 {
+    /// <summary>Planned engaged-bot hours per mall (sum ≥ 24).</summary>
+    static readonly double[] TargetHours = { 3.0, 3.5, 4.0, 4.5, 5.0, 5.0 };
+
     static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "fit") return Fit(args.Contains("--apply"));
         if (args.Length > 0 && args[0] == "counts")
         {
             Console.WriteLine($"malls {Content.Malls.Length}, items {Content.Items.Length} (coins {Content.CoinTiers.Count}, oddities {Content.Oddities.Count})");
@@ -20,7 +29,93 @@ static class Program
         if (args.Length > 0 && args[0] == "crowd") return Crowd(args.Length > 1 ? double.Parse(args[1]) : 0);
         if (args.Length > 0 && args[0] == "factory") return Factory();
         if (args.Length > 0 && args[0] == "crust") return Crust();
-        return Smoke();
+        if (args.Length > 0 && args[0] == "smoke") return Smoke();
+        double hours = args.Length > 0 ? double.Parse(args[0]) : 40;
+        int seed = args.Length > 1 ? int.Parse(args[1]) : 1234;
+        string profile = args.Length > 2 ? args[2] : "engaged";
+        return Run(hours, seed, profile);
+    }
+
+    static int Run(double maxHours, int seed, string profile)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var bot = new Bot(new SaveData(), seed, profile);
+        if (Environment.GetEnvironmentVariable("BOT_REPORT") is string every) bot.ReportEvery = double.Parse(every);
+        var sb = new StringBuilder();
+        sb.AppendLine($"Wish Extractor balance run: profile {profile}, seed {seed}, cap {maxHours} h");
+        double total = 0;
+        for (int m = 0; m < Content.Malls.Length; m++)
+        {
+            double left = maxHours - total;
+            if (left <= 0) break;
+            double h = bot.PlayMall(Math.Min(left, 14));
+            sb.Append(bot.Log);
+            bot.Log.Clear();
+            if (h < 0) { sb.AppendLine($"{Content.Malls[m].Name}: NOT CLEARED (depth {bot.Sim.DepthFeet:0.0} ft)"); break; }
+            total += h;
+            sb.AppendLine($"{Content.Malls[m].Name}: {h:0.00} h   (running total {total:0.00} h)");
+            bot.SignAndSpend();
+        }
+        sb.AppendLine($"TOTAL {total:0.00} h for {bot.MallTimes.Count} malls  (simulated in {sw.Elapsed.TotalSeconds:0} s)");
+        var report = sb.ToString();
+        Console.WriteLine(report);
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", $"report_{profile}.txt"), report);
+        return 0;
+    }
+
+    static readonly JsonSerializerOptions JsonOpts = new JsonSerializerOptions { IncludeFields = true };
+    static SaveData Clone(SaveData s) => JsonSerializer.Deserialize<SaveData>(JsonSerializer.Serialize(s, JsonOpts), JsonOpts);
+
+    /// <summary>
+    /// For each mall in turn, bisect its crust size (log space) until the engaged bot clears it in the
+    /// target hours, starting from the state the bot reached at the end of the previous mall.
+    /// </summary>
+    static int Fit(bool apply)
+    {
+        var fitted = new double[Content.Malls.Length];
+        var bot = new Bot(new SaveData(), 1234, "engaged");
+        var start = Clone(bot.Sim.Snapshot());
+        for (int m = 0; m < Content.Malls.Length; m++)
+        {
+            var mall = Content.Malls[m];
+            double target = TargetHours[m];
+            double lo = Math.Log(3000), hi = Math.Log(6e7), best = mall.CrustScoops;
+            for (int iter = 0; iter < 14; iter++)
+            {
+                double mid = (lo + hi) / 2;
+                Content.SetCrust(mall, Math.Exp(mid));
+                var trial = new Bot(Clone(start), 1234, "engaged");
+                double h = trial.PlayMall(target * 2.2);
+                Console.WriteLine($"  {mall.Id}: {Math.Exp(mid):0} scoops → {(h < 0 ? "timeout" : h.ToString("0.00") + " h")}");
+                if (h < 0 || h > target) hi = mid; else lo = mid;
+                best = Math.Exp((lo + hi) / 2);
+                if (h > 0 && Math.Abs(h - target) / target < 0.02) { best = Math.Exp(mid); break; }
+            }
+            best = Math.Round(best, -2);
+            Content.SetCrust(mall, best);
+            fitted[m] = best;
+            var run = new Bot(Clone(start), 1234, "engaged");
+            double hours = run.PlayMall(target * 3);
+            Console.WriteLine($"{mall.Name}: {best:0} scoops → {hours:0.00} h (target {target})");
+            if (hours < 0) { Console.WriteLine("  did not clear; stopping"); break; }
+            run.SignAndSpend();
+            start = Clone(run.Sim.Snapshot());
+        }
+        Console.WriteLine("fitted: " + string.Join(", ", fitted.Select(v => v.ToString("0"))));
+        if (apply)
+        {
+            string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Assets", "Scripts", "Core", "ContentMalls.cs"));
+            var text = File.ReadAllText(path);
+            int a = text.IndexOf("// <fitted-scoops>"), b = text.IndexOf("// </fitted-scoops>");
+            int lineEnd = text.IndexOf('\n', a) + 1;
+            int indentStart = text.LastIndexOf('\n', b) + 1;
+            string indent = text.Substring(indentStart, b - indentStart);
+            string body = indent + string.Join(", ", fitted.Select(v => v.ToString("0", System.Globalization.CultureInfo.InvariantCulture))) + ",\n";
+            text = text.Substring(0, lineEnd) + body + text.Substring(indentStart);
+            File.WriteAllText(path, text);
+            Console.WriteLine("wrote " + path);
+        }
+        return 0;
     }
 
     /// <summary>Build a hamster wheel, a skimmer, four belts and a hopper; watch it run for three minutes.</summary>

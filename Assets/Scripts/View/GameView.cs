@@ -8,7 +8,7 @@ using WishExtractor.Core;
 
 namespace WishExtractor.View
 {
-    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board, Building, Crust }
+    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board, Building, Crust, Rival }
 
     public struct Target
     {
@@ -35,6 +35,7 @@ namespace WishExtractor.View
         public FountainDecor Decor { get; private set; }
         public FactoryView Factory { get; private set; }
         public BuildMode Build { get; private set; }
+        public HazardsView Hazards { get; private set; }
         bool decorPrimed;
         float wallDistNow = 999;
         int hoverBuilding = -1;
@@ -119,6 +120,8 @@ namespace WishExtractor.View
 
             Factory = new FactoryView();
             Factory.Init(transform, Ctx);
+            Hazards = new HazardsView();
+            Hazards.Init(transform, Ctx);
             Build = new BuildMode();
             Build.Init(sim, transform);
             Build.Denied += why => Message?.Invoke(why);
@@ -284,13 +287,18 @@ namespace WishExtractor.View
                     if (Sim.FindBuilding(bct.Uid)?.Def.IsBelt == true) wallDistNow = 999;
                 }
             }
-            // floating wishes first: they're triggers on their own layer, and generous to aim at
+            // floating wishes (and Chad) first: they're triggers on their own layer, and generous to aim at
             if (Physics.SphereCast(ray, 0.12f, out var wh, Mathf.Min(Balance.WishReach, wallDist), 1 << WishView.Layer, QueryTriggerInteraction.Collide))
             {
                 var wct = wh.collider.GetComponent<ClickTarget>();
                 if (wct != null && wct.Kind == "wish")
                 {
                     Current = new Target { Kind = TargetKind.Wish, Uid = wct.Uid, Point = wh.point, Distance = wh.distance };
+                    return;
+                }
+                if (wct != null && wct.Kind == "rival")
+                {
+                    Current = new Target { Kind = TargetKind.Rival, Point = wh.point, Distance = wh.distance };
                     return;
                 }
             }
@@ -370,6 +378,9 @@ namespace WishExtractor.View
                     break;
                 case TargetKind.Terminal:
                     OpenTerminal?.Invoke();
+                    break;
+                case TargetKind.Rival:
+                    Sim.ChaseRival();
                     break;
                 case TargetKind.Board:
                 {
@@ -469,6 +480,8 @@ namespace WishExtractor.View
             var feet = Player.Feet;
             Sim.PlayerX = feet.x;
             Sim.PlayerZ = feet.z;
+            Sim.PlayerInWater = Wading;
+            Hazards.Update(dt, time);
             Crowd.Update(dt, time);
             WishOrbs.Update(dt, time);
             Factory.Update(dt, time);

@@ -540,7 +540,7 @@ namespace WishExtractor.Core
             for (int i = 0; i < Loose.Count; i++)
             {
                 var it = Loose[i];
-                if (it.State == LooseState.Airborne) continue;
+                if (it.State == LooseState.Airborne || IsFish(it.Type)) continue;
                 float dx = it.X - p.x, dz = it.Z - p.z, d2 = dx * dx + dz * dz;
                 if (d2 < bd) { bd = d2; best = i; }
             }
@@ -554,7 +554,7 @@ namespace WishExtractor.Core
             for (int i = 0; i < Loose.Count; i++)
             {
                 var it = Loose[i];
-                if (it.State == LooseState.Airborne) continue;
+                if (it.State == LooseState.Airborne || IsFish(it.Type)) continue;
                 if (it.Value > bv) { bv = it.Value; best = i; }
             }
             return best;

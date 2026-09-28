@@ -59,6 +59,8 @@ namespace WishExtractor.Audio
             Add("plop", Synth.Splash(1, false), Synth.Splash(2, false), Synth.Splash(3, false));
             Add("splash", Synth.Splash(4, true), Synth.Splash(5, true));
             Add("throw", Synth.Whoosh(false));
+            Add("step", Synth.Footstep(1), Synth.Footstep(2), Synth.Footstep(3), Synth.Footstep(4), Synth.Footstep(5), Synth.Footstep(6));
+            Add("whistle", Synth.Whistle());
         }
 
         void Add(string name, params float[][] buffers)

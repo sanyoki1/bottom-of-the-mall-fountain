@@ -307,6 +307,7 @@ namespace WishExtractor.Core
             UpdateWishes(dt);
             UpdateFactory(dt);
             UpdateEvent(dt);
+            UpdateHazards(dt);
 
             earnWindowTime += dt;
             if (earnWindowTime >= 1)
@@ -395,12 +396,30 @@ namespace WishExtractor.Core
 
         string FullLine() => Content.FullHandsLines[Rng.Next(Content.FullHandsLines.Length)];
 
+        int fishType = -2;
+        public bool IsFish(int type) { if (fishType == -2) fishType = Content.TypeOrNone("goldfish"); return type == fishType; }
+        public event Action<LooseItem> OnFishReturned;
+
+        /// <summary>You don't carry a goldfish: you put it straight back, to applause (and a Wish Token).</summary>
+        void ReturnFish(LooseItem it)
+        {
+            var (x, z) = RandomLanding();
+            it.FromX = it.X; it.FromY = 1.2f; it.FromZ = it.Z;
+            it.X = x; it.Z = z;
+            it.State = LooseState.Airborne;
+            it.Timer = 0;
+            S.fishReturned++;
+            S.wishTokens += 1;
+            OnFishReturned?.Invoke(it);
+        }
+
         /// <summary>Pick up one loose item. False if it's gone, still airborne, or your hands are full.</summary>
         public bool Pickup(int itemUid)
         {
             if (!looseIndex.TryGetValue(itemUid, out int i)) return false;
             var it = Loose[i];
             if (it.State == LooseState.Airborne) return false;
+            if (IsFish(it.Type)) { ReturnFish(it); return false; }
             if (!CanCarry(it.Type)) { OnPickupFail?.Invoke(FullLine()); return false; }
             RemoveLooseAt(i);
             AddCarried(it.Type, 1, it.Value);
@@ -421,6 +440,7 @@ namespace WishExtractor.Core
                 if (!looseIndex.TryGetValue(u, out int i)) continue;
                 var it = Loose[i];
                 if (it.State == LooseState.Airborne) continue;
+                if (IsFish(it.Type)) { ReturnFish(it); continue; }
                 if (!CanCarry(it.Type)) { full = true; continue; }
                 RemoveLooseAt(i);
                 AddCarried(it.Type, 1, it.Value);

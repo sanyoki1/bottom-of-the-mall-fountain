@@ -250,6 +250,28 @@ namespace WishExtractor.Game
                 sfx.PlayMusicFor(sim.Mall, sim.Remodel);
                 Save();
             };
+            // hazards, the goldfish, footsteps
+            view.Hazards.Speak = (head, text, wish, rarity) => pops.Say(head, text, wish, rarity);
+            sim.OnGuardSpeak += (g, line) => { if (g.State == GuardState.Warning) sfx.PlayAt("whistle", new Vector3(g.X, 1.6f, g.Z), 0.9f, 0.05f, 1f); };
+            sim.OnFined += fine =>
+            {
+                sfx.Play("denied", 0.7f, 0.02f, 0.5f);
+                pops.Toast("Fined by Officer Doug", $"-{Fmt.Money(fine)} for wading during mall hours. (Security tab: Donut Diplomacy.)", Pal.Red, "!", 4.5f);
+            };
+            sim.OnRivalArrived += r => { sfx.Play("event", 0.5f, 0.05f, 2f, 1.3f); pops.Toast("A rival diver is in your fountain!", "Chad is pocketing your coins. Get close to him (or press E) to chase him off.", Pal.Pink, "!", 5f); };
+            sim.OnRivalChased += (r, n) => { sfx.Play("splash", 0.9f, 0.05f, 0.3f, 0.8f); pops.Toast("Chad fled!", n > 0 ? $"He dropped {n} stolen item{(n == 1 ? "" : "s")} back in the fountain." : "He didn't get anything. Good.", Pal.Green, "✓", 3.5f); };
+            sim.OnRivalEscaped += (r, n) => pops.Toast("Chad got away", $"...with {n} of your items. He'll be back.", Pal.Ink2, "✕", 4f);
+            sim.OnFishReturned += it =>
+            {
+                sfx.Play("splash", 0.7f, 0.1f, 0.2f, 1.3f);
+                hud.ShowMessage("You gently return the goldfish to the water. Nearby shoppers applaud.  +1 ✦");
+            };
+            view.Player.OnStep += () =>
+            {
+                if (view.Wading) sfx.Play("plop", 0.18f, 0.2f, 0.12f, 0.7f);
+                else sfx.Play("step", 0.35f, 0.12f, 0.12f);
+            };
+
             modals.OnSign = () =>
             {
                 if (!sim.MallCleared) return;

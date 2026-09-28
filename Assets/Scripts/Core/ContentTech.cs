@@ -57,6 +57,14 @@ namespace WishExtractor.Core
             Lv("dig_shoulders", "Stronger Shoulders", TechBranch.Tools, TechKind.DigPower, 0.15, 20, 2.0, 12, 0, 3,
                 "Forty push-ups a day, all of them with a shovel. Every swing and every dig rig bites deeper.", "dig_sandshovel");
 
+            // security: keeping Officer Doug and Chad off your back
+            Lv("sec_donuts", "Donut Diplomacy", TechBranch.Security, TechKind.GuardFine, 0.3, 4, 3.5, 3, 0, 0,
+                "A box of crullers for mall security, every morning. Fines shrink. Doug's waistline does not.");
+            Lv("sec_sign", "'No Rival Divers' Sign", TechBranch.Security, TechKind.RivalRepel, 0.3, 15, 3.5, 3, 1, 0,
+                "Laminated, official-looking, and entirely unenforceable. Chad shows up less anyway.");
+            var badge = T("sec_badge", "Honorary Deputy Badge", TechBranch.Security, TechKind.GuardFine, 1.0, 4000, "Doug swears you in. You may now wade with impunity (and a badge).", "sec_donuts");
+            badge.Col = 0; badge.Row = 1;
+
             // Head Office: paid in Lucky Pennies (from signing contracts), kept forever
             TechDef H(string id, string name, TechKind kind, double value, double cost, double growth, int max, int col, int row, string desc, params string[] req)
             {
@@ -82,17 +90,17 @@ namespace WishExtractor.Core
             F("fountain_scrub", "Scrub the Grime", 3, 0.50, false, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
             F("fountain_jets", "Fix the Water Jets", 4, 3, false, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
             F("fountain_lights", "Coloured Lights", 5, 15, false, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
-            F("fountain_neon", "'MAKE A WISH' Neon", 6, 60, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
-            F("fountain_cherub", "Cherub Statue", 8, 10, true, "A chubby stone baby who judges everyone's throwing form. Paid for in pure wishes.", "fountain_neon", 4);
-            F("fountain_koi", "Koi", 8, 25, true, "Twelve koi, each named after a former mall manager. They are thriving. The managers are not.", "fountain_cherub", 5);
-            F("fountain_music", "Mood Music", 10, 400, false, "Smooth jazz, piped in from a speaker disguised as a rock. The rock is also smooth.", "fountain_koi", 6);
-            F("fountain_dispenser", "Lucky Penny Dispenser", 10, 1500, false, "Sells shoppers 'lucky' pennies to throw in. You are, technically, selling them your own pennies.", "fountain_music", 7);
-            F("fountain_photo", "Influencer Photo Spot", 12, 60, true, "A ring light, a flower wall and a sign saying #WishWall. The influencers arrive within minutes.", "fountain_dispenser", 8);
-            F("fountain_golden", "Golden Statue", 15, 8000, false, "A gold-plated statue of the mall's founder, mid-toss. Slightly too shiny to look at.", "fountain_photo", 9);
-            F("fountain_show", "Fountain Light Show", 20, 150, true, "Every hour on the hour: lasers, fog and a synth version of 'Wind Beneath My Wings'.", "fountain_golden", 10);
-            F("fountain_certified", "Official Wishing Fountain", 25, 40000, false, "Certified by the International Wishing Fountain Board (you founded it last week).", "fountain_show", 11);
-            F("fountain_wormhole", "Wormhole to Other Fountains", 40, 500, true, "A shimmering portal to every mall fountain on Earth. Things come through. Some of them are coins.", "fountain_certified", 12);
-            Lv("fountain_polish", "Polish the Tiles", TechBranch.Fountain, TechKind.Wishability, 1, 1, 1.45, 30, 0, 1,
+            F("fountain_neon", "'MAKE A WISH' Neon", 6, 80, false, "A pink neon sign that buzzes at exactly the pitch of hope.", "fountain_lights", 3);
+            F("fountain_cherub", "Cherub Statue", 8, 15, true, "A chubby stone baby who judges everyone's throwing form. Paid for in pure wishes.", "fountain_neon", 4);
+            F("fountain_koi", "Koi", 8, 40, true, "Twelve koi, each named after a former mall manager. They are thriving. The managers are not.", "fountain_cherub", 5);
+            F("fountain_music", "Mood Music", 10, 2000, false, "Smooth jazz, piped in from a speaker disguised as a rock. The rock is also smooth.", "fountain_koi", 6);
+            F("fountain_dispenser", "Lucky Penny Dispenser", 10, 12000, false, "Sells shoppers 'lucky' pennies to throw in. You are, technically, selling them your own pennies.", "fountain_music", 7);
+            F("fountain_photo", "Influencer Photo Spot", 12, 150, true, "A ring light, a flower wall and a sign saying #WishWall. The influencers arrive within minutes.", "fountain_dispenser", 8);
+            F("fountain_golden", "Golden Statue", 15, 150000, false, "A gold-plated statue of the mall's founder, mid-toss. Slightly too shiny to look at.", "fountain_photo", 9);
+            F("fountain_show", "Fountain Light Show", 20, 500, true, "Every hour on the hour: lasers, fog and a synth version of 'Wind Beneath My Wings'.", "fountain_golden", 10);
+            F("fountain_certified", "Official Wishing Fountain", 25, 3000000, false, "Certified by the International Wishing Fountain Board (you founded it last week).", "fountain_show", 11);
+            F("fountain_wormhole", "Wormhole to Other Fountains", 40, 2000, true, "A shimmering portal to every mall fountain on Earth. Things come through. Some of them are coins.", "fountain_certified", 12);
+            Lv("fountain_polish", "Polish the Tiles", TechBranch.Fountain, TechKind.Wishability, 1, 1, 1.62, 30, 0, 1,
                 "Elbow grease, applied one tile at a time. The fountain gets a little more wishable every time.", "fountain_scrub");
             Lv("fountain_mints", "Free Mints by the Fountain", TechBranch.Fountain, TechKind.TossRate, 0.08, 4, 1.85, 15, 1, 1,
                 "Shoppers linger for a free mint, then feel obligated to throw something in.", "fountain_jets");

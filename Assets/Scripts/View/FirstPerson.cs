@@ -39,6 +39,7 @@ namespace WishExtractor.View
         float bobPhase, bobAmount, landKick;
         bool wasGrounded = true;
         public System.Action<float> OnLand;         // fall speed
+        public System.Action OnStep;                // a footfall (for footstep sounds)
 
         public Vector3 Feet => transform.position;
         public Vector3 EyePos => Head.position;
@@ -131,7 +132,9 @@ namespace WishExtractor.View
             // head bob
             float targetBob = g && HeadBob ? Speed01 : 0;
             bobAmount = Mathf.MoveTowards(bobAmount, targetBob, dt * 4);
+            float before2 = bobPhase;
             bobPhase += dt * Mathf.Lerp(6f, 10f, Speed01) * (Speed01 > 0.05f ? 1 : 0.3f);
+            if (g && Speed01 > 0.15f && Mathf.Floor(bobPhase / Mathf.PI) != Mathf.Floor(before2 / Mathf.PI)) OnStep?.Invoke();
             landKick = Mathf.MoveTowards(landKick, 0, dt * 0.4f);
             float by = Mathf.Abs(Mathf.Sin(bobPhase)) * 0.045f * bobAmount - landKick;
             float bx = Mathf.Sin(bobPhase) * 0.025f * bobAmount;
