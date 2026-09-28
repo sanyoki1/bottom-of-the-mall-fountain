@@ -549,6 +549,34 @@ namespace WishExtractor.Game
             yield return LookAtSmooth(b.position + Vector3.up * 1.25f);
         }
 
+        /// <summary>The floor just outside the stepping stone nearest to (x, z): walk in from there like EnterFountain does.</summary>
+        static Vector3 OutsideStoneNear(float x, float z)
+        {
+            float want = Mathf.Atan2(z, x) * Mathf.Rad2Deg, stone = Layout.StoneAngles[0], bestD = 999f;
+            foreach (float a in Layout.StoneAngles)
+            {
+                float d = Mathf.Abs(Mathf.DeltaAngle(a, want));
+                if (d < bestD) { bestD = d; stone = a; }
+            }
+            return new Vector3(Mathf.Cos(stone * Mathf.Deg2Rad), 0, Mathf.Sin(stone * Mathf.Deg2Rad)) * 11.2f;
+        }
+
+        /// <summary>Hop in over the stepping stone nearest to Chad, then walk up to him (he flees within 2.2 m).</summary>
+        IEnumerator ApproachRival(float stopAt, float timeout)
+        {
+            var outside = OutsideStoneNear(sim.Rival.X, sim.Rival.Z);
+            view.Player.Place(outside + Vector3.up * 0.05f, Mathf.Atan2(-outside.x, -outside.z) * Mathf.Rad2Deg, 0);
+            yield return null;
+            yield return WalkTo(outside * (6.5f / 11.2f), 0.4f, 8f, false);
+            for (float spent = 0; sim.Rival.State == RivalState.Stealing && spent < timeout; spent += 0.5f)
+            {
+                var at = new Vector3(sim.Rival.X, 0, sim.Rival.Z);
+                var feet = view.Player.Feet;
+                if (new Vector2(at.x - feet.x, at.z - feet.z).magnitude <= stopAt) yield break;
+                yield return WalkTo(at, stopAt, 0.5f);
+            }
+        }
+
         // ───────────────────────────── screenshot tour (-autotour) ─────────────────────────────
 
         IEnumerator Shot(string name)
@@ -634,7 +662,37 @@ namespace WishExtractor.Game
             yield return Shot("07i_terminal_carry");
             terminal.SetBranch(TechBranch.Fountain);
             yield return Shot("07j_terminal_fountain");
+            terminal.SetBranch(TechBranch.Security);
+            yield return Shot("07j2_terminal_security");
             terminal.Close();
+
+            // hazards: Officer Doug's whistle, Chad the rival diver, and a goldfish that has to go back
+            yield return EnterFountain();
+            sim.DebugGuardCheck();
+            float guardWait = 0;
+            while (sim.Guard.State != GuardState.Warning && guardWait < 5) { guardWait += Time.deltaTime; yield return null; }
+            yield return LookAtSmooth(view.Hazards.GuardHead.position);
+            yield return Shot("07q_guard_warning");
+            yield return WalkTo(new Vector3(0, 0, -12.5f), 0.5f, 6f);
+            sim.DebugRival();
+            float rivalWait = 0;
+            while (sim.Rival.State != RivalState.Stealing && rivalWait < 30) { rivalWait += Time.deltaTime; yield return null; }
+            yield return new WaitForSeconds(2.5f);
+            yield return LookAtSmooth(view.Hazards.RivalHead.position);
+            yield return Shot("07r_rival");
+            sim.ChaseRival();
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("07s_rival_fleeing");
+            Debug.Log($"[TOUR] hazards: guard {sim.Guard.State} after {guardWait:0.0}s, rival arrived after {rivalWait:0}s and is {sim.Rival.State}");
+            yield return EnterFountain();
+            var fp = view.Player.Feet;
+            var fish = sim.AddLoose(Content.Type("goldfish"), fp.x + 0.3f, fp.z + 1.5f, 0, null);
+            yield return new WaitForSeconds(0.4f);
+            yield return LookAtSmooth(view.Items.PositionOf(fish));
+            yield return Shot("07t_goldfish");
+            Press();
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("07u_goldfish_returned");
 
             // every fountain upgrade, from the rim and the balcony
             foreach (var t in Content.Techs) if (t.Branch == TechBranch.Fountain && t.MaxLevel == 1) sim.DebugSetTech(t.Id, 1);
@@ -1093,6 +1151,92 @@ namespace WishExtractor.Game
             SetFlag(i => i.Hotbar = 1);
             yield return null;
             Check(!view.Build.Active, "1 goes back to grabbing");
+
+            // ── hazards: the Security tab, Officer Doug's whistle and fine, Chad the rival diver, the goldfish ──
+            yield return GoToTerminal();
+            Press();
+            yield return new WaitForSeconds(0.3f);
+            Check(terminal.IsOpen && ClickSelectable(FindButton("Security")), "open the Security tab");
+            yield return null;
+            ClickSelectable(FindButton("Node:sec_donuts"));
+            yield return null;
+            Check(terminal.Branch == TechBranch.Security && ClickSelectable(FindButton("Buy", b => b.interactable)) && sim.TechLevel("sec_donuts") == 1 && sim.FineMult < 1,
+                  $"Donut Diplomacy bought on the Security tab (fines × {sim.FineMult:0.00})");
+            yield return Shot("ui_security");
+            ClickSelectable(FindButton("Close"));
+            yield return null;
+
+            yield return EnterFountain();
+            double fined = 0, finesBefore = sim.S.finesPaid;
+            Action<double> onFine = amount => fined += amount;
+            sim.OnFined += onFine;
+            sim.DebugGuardCheck();
+            float waitGuard = 0;
+            while (sim.Guard.State != GuardState.Warning && waitGuard < 5) { waitGuard += Time.deltaTime; yield return null; }
+            Check(view.Wading && sim.Guard.State == GuardState.Warning && !string.IsNullOrEmpty(sim.Guard.Line), $"Officer Doug blows the whistle on a wading player: \"{sim.Guard.Line}\"");
+            yield return LookAtSmooth(view.Hazards.GuardHead.position);
+            yield return Shot("ui_guard_warning");
+            yield return new WaitForSeconds(5.5f);
+            Check(sim.S.finesPaid > finesBefore && fined > 0, $"staying in the water gets you fined ({Fmt.Money(fined)})");
+            yield return new WaitForSeconds(3.5f);
+            finesBefore = sim.S.finesPaid;
+            sim.DebugGuardCheck();
+            waitGuard = 0;
+            while (sim.Guard.State != GuardState.Warning && waitGuard < 5) { waitGuard += Time.deltaTime; yield return null; }
+            yield return WalkTo(new Vector3(0, 0, -12.5f), 0.5f, 6f);
+            yield return new WaitForSeconds(0.3f);
+            Check(!view.Wading && sim.Guard.State != GuardState.Warning && sim.S.finesPaid == finesBefore, "climbing out after the whistle avoids the fine");
+            sim.OnFined -= onFine;
+
+            // Chad: shows up, pockets coins, and flees (dropping them) when you walk up to him or press E on him
+            int dropped = -1;
+            Action<Rival, int> onChase = (who, count) => dropped = count;
+            sim.OnRivalChased += onChase;
+            double chased0 = sim.S.rivalsChased;
+            sim.DebugRival();
+            float waitRival = 0;
+            while (sim.Rival.State != RivalState.Stealing && waitRival < 30) { waitRival += Time.deltaTime; yield return null; }
+            Check(sim.Rival.State == RivalState.Stealing && view.Hazards.RivalHead.gameObject.activeInHierarchy, $"Chad the rival diver wades in ({waitRival:0}s after his cue)");
+            yield return new WaitForSeconds(2f);
+            yield return LookAtSmooth(view.Hazards.RivalHead.position);
+            yield return Shot("ui_rival");
+            yield return ApproachRival(0.8f, 15f);
+            Check(sim.S.rivalsChased > chased0 && dropped >= 0, $"walking up to Chad chases him off (he drops {dropped} stolen item{(dropped == 1 ? "" : "s")})");
+            float waitAway = 0;
+            while (sim.Rival.State != RivalState.Away && waitAway < 20) { waitAway += Time.deltaTime; yield return null; }
+            view.Player.Place(new Vector3(0, 0.05f, -15f), 0, 0);
+            double chased1 = sim.S.rivalsChased;
+            sim.DebugRival();
+            waitRival = 0;
+            while (sim.Rival.State != RivalState.Stealing && waitRival < 30) { waitRival += Time.deltaTime; yield return null; }
+            var rivalStone = OutsideStoneNear(sim.Rival.X, sim.Rival.Z);
+            view.Player.Place(rivalStone + Vector3.up * 0.05f, Mathf.Atan2(-rivalStone.x, -rivalStone.z) * Mathf.Rad2Deg, 0);
+            yield return null;
+            yield return LookAtSmooth(view.Hazards.RivalHead.position, 0.15f);
+            Check(view.Current.Kind == TargetKind.Rival, $"the crosshair finds Chad from the rim (got {view.Current.Kind})");
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.S.rivalsChased > chased1 && sim.Rival.State == RivalState.Fleeing, "E on Chad shoos him out too");
+            sim.OnRivalChased -= onChase;
+
+            // the goldfish: you don't carry it, you put it straight back (to applause and a Wish Token)
+            view.Player.Place(new Vector3(0, 0.05f, -12f), 0, 0);
+            yield return null;
+            yield return EnterFountain();
+            var pf = view.Player.Feet;
+            var fish = sim.AddLoose(Content.Type("goldfish"), pf.x + 0.3f, pf.z + 1.4f, 0, null);
+            yield return new WaitForSeconds(0.3f);
+            yield return LookAtSmooth(view.Items.PositionOf(fish));
+            Check(view.Current.Kind == TargetKind.Item && view.Current.Uid == fish.Uid, $"crosshair targets the goldfish (got {view.Current.Kind})");
+            int carried0 = sim.CarriedCount;
+            double tok0f = sim.S.wishTokens, returned0 = sim.S.fishReturned;
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.S.fishReturned == returned0 + 1 && sim.CarriedCount == carried0 && sim.S.wishTokens == tok0f + 1 && sim.FindLoose(fish.Uid)?.State == LooseState.Airborne,
+                  "E on the goldfish puts it straight back in the water (+1 Wish Token, nothing carried)");
+            yield return Shot("ui_goldfish");
 
             // ── the crust: dig by hand, gunk below the loose layer, bare concrete, the next contract ──
             sim.DebugSetTech("dig_sandshovel", 1);
