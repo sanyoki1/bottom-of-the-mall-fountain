@@ -96,10 +96,10 @@ Each mall has its own theme, storefront signs, music loop, loot table, 17–22 w
   capped by rubble, and the factory ticks at a fixed step, so a mall takes as long as its factory needs.
 - **Something to buy all the way down.** Bigger Chunks (polynomial price, linear effect) keeps cash useful
   after the rest of the tree is bought, without the runaway growth an exponential sink causes in rich malls.
-- **Measured pacing** (engaged bot, seed 1234, final fit): Crestview 3.26 h · Neon Galaxy 3.77 h · Galleria
-  4.20 h · Skyport 4.73 h · Lucky Lagoon 5.20 h · Eternity 5.19 h = **26.35 h**. On the previous fit six seeds
-  spread 26.09–26.42 h, and the casual bot took 27.5–28.1 h. Longest gap between purchases: 12 min
-  (Crestview), under 5 min from the third mall on.
+- **Measured pacing** (engaged bot, seed 1234, a full run on the current fit): Crestview 3.18 h · Neon Galaxy
+  3.95 h · Galleria 4.15 h · Skyport 4.80 h · Lucky Lagoon 5.31 h · Eternity 5.19 h = **26.58 h**. Seeds 1–5
+  spread 26.24–27.02 h; the casual bot took 27.74 h. Longest gap between purchases: 20–24 min in Crestview
+  (around 2h15), 13–14 min in Neon Galaxy, under 8 min from the third mall on.
 - **Early game** (Crestview, engaged bot, median of six seeds): cup and first beautification in under 30 s,
   bucket ~7 min, hamster wheel ~10 min, skimmer ~21 min, first skimmer line ~37 min.
 

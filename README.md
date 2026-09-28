@@ -40,8 +40,8 @@ Measured with the balance simulator (a bot playing the real game rules, see belo
 
 | Player profile | Six malls (the campaign) |
 |---|---|
-| Engaged bot (sprints, catches 80% of wishes, saves for the next big upgrade, fills the rim with lines) | **26h 21m** (seed 1234) |
-| Casual bot (walks, reacts slower, catches 45% of wishes, idles now and then; builds the same factory) | about 27–28 h (measured on the previous fit) |
+| Engaged bot (sprints, catches 80% of wishes, saves for the next big upgrade, fills the rim with lines) | **26h 35m** (seed 1234; 26.2–27.0 h over seeds 1–5) |
+| Casual bot (walks, reacts slower, catches 45% of wishes, idles now and then; builds the same factory) | 27h 44m (seed 1234) |
 
 After the sixth mall the game continues with Remodel contracts (every mall again, deeper and richer).
 
@@ -54,9 +54,11 @@ After the sixth mall the game continues with Remodel contracts (every mall again
 Or in the editor: **Wish Extractor → 2. Build Windows Player**. The build step also (re)creates
 `Assets/Scenes/Main.unity` and applies player settings (linear colour, windowed, no splash).
 
-No Unity at hand (a cloud or Linux session)? `dotnet build Tools/UnityCompileCheck` compiles every runtime
-script against Unity 2022.3 reference assemblies from NuGet. It reports one expected error (a Unity 6-only
-overload in `GameRoot.cs`) and catches type errors only.
+No Unity at hand (a cloud or Linux session)? `bash Tools/UnityCompileCheck/unity6_compile.sh <extracted editor>`
+compiles every script with Unity 6000.4.2f1's own compiler and assemblies, taken from the Linux editor archive
+(download and extract steps are in the script's header). The quicker `dotnet build Tools/UnityCompileCheck`
+uses Unity 2022.3 reference assemblies from NuGet and reports one expected error (a Unity 6-only overload in
+`GameRoot.cs`). Both catch compile errors only.
 
 ## Self-tests in the player
 

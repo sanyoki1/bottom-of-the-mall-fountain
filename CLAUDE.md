@@ -16,7 +16,7 @@ Ask Nico before any git commit.
 | `Assets/Editor/ProjectBuilder.cs` | Scene creation, player settings, Windows build (menu + `BuildWindowsCI`). |
 | `Assets/Resources/Shaders/` | `WE/Lit`, `WE/Crust`, `WE/Water`, `WE/Glow`, `WE/Ghost`, `WE/Soft`, `WE/Scroll`, `WE/Text`, `Hidden/WE/Bloom`. |
 | `Tools/BalanceSim/` | .NET 10 console: a bot plays the real Core; `fit --apply` writes each mall's crust size and layer bounds. |
-| `Tools/UnityCompileCheck/` | Compiles `Assets/Scripts` against Unity 2022.3 reference assemblies from NuGet, for machines without Unity. |
+| `Tools/UnityCompileCheck/` | Compile checks for machines without Unity: `unity6_compile.sh` (the real Unity 6 compiler and assemblies) and a quicker NuGet-based `.csproj`. |
 
 ## Build / verify (Unity 6000.4.2f1 at `C:\Program Files\Unity\Hub\Editor\6000.4.2f1\Editor\Unity.exe`)
 
@@ -29,9 +29,12 @@ Ask Nico before any git commit.
 Players and editor runs block the shell until they exit; the tour and uitest quit on their own (watchdogs at 660 s / 600 s).
 Never kill processes; close a stray player window gracefully (WM_CLOSE).
 
-No Unity (cloud or Linux sessions): `dotnet build Tools/UnityCompileCheck` compiles every runtime script. Expect exactly
-one error, `GameRoot.cs … 'FindObjectsByType' takes 0 arguments` (a Unity 6 overload); anything else is real. It only
-catches type errors: a milestone still needs steps 1–4 on Windows.
+No Unity (cloud or Linux sessions): `bash Tools/UnityCompileCheck/unity6_compile.sh <extracted editor>` compiles every
+script (editor and player defines, `Assets/Editor` too) with Unity 6000.4.2f1's own compiler and assemblies, taken from
+the Linux editor archive (setup in the script's header); expect 0 errors. The quicker `dotnet build
+Tools/UnityCompileCheck` uses Unity 2022.3 reference assemblies from NuGet: expect exactly one error, `GameRoot.cs …
+'FindObjectsByType' takes 0 arguments` (a Unity 6 overload). Both only catch compile errors: a milestone still needs
+steps 1–4 on Windows.
 
 ## Rules that bit before (keep them)
 

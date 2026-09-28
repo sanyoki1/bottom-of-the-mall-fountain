@@ -62,6 +62,7 @@ namespace WishExtractor.Core
             "I'm writing you up. For the record, I'm very disappointed.",
         };
         static readonly string[] GuardRelief = { "Thank you. The system works.", "Good. Very good. Carry on.", "That's what I like to see. Dry ankles." };
+        static readonly string[] GuardNods = { "Deputy. *tips cap*", "Carry on, Deputy. Ankles are your business now.", "Nothing to see here, folks. That's a deputy." };
         static readonly string[] RivalLines =
         {
             "Finders keepers!", "This is MY fountain now!", "Don't mind me, just a regular guy. In a wetsuit.",
@@ -117,7 +118,8 @@ namespace WishExtractor.Core
                     g.Speed = pausing ? 0 : 1.1f;
                     if (!pausing) g.Angle += dt * g.Speed / PatrolR;
                     float tx = (float)Math.Sin(g.Angle) * PatrolR, tz = (float)Math.Cos(g.Angle) * PatrolR;
-                    g.Heading = (float)(Math.Atan2(tx - g.X, tz - g.Z) * 180 / Math.PI);
+                    // (standing still, atan2(0, 0) would snap him to face north)
+                    if (tx != g.X || tz != g.Z) g.Heading = (float)(Math.Atan2(tx - g.X, tz - g.Z) * 180 / Math.PI);
                     g.X = tx; g.Z = tz;
                     guardCheck -= dt;
                     if (guardCheck <= 0)
@@ -126,9 +128,17 @@ namespace WishExtractor.Core
                         float dx = PlayerX - g.X, dz = PlayerZ - g.Z;
                         if (PlayerInWater && dx * dx + dz * dz < 22f * 22f)
                         {
-                            g.State = GuardState.Warning;
-                            g.Timer = 0;
-                            GuardSay(GuardWarnings[Rng.Next(GuardWarnings.Length)]);
+                            if (FineMult <= 1e-9)
+                            {
+                                // a sworn-in deputy (fines × 0) gets a nod instead of a whistle
+                                if (Rng.NextDouble() < 0.5) GuardSay(GuardNods[Rng.Next(GuardNods.Length)]);
+                            }
+                            else
+                            {
+                                g.State = GuardState.Warning;
+                                g.Timer = 0;
+                                GuardSay(GuardWarnings[Rng.Next(GuardWarnings.Length)]);
+                            }
                         }
                     }
                     break;
@@ -166,7 +176,8 @@ namespace WishExtractor.Core
             {
                 case RivalState.Away:
                     if (S.tosses < 40 || S.mallCleared) return;
-                    rivalTimer -= dt / RivalFreqMult;
+                    // the sign makes him come less often: his clock runs slower
+                    rivalTimer -= dt * RivalFreqMult;
                     if (rivalTimer > 0) return;
                     rivalTimer = RandRange(300, 540);
                     int di = Rng.Next(Layout.Doors.Length);

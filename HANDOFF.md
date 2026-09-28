@@ -1,28 +1,61 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-28 (session 4, a cloud session on Linux with no Unity: M6 balance done, tour/uitest
-written but not run)._
+_Last updated 2026-09-28 (session 5, a cloud session on Linux with no Unity license: M6 compile-checked
+against the real Unity 6000.4.2f1 assemblies, three hazard bugs and the overflowing build catalogue fixed,
+re-fitted; still not built or run in Unity)._
 
 ## NEXT: verify M6 in Unity on Windows, then commit it as a milestone
 
-Everything below "M6 done" compiles against Unity 2022.3 reference assemblies (`dotnet build
-Tools/UnityCompileCheck`: only the one expected Unity 6-overload error), and the balance numbers are
-measured, but **nothing was built or run in Unity this session**. Before calling M6 done:
+Sessions 4 and 5 ran in cloud containers where the Unity editor can't start (it needs an activated
+license, even in batch mode), so the checks that need Unity are still open:
 
-1. Build (CLAUDE.md step 1) and fix any `error CS` the reference-assembly check couldn't see.
+1. Build (CLAUDE.md step 1). Session 5 compiled every script with Unity 6000.4.2f1's own compiler and
+   assemblies (`Tools/UnityCompileCheck/unity6_compile.sh`: 0 errors, 0 warnings, editor and player
+   defines, `Assets/Editor` included), so the build should compile cleanly.
 2. Run `-autotour` and look at every screenshot, especially the new ones: `30_terminal_security`,
-   `31_guard_warning`, `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish`, `36_goldfish_returned`.
+   `31_guard_warning`, `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish` (the prompt should read
+   "Put the goldfish back in the water"), `36_goldfish_returned`, and `18_build_catalogue` (new six-column
+   layout, see below).
 3. Run `-uitest`: expect `[UITEST] done: 96 passed, 0 failed` (85 old checks + 11 new: the goldfish,
    Officer Doug's whistle and fine and "step out to avoid it", Chad chased by wading up and by E). Then
    `-loadtest`.
-4. Play the first 20 minutes and the start of a dig by hand: this session changed the early economy and
+4. Play the first 20 minutes and the start of a dig by hand: session 4 changed the early economy and
    digging (see below), and only the bot has played it.
 5. Refresh `Docs/Screenshots` from the tour (they are still v1's overhead shots; the README no longer uses them).
 
-**Git:** branch `master` holds M1–M5 and the M6 WIP commit `4a99037`. This session worked on
-`claude/upbeat-dijkstra-ypw7nn` (branched from `4a99037`) and left its changes uncommitted pending Nico's OK
-(CLAUDE.md: ask before any commit). Once committed there, it is still unverified in Unity: review before
-merging into `master`.
+**Git:** branch `master` holds M1–M5 and the M6 WIP commit `4a99037`. Session 4's M6 work is commit
+`93cae22` on `claude/upbeat-dijkstra-ypw7nn`; session 5 continued on `claude/wish-extractor-m6-verify-m6ww7w`
+(fast-forwarded to `93cae22`). Unverified in Unity: review before merging into `master`.
+
+## Session 5 (cloud, no Unity license)
+
+- **Compile check against the real Unity 6.** `Tools/UnityCompileCheck/unity6_compile.sh` (new) takes
+  Unity's own C# compiler (Roslyn 4.3.1), .NET Standard 2.1 profile and engine/editor module assemblies from
+  the Linux editor archive, builds uGUI from the `com.unity.ugui` 2.0.0 source, then `Assembly-CSharp`
+  (editor and player defines) and `Assembly-CSharp-Editor`. Setup (a 4.1 GB download) is in the script's
+  header. It replaces the old NuGet check's "one expected error": the Unity 6 overload compiles.
+- **Hazard bugs fixed** (found by reading the code; none of them shows up in a compile):
+  - The "No Rival Divers" sign was inverted: `rivalTimer -= dt / RivalFreqMult` made each level bring Chad
+    ~43% *more* often. It now slows his clock (`dt * RivalFreqMult`).
+  - With the Honorary Deputy Badge (fines × 0) Officer Doug still whistled and "fined" you $0.00 with a toast.
+    He now tips his cap instead.
+  - Aiming at a goldfish said "[E] Pick up Live Goldfish $0.00" (or "Hands full" when your container was
+    full, although E returns it either way). It now says "Put the goldfish back in the water +1 ✦".
+- **The build catalogue ran off the panel** (since M5): eight processors in one column of 142 px cards in a
+  760 px panel put the palletiser, melter and compressor below the panel and partly off-screen (the tour's
+  `18_build_catalogue`). It now has six columns (processing split into "wash & sort" and "bundling", output
+  shares "logistics & output"), 120 px cards and a 1760 × 960 panel that shrinks to fit smaller canvases; the
+  longest column holds 5 cards (6 fit). Check it in the tour shot.
+- Officer Doug no longer snaps to face north whenever he pauses on patrol (heading from `atan2(0, 0)`).
+- **Balance.** Before the fixes, on session 4's fit: engaged seeds 1–5 took 26.29–26.57 h, casual 27.46 h.
+  The Chad fix changes a rate, so `fit --apply` ran again: crusts 175,300 / 24.8M / 93.7M / 206.3M / 330.2M /
+  488.1M scoops (fit passes 3.35, 3.73, 4.23, 4.77, 5.28, 5.17 h). Full runs on it: engaged seed 1234
+  **26.58 h** (3.18 · 3.95 · 4.15 · 4.80 · 5.31 · 5.19), seeds 1–5 26.51, 27.02, 26.43, 26.24, 26.61 h; casual
+  seed 1234 **27.74 h**. Lines at the end: 2 claws and 12 dig lines (rigs in Crestview, borers after).
+- Longest gap between purchases (engaged, seeds 1–5 and 1234): 20–24 min in Crestview (starting around 2h10–2h30,
+  just before the bot builds out its dig lines), 13–14.5 min in Neon Galaxy, 5.5–7.5 min in Aurelia, under
+  4 min after that; casual 26 min in Crestview. Session 4's docs said 12 min for Crestview: that was measured
+  before its final bot changes.
 
 ## M6 done (session 4)
 
@@ -78,9 +111,8 @@ merging into `master`.
   seeds, casual 27.5–28.1 h over three. Longest gap between purchases 12 min (Crestview), 10.5 min (Neon),
   under 5 min from Aurelia on; a new layer every ~20 min in Crestview up to ~45 min in Eternity; late-mall
   income tens of $M per minute.
-- The six-seed and casual runs after the final fit didn't run this session. Run them before relying on the
-  totals: `dotnet run -c Release --project Tools/BalanceSim -- 40 <seed> engaged` for a few seeds, and
-  `-- 60 1234 casual`.
+- Session 5 ran the seed and casual checks and re-fitted after its fixes: see "Session 5" above for the
+  current numbers.
 - **Early game** (Crestview; unaffected by the final bot and fit changes). Engaged, six seeds: cup and scrub
   in under 30 s, pail by ~1 min, bucket median ~7 min (40 s–15 min), hamster wheel ~10 min (40 s–17 min),
   skimmer ~21 min, first line ~37 min (24–45). Casual, four seeds: bucket 7–15 min, hamster 10–21, skimmer

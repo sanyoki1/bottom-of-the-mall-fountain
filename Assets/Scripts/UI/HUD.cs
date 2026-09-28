@@ -302,6 +302,7 @@ namespace WishExtractor.UI
                     if (it == null) return "";
                     var def = Content.Items[it.Type];
                     string name = def.Name;
+                    if (sim.IsFish(it.Type)) return "<b>[E]</b> Put the goldfish back in the water  <color=#9CFFB0>+1 ✦</color>  <color=#C8C8C8>(it's not yours)</color>";
                     if (!sim.CanCarry(it.Type)) return $"<color=#FF8FA8>Hands full</color>  ·  deposit at the COIN-O-MATIC";
                     double v = it.Value * sim.ValueMult * Sim.CatRate(def.Cat);
                     string key = sim.Grab.Area > 0 ? "Scoop" : "Pick up";
