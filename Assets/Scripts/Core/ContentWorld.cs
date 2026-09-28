@@ -45,6 +45,9 @@ namespace WishExtractor.Core
         /// <summary>The ridiculous things people throw once the fountain is fancy enough.</summary>
         static void BuildOddities()
         {
+            // not oddities proper: thrown by particular archetypes regardless of the fountain's fanciness
+            AddType("gum", "Chewed Gum", ItemCat.Junk, ItemShape.Wad, 0xF28DB2, 0, 0.8f, "Worth nothing. Sticks to everything. A teenager's wish, basically.");
+            AddType("foreign", "Foreign Coin", ItemCat.Coin, ItemShape.Coin, 0xB08D57, 0.40, 0.46f, "From a country with a very confident-looking bird on its money.");
             void O(string id, string name, double value, ItemShape shape, uint color, float scale, double minWish, Rarity r, string desc, bool heavy = false)
             {
                 var t = AddType(id, name, ItemCat.Oddity, shape, color, value, scale, desc);
@@ -170,6 +173,89 @@ namespace WishExtractor.Core
             D("borer", "Handheld Borer", 400000, 90, 3f, "It is not handheld. You are holding it anyway.");
             return list.ToArray();
         }
+
+        // ───────────────────────────── shoppers ─────────────────────────────
+
+        static ArchetypeDef[] BuildArchetypes()
+        {
+            var list = new List<ArchetypeDef>();
+            ArchetypeDef A(string id, string name, double minWish, double weight, double bias, uint shirt, uint pants, uint hat, string prop, string[] barks, params string[] odd)
+            {
+                var a = new ArchetypeDef
+                {
+                    Id = id, Name = name, MinWish = minWish, Weight = weight, TierBias = bias, Shirt = shirt, Pants = pants, Hat = hat,
+                    Skin = 0xE0B08A, Prop = prop, Barks = barks, Oddities = odd, Index = list.Count,
+                };
+                list.Add(a);
+                return a;
+            }
+            var walker = A("walker", "Mall Walker", 0, 5, 0, 0x7A3FC8, 0x3A2A7A, 0xFF4FA8, null, new[]
+            {
+                "Lap 43! A penny for luck!", "Keep those knees up, Doris!", "One penny per lap. That's the rule.",
+                "Power walking is a lifestyle.", "I've walked to Winnipeg and back in this mall.",
+            });
+            walker.Headband = true; walker.Speed = 1.9f; walker.Tosses = 2;
+            var teen = A("teen", "Bored Teen", 0, 3, 0.3, 0x2A2A30, 0x3A5A8A, 0xD8283A, "phone", new[]
+            {
+                "ugh this mall is so dead", "i wish i was literally anywhere else", "*chews loudly*", "is this, like, a vibe?",
+                "my mom gave me a quarter. for WHAT", "no cap this fountain is mid",
+            });
+            teen.JunkChance = 0.3; teen.Speed = 1.1f;
+            var grandma = A("grandma", "Grandma", 3, 2, 0.25, 0xB86A8A, 0x6A6A78, 0xD8D8D8, "cane", new[]
+            {
+                "In my day this fountain had fish!", "This one's for my grandson's braces.", "Ohh, I've dropped my... never mind.",
+                "Forty years I've been wishing for a nicer husband.", "Is that young man in the fountain allowed to be in there?",
+            }, "teeth");
+            grandma.Speed = 0.8f; grandma.Tosses = 2;
+            var toddler = A("toddler", "Toddler (Unsupervised)", 5, 2, 0, 0xFFD23A, 0x3A7BD5, 0xFF7AA8, "balloon", new[]
+            {
+                "MINE!", "Penny go SPLASH!", "*throws shoe*", "Mommy I wished for a DINOSAUR", "WAAAAH", "again! AGAIN!",
+            }, "shoe", "duck");
+            toddler.Scale = 0.55f; toddler.Speed = 1.0f; toddler.OddityBoost = 3; toddler.Tosses = 3;
+            var suit = A("business", "Businessman", 10, 2, 0.8, 0x2A3140, 0x222630, 0x2A2A2A, "briefcase", new[]
+            {
+                "Synergy.", "I'll expense it.", "Let's circle back to this wish.", "Per my last wish...",
+                "This fountain has great ROI.", "Can this wish be a meeting? No? Fine.",
+            }, "wallet", "phone", "keys");
+            suit.Speed = 1.6f;
+            var tourist = A("tourist", "Tourist", 15, 2, 0.5, 0x2FA8C8, 0xE8D8B0, 0xF2E6C8, "camera", new[]
+            {
+                "Is this the famous fountain?", "Honey, take a picture of me wishing!", "How much is this in real money?",
+                "Our guidebook said this was a must-see.", "Do they have fountains like this back home? No. No they do not.",
+            }, "foreign");
+            tourist.OddityBoost = 4;
+            var influencer = A("influencer", "Influencer", 22, 1.5, 0.6, 0xFF7AA8, 0xF4F0EA, 0xFFE0F0, "selfie", new[]
+            {
+                "Hey besties, wish with me!", "Don't forget to like and subscribe to this fountain!", "Wait, the lighting's wrong. Again.",
+                "Take 47. And... wish!", "#blessed #fountaincore #nofilter",
+            }, "phone");
+            influencer.OddityBoost = 2;
+            var proposer = A("proposer", "Heartbroken Proposer", 40, 1, 1.0, 0x1D1D22, 0x1D1D22, 0x1D1D22, "rose", new[]
+            {
+                "Will you... okay. Never mind.", "She said she needs 'space'. The fountain has space.", "It was a promise ring. I'm keeping the promise.",
+                "I rented a flash mob. They're on their break.",
+            }, "ring");
+            proposer.OddityBoost = 6;
+            var gym = A("bodybuilder", "Bodybuilder", 90, 1, 1.5, 0xE84F4F, 0x2A2A2A, 0x2A2A2A, "dumbbell", new[]
+            {
+                "DO YOU EVEN WISH, BRO?", "Leg day tomorrow. Wish me luck.", "HNNNGH!", "Protein. I wished for protein.",
+            }, "vending", "bowling", "fridge");
+            gym.Scale = 1.2f; gym.OddityBoost = 3;
+            var rich = A("billionaire", "Billionaire", 100, 0.6, 3.0, 0x1A1A1A, 0x1A1A1A, 0x1A1A1A, "tophat", new[]
+            {
+                "Money can't buy happiness. It CAN buy fountains.", "Keep the change. All of it.", "I own the mall. And this fountain. And you.",
+                "I wished for a second moon. Let's see.", "Pocket lint. Diamonds. Same thing.",
+            }, "goldbar", "tiara", "moonrock", "diamond");
+            rich.OddityBoost = 4; rich.Tosses = 3;
+            return list.ToArray();
+        }
+
+        /// <summary>Said by anyone when they have nothing specific to say.</summary>
+        public static readonly string[] GenericBarks =
+        {
+            "For luck!", "Here goes nothing.", "Make it count!", "Please please please...", "Heads I win.",
+            "Is someone... in the fountain?", "Ooh, it sparkles now!",
+        };
 
         // ───────────────────────────── jokes ─────────────────────────────
 

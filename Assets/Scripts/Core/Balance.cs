@@ -23,6 +23,15 @@ namespace WishExtractor.Core
         public const double TierSigma = 1.35;
         public const double OddityBaseChance = 0.02;    // per toss once any oddity is unlocked
         public const double OddityPerWish = 0.0006;
+        public const double OddityMaxChance = 0.2;
+
+        // ── the crowd (shoppers walk in, stand at the fountain, toss, leave) ─────────
+        public const double CrowdBase = 3, CrowdPerWish = 0.2, CrowdMax = 36;
+        public const float StandRadius = 10.7f;         // where shoppers stand to toss (outside the rim and stepping stones)
+        public const double WindUp = 0.55;              // seconds from "raise arm" to release
+        public const double SpawnInterval = 1.2;        // seconds between arrivals while below the crowd target
+        public const double Patience = 14;              // seconds a shopper waits at the rim for their turn
+        public const int MaxPendingTosses = 4;
 
         // ── manual collection ────────────────────────────────────────────────────
         public const float WalkSpeed = 4.6f, SprintMult = 1.55f, WadeMult = 0.72f;
@@ -31,6 +40,10 @@ namespace WishExtractor.Core
         public const double WishChanceBase = 0.05;      // per toss, before tier bonus
         public const double WishChancePerTier = 0.03;
         public const double WishLife = 14.0;
+        public const double WishValueScale = 0.05;      // v1 wish values were sized for billions; first-person money is modest
+        public static readonly double[] WishTokens = { 1, 2, 4, 8, 25 };
+        public const float WishReach = 7f;              // catch distance for floating wishes
+        public const int MaxActiveWishes = 8;
         public static readonly double[] WishRarityWeight = { 60, 25, 10.5, 3.8, 0.7 };
         public const double UndiscoveredBias = 0.6;
 

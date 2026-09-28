@@ -19,6 +19,13 @@ Lessons: a lit mesh at exactly zero scale makes NaN pixels that bloom turns into
 text colours must have alpha 1 (`Mats.NewText` now forces it — v1's coloured signs were invisible);
 the player sits on the Ignore Raycast layer so the aim ray doesn't hit its own capsule.
 
+**M2 (verified, committed):** shopper crowd in Core (`SimCrowd.cs`: 10 archetypes walk in from doors in
+`Layout.cs`, stand at r = 10.7, wind up, toss coins/oddities/gum along the Gaussian tier curve, speak barks
+or wish quotes, leave), True Wishes rising where wishful tosses land (catch with E: cash + Wish Tokens +
+journal), the Fountain Improvement Plan easel (buys Fountain-branch techs), first 3 beautification upgrades
+with visuals (scrubbed tiles, water jets, coloured LED ring), speech bubbles, positional splash/plop audio.
+uitest 38/38. `dotnet run ... -- crowd <wishability>` prints what the crowd is doing headlessly.
+
 Session 2 notes (kept for history):
 - Done (session 2):
   - `Core/Defs.cs` rewritten for v2: ItemType/ItemCat, CarryDef, ToolDef, ArchetypeDef, TechDef/TechKind/

@@ -183,6 +183,12 @@ namespace WishExtractor.Core
         public double TierBias;         // + shifts their tosses toward richer tiers
         public string[] Oddities;       // oddity item ids they sometimes throw
         public string[] Barks;          // what they say while throwing
+        public string Prop;             // what they carry: "phone", "briefcase", "cane", "balloon", "rose", "camera", "tophat", "selfie", "dumbbell"
+        public int Tosses = 1;          // tosses per visit (before rate bonuses)
+        public float Speed = 1.3f;      // walking speed, m/s
+        public double JunkChance;       // chance a toss is worthless junk (teens and their gum)
+        public double OddityBoost = 1;  // × oddity chance
+        public int Index;
     }
 
     public enum TechKind

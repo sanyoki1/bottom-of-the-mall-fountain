@@ -56,6 +56,9 @@ namespace WishExtractor.Audio
             Add("squeak", Synth.Squeak());
             Add("denied", Synth.Denied());
             Add("event", Synth.Siren());
+            Add("plop", Synth.Splash(1, false), Synth.Splash(2, false), Synth.Splash(3, false));
+            Add("splash", Synth.Splash(4, true), Synth.Splash(5, true));
+            Add("throw", Synth.Whoosh(false));
         }
 
         void Add(string name, params float[][] buffers)
@@ -87,6 +90,30 @@ namespace WishExtractor.Audio
             nextVoice = (nextVoice + 1) % voices.Length;
             v.clip = arr[Random.Range(0, arr.Length)];
             v.volume = vol * sfxVol;
+            v.panStereo = 0;
+            v.pitch = pitch * (1 + Random.Range(-pitchVar, pitchVar));
+            v.Play();
+        }
+
+        /// <summary>Play an effect from a place in the world: quieter with distance, panned left/right.</summary>
+        public void PlayAt(string name, Vector3 pos, float vol = 1f, float pitchVar = 0.08f, float minInterval = 0.02f, float pitch = 1f)
+        {
+            var cam = Camera.main;
+            if (cam == null) { Play(name, vol, pitchVar, minInterval, pitch); return; }
+            Vector3 d = pos - cam.transform.position;
+            float dist = d.magnitude;
+            float att = 1f / (1f + dist * 0.12f + dist * dist * 0.004f);
+            if (att * vol < 0.015f) return;
+            float pan = dist > 0.01f ? Vector3.Dot(cam.transform.right, d / dist) * 0.75f : 0;
+            if (voices == null || sfxVol <= 0.001f || !clips.TryGetValue(name, out var arr)) return;
+            float now = Time.unscaledTime;
+            if (lastPlay.TryGetValue(name, out var last) && now - last < minInterval) return;
+            lastPlay[name] = now;
+            var v = voices[nextVoice];
+            nextVoice = (nextVoice + 1) % voices.Length;
+            v.clip = arr[Random.Range(0, arr.Length)];
+            v.volume = vol * att * sfxVol;
+            v.panStereo = pan;
             v.pitch = pitch * (1 + Random.Range(-pitchVar, pitchVar));
             v.Play();
         }

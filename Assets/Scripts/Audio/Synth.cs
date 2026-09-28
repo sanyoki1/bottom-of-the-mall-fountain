@@ -80,6 +80,38 @@ namespace WishExtractor.Audio
             return b;
         }
 
+        /// <summary>Something landing in the fountain: a filtered noise slap plus a falling "bloop" bubble.</summary>
+        public static float[] Splash(int seed, bool big)
+        {
+            var r = new Random(seed);
+            var b = Buffer(big ? 0.7f : 0.35f);
+            float lp = 0, bp = 0;
+            double ph = 0;
+            float f0 = (big ? 380 : 900) + (float)r.NextDouble() * 200;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(r.NextDouble() * 2 - 1);
+                lp += (noise - lp) * (big ? 0.25f : 0.45f);
+                bp += (lp - bp) * 0.1f;
+                float slap = (lp - bp) * Env(t, 0.002f, big ? 0.09f : 0.04f) * 1.3f;
+                // bubble: a sine sweeping upward, as bubbles do
+                float bt = t - 0.015f;
+                float bub = 0;
+                if (bt > 0)
+                {
+                    ph += f0 * (1 + bt * 6) / Rate;
+                    bub = Sin(ph) * Env(bt, 0.003f, big ? 0.08f : 0.05f) * 0.7f;
+                }
+                b[i] = slap + bub;
+            }
+            if (big)
+                for (int k = 0; k < 4; k++) AddClink(b, 0.12f + k * 0.07f + (float)r.NextDouble() * 0.04f, 700 + (float)r.NextDouble() * 500, 0.06f, 0.04f);
+            Normalize(b, 0.8f);
+            Fade(b);
+            return b;
+        }
+
         public static float[] Register()
         {
             var b = Buffer(1.4f);

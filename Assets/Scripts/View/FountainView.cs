@@ -11,7 +11,8 @@ namespace WishExtractor.View
     {
         public const float RimInner = 8.0f, RimOuter = 9.4f, RimTop = 0.9f;
         public const float BasinFloor = -7.0f, CrustTop = 0.55f;
-        public const float WaterDepth = 0.3f;
+        public const float WaterDepth = 0.34f;
+        const float EdgeBank = 0.16f;   // sediment banked against the wall (low enough that water mostly covers it)
         const int Rings = 38, Segs = 104;
         const int ColRings = 12, ColSegs = 40;
         const float InnerR = 0.72f, OuterR = 7.97f;
@@ -46,6 +47,12 @@ namespace WishExtractor.View
         public void Build(MallDef m, Transform parent)
         {
             mall = m;
+            theme = m.Theme;
+            Grime = 1;
+            hasJets = hasLights = false;
+            jets = null;
+            lightRing = null;
+            lightMat = null;
             if (Root != null) Object.Destroy(Root.gameObject);
             Root = new GameObject("Fountain").transform;
             Root.SetParent(parent, false);
@@ -97,11 +104,13 @@ namespace WishExtractor.View
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
             Color tint = Color.Lerp(C(th.BasinTileA), new Color(0.35f, 0.7f, 0.8f), 0.6f);
-            mr.sharedMaterial = Mats.NewFountainWater(tint);
+            waterMat = Mats.NewFountainWater(tint);
+            mr.sharedMaterial = waterMat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             water = go.transform;
             water.localPosition = new Vector3(0, WaterY, 0);
+            TintWater();
         }
 
         /// <summary>
@@ -146,10 +155,6 @@ namespace WishExtractor.View
                 go.AddComponent<BoxCollider>().size = new Vector3(1.3f, 0.44f, 0.9f);
             }
             k.Build("Stepping Stones", Root);
-
-            // centrepiece: its own render mesh, as a static mesh collider
-            var cp = Root.Find("Centerpiece");
-            if (cp != null) cp.gameObject.AddComponent<MeshCollider>().sharedMesh = cp.GetComponent<MeshFilter>().sharedMesh;
 
             var cgo = new GameObject("Crust Collider");
             cgo.transform.SetParent(root, false);
@@ -197,7 +202,7 @@ namespace WishExtractor.View
                      + (Mathf.PerlinNoise(x * 0.9f + 3, z * 0.9f + 9) - 0.5f) * 0.18f;
             float rc = Mathf.Min(r, OuterR);
             float mound = 0.22f * (1 - (rc / OuterR) * (rc / OuterR));
-            float edge = 0.38f * Mathf.SmoothStep(0, 1, Mathf.InverseLerp(6.3f, OuterR, rc));
+            float edge = EdgeBank * Mathf.SmoothStep(0, 1, Mathf.InverseLerp(6.3f, OuterR, rc));
             return nb + mound + edge;
         }
 
@@ -221,7 +226,7 @@ namespace WishExtractor.View
         void BuildRim(ThemeDef th)
         {
             var k = new MeshKit();
-            Color rim = C(th.Rim), rimTop = Color.Lerp(C(th.Rim), Color.white, 0.18f), trim = C(th.WallTrim);
+            Color rim = Grimy(C(th.Rim)), rimTop = Grimy(Color.Lerp(C(th.Rim), Color.white, 0.18f)), trim = Grimy(C(th.WallTrim));
             rimTop.a = 0;
             k.Wall(Vector3.zero, RimOuter, 0, RimTop, 96, rim, false);
             k.Push(new Vector3(0, RimTop, 0));
@@ -241,11 +246,158 @@ namespace WishExtractor.View
             k.Build("Rim", Root);
         }
 
+        // ── beautification ──────────────────────────────────────────────────
+
+        /// <summary>1 = forty years of algae; 0 = scrubbed.</summary>
+        public float Grime { get; private set; } = 1f;
+        bool hasJets, hasLights;
+        ParticleSystem jets;
+        Transform lightRing;
+        Material lightMat;
+        Material waterMat;
+        ThemeDef theme;
+
+        Color Grimy(Color c)
+        {
+            var g = Color.Lerp(c, new Color(0.34f, 0.38f, 0.24f), 0.45f * Grime) * (1 - 0.2f * Grime);
+            g.a = c.a;
+            return g;
+        }
+
+        /// <summary>Show the fountain upgrades the player has bought. Cheap to call every frame.</summary>
+        public void SetBeauty(bool scrubbed, bool withJets, bool withLights)
+        {
+            float g = scrubbed ? 0 : 1;
+            if (g != Grime)
+            {
+                Grime = g;
+                foreach (var n in new[] { "Rim", "Basin Wall", "Centerpiece" })
+                {
+                    var t = Root.Find(n);
+                    if (t != null) Object.Destroy(t.gameObject);
+                }
+                BuildRim(theme);
+                BuildWall(mall);
+                BuildCenterpiece(theme);
+                TintWater();
+            }
+            if (withJets != hasJets) { hasJets = withJets; if (withJets) BuildJets(); else if (jets != null) Object.Destroy(jets.gameObject); }
+            if (withLights != hasLights) { hasLights = withLights; if (withLights) BuildLights(); else if (lightRing != null) Object.Destroy(lightRing.gameObject); }
+        }
+
+        void TintWater()
+        {
+            if (waterMat == null) return;
+            Color clear = Color.Lerp(C(theme.BasinTileA), new Color(0.35f, 0.7f, 0.8f), 0.6f);
+            waterMat.SetColor("_Color", Color.Lerp(clear, new Color(0.42f, 0.5f, 0.3f), Grime * 0.7f));
+            waterMat.SetFloat("_Alpha", Mathf.Lerp(0.16f, 0.3f, Grime));
+        }
+
+        void BuildJets()
+        {
+            var go = new GameObject("Water Jets");
+            go.transform.SetParent(Root, false);
+            jets = go.AddComponent<ParticleSystem>();
+            jets.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = jets.main;
+            main.loop = true;
+            main.startLifetime = 1.3f;
+            main.startSpeed = new ParticleSystem.MinMaxCurve(2.6f, 3.4f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
+            main.gravityModifier = 1.1f;
+            main.maxParticles = 1500;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startColor = new Color(0.85f, 0.95f, 1f, 0.8f);
+            var em = jets.emission;
+            em.rateOverTime = 260;
+            var shape = jets.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 28;
+            shape.radius = 0.12f;
+            go.transform.localPosition = new Vector3(0, 4.25f, 0);
+            go.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+            var col = jets.colorOverLifetime;
+            col.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+                         new[] { new GradientAlphaKey(0.9f, 0), new GradientAlphaKey(0.7f, 0.7f), new GradientAlphaKey(0, 1) });
+            col.color = new ParticleSystem.MinMaxGradient(grad);
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = Mats.NewGlow(TexKit.SoftDot, 0.9f, new Color(0.8f, 0.92f, 1f));
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            // a second ring of arcs spilling from the lower bowl
+            var sub = Object.Instantiate(go, Root);
+            sub.name = "Bowl Spill";
+            sub.transform.localPosition = new Vector3(0, 2.0f, 0);
+            var sp = sub.GetComponent<ParticleSystem>();
+            var sm = sp.main;
+            sm.startSpeed = new ParticleSystem.MinMaxCurve(1.4f, 2.0f);
+            var ss = sp.shape;
+            ss.shapeType = ParticleSystemShapeType.Circle;
+            ss.radius = 1.8f;
+            ss.radiusThickness = 0;
+            ss.rotation = Vector3.zero;
+            sub.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+            var se = sp.emission;
+            se.rateOverTime = 320;
+            sub.transform.SetParent(go.transform, true);
+            jets.Play(true);
+        }
+
+        void BuildLights()
+        {
+            lightRing = new GameObject("Fountain Lights").transform;
+            lightRing.SetParent(water, false);
+            var k = new MeshKit();
+            const int n = 24;
+            for (int i = 0; i < n; i++)
+            {
+                float a = i * Mathf.PI * 2 / n;
+                float hue = i / (float)n;
+                Color c = Color.HSVToRGB(hue, 0.7f, 1f);
+                c.a = 1f;
+                var p = new Vector3(Mathf.Cos(a) * (RimInner - 0.06f), -0.14f, Mathf.Sin(a) * (RimInner - 0.06f));
+                k.Push(p, Quaternion.LookRotation(-new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a))));
+                k.Box(Vector3.zero, new Vector3(0.34f, 0.12f, 0.05f), c);
+                k.Pop();
+            }
+            var go = k.Build("LEDs", lightRing, false);
+            lightMat = new Material(Mats.Lit);
+            lightMat.SetFloat("_EmissionBoost", 2.2f);
+            go.GetComponent<MeshRenderer>().sharedMaterial = lightMat;
+            // glow pools on the water above each LED
+            var glowMat = Mats.NewGlow(TexKit.SoftDot, 0.7f, Color.white);
+            for (int i = 0; i < n; i += 2)
+            {
+                float a = i * Mathf.PI * 2 / n;
+                var q = new GameObject("Glow");
+                q.transform.SetParent(lightRing, false);
+                q.transform.localPosition = new Vector3(Mathf.Cos(a) * (RimInner - 0.8f), 0.02f, Mathf.Sin(a) * (RimInner - 0.8f));
+                q.transform.localScale = Vector3.one * 2.4f;
+                q.AddComponent<MeshFilter>().sharedMesh = FX.Quad;
+                var mr = q.AddComponent<MeshRenderer>();
+                var m = new Material(glowMat);
+                m.SetColor("_Color", Color.HSVToRGB(i / (float)n, 0.6f, 1f));
+                mr.sharedMaterial = m;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+        }
+
+        void AnimateBeauty(float time)
+        {
+            if (lightMat != null)
+            {
+                // a slow colour chase: tint the whole ring through the rainbow over the vertex colours
+                float h = (time * 0.05f) % 1f;
+                lightMat.SetColor("_Color", Color.Lerp(Color.white, Color.HSVToRGB(h, 0.5f, 1f), 0.5f));
+            }
+        }
+
         void BuildWall(MallDef m)
         {
             var th = m.Theme;
             var k = new MeshKit();
-            Color a = C(th.BasinTileA), b = C(th.BasinTileB);
+            Color a = Grimy(C(th.BasinTileA)), b = Grimy(C(th.BasinTileB));
             int seg = 96;
             float rowH = 0.32f;
             int rows = Mathf.CeilToInt((RimTop - 0.2f - BasinFloor) / rowH);
@@ -287,7 +439,9 @@ namespace WishExtractor.View
         void BuildCenterpiece(ThemeDef th)
         {
             var k = new MeshKit();
-            Color stone = Color.Lerp(C(th.Rim), Color.white, 0.12f), trim = C(th.WallTrim), gunk = C(0x6B5A3A);
+            Color stone = Grimy(Color.Lerp(C(th.Rim), Color.white, 0.12f)), trim = Grimy(C(th.WallTrim));
+            Color gunk = Grime > 0.5f ? C(0x6B5A3A) : Color.Lerp(C(th.BasinTileA), new Color(0.5f, 0.8f, 0.9f), 0.6f);
+            gunk.a = 0;
             stone.a = 0;
             k.Cylinder(new Vector3(0, (BasinFloor + 1.6f) / 2, 0), 0.55f, 1.6f - BasinFloor, 18, stone);
             for (float y = BasinFloor + 1f; y < 1.4f; y += 1.6f) k.Torus(new Vector3(0, y, 0), 0.57f, 0.06f, 18, 5, trim);
@@ -313,7 +467,9 @@ namespace WishExtractor.View
             }
             k.Sphere(Vector3.zero, 0.16f, 5, 8, star);
             k.Pop();
-            k.Build("Centerpiece", Root);
+            var go = k.Build("Centerpiece", Root);
+            // you walk around (and under the bowls of) this in first person
+            go.AddComponent<MeshCollider>().sharedMesh = go.GetComponent<MeshFilter>().sharedMesh;
         }
 
         void BuildFloor()
@@ -351,7 +507,7 @@ namespace WishExtractor.View
                     float nb = (Mathf.PerlinNoise(x * 0.23f + 13, z * 0.23f + 7) - 0.5f) * 0.55f
                              + (Mathf.PerlinNoise(x * 0.9f + 3, z * 0.9f + 9) - 0.5f) * 0.18f;
                     float mound = 0.22f * (1 - (r / OuterR) * (r / OuterR));
-                    float edge = 0.38f * Mathf.SmoothStep(0, 1, Mathf.InverseLerp(6.3f, OuterR, r));
+                    float edge = EdgeBank * Mathf.SmoothStep(0, 1, Mathf.InverseLerp(6.3f, OuterR, r));
                     bump[idx] = nb + mound + edge;
                     uv[idx] = new Vector2(x, z);
                 }
@@ -554,6 +710,7 @@ namespace WishExtractor.View
                 dirty = false;
             }
             if (water != null) water.localPosition = new Vector3(0, WaterY, 0);
+            AnimateBeauty(Time.time);
             if (crustCollider != null && (float.IsNaN(colliderY) || Mathf.Abs(SurfaceY - colliderY) > 0.04f)) RebuildCrustCollider();
         }
 

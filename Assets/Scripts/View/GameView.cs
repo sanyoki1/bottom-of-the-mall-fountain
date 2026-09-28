@@ -8,7 +8,7 @@ using WishExtractor.Core;
 
 namespace WishExtractor.View
 {
-    public enum TargetKind { None, Item, Kiosk, Terminal, Wish }
+    public enum TargetKind { None, Item, Kiosk, Terminal, Wish, Board }
 
     public struct Target
     {
@@ -28,7 +28,12 @@ namespace WishExtractor.View
         public Kiosk Kiosk { get; private set; }
         public ItemRenderer Items { get; private set; }
         public Hands Hands { get; private set; }
+        public CrowdView Crowd { get; private set; }
+        public WishView WishOrbs { get; private set; }
+        public FountainBoard Board { get; private set; }
         public ViewContext Ctx { get; private set; }
+        /// <summary>A one-line message for the HUD (e.g. "not enough cash").</summary>
+        public event Action<string> Message;
         public Target Current;
         public bool Wading { get; private set; }
         /// <summary>What the aim ray hit last frame (diagnostics).</summary>
@@ -72,7 +77,40 @@ namespace WishExtractor.View
                 FloatText?.Invoke(Kiosk.Front + Vector3.up * 0.9f, "+" + Fmt.Money(cash), new Color(0.55f, 1f, 0.55f), 1.3f);
             };
             Sim.OnDepositEmpty += line => Kiosk.Say(line);
+
+            Crowd = new CrowdView();
+            Crowd.Init(transform, sim);
+            WishOrbs = new WishView();
+            WishOrbs.Init(transform, Ctx, cam);
+            Sim.OnWishSpawned += w => WishOrbs.Spawn(w);
+            Sim.OnWishCaught += (w, cash, tokens, first) =>
+            {
+                var p = WishOrbs.PositionOf(w.Uid);
+                WishOrbs.Caught(w);
+                FloatText?.Invoke(p + Vector3.up * 0.3f, $"+{Fmt.Money(cash)}  +{tokens:0} ✦", RarityColors.Orb[(int)w.Def.Rarity], 1.1f + (int)w.Def.Rarity * 0.12f);
+            };
+            Sim.OnWishEscaped += w => WishOrbs.Escaped(w);
+            Sim.OnLanded += it =>
+            {
+                var p = new Vector3(it.X, Fountain.WaterY + 0.01f, it.Z);
+                var def = Content.Items[it.Type];
+                float big = def.Cat == ItemCat.Coin ? 0.5f : Mathf.Clamp(def.Scale, 0.8f, 2.5f);
+                Fx.Ripple(p, new Color(0.9f, 0.97f, 1f, 0.7f), 0.8f + big * 0.6f, 0.7f);
+                Fx.Sparks(p, new Color(0.8f, 0.92f, 1f), def.Cat == ItemCat.Coin ? 5 : 16, 2.2f + big, 0.07f, 0.5f);
+            };
+            Sim.OnTechBought += t => { if (t.Branch == TechBranch.Fountain) { Board.Flash(); FountainCelebrate(); } };
             RebuildMall();
+        }
+
+        void FountainCelebrate()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                float a = i * Mathf.PI * 2 / 10;
+                Fx.Glint(new Vector3(Mathf.Cos(a) * 6.5f, Fountain.WaterY + 0.6f, Mathf.Sin(a) * 6.5f), new Color(1f, 0.95f, 0.7f), 1.4f, 2, 0.4f);
+            }
+            Fx.Confetti(new Vector3(0, 4.5f, 0), 70, 7);
+            Shake(0.2f);
         }
 
         public void RebuildMall()
@@ -88,6 +126,10 @@ namespace WishExtractor.View
             Fountain.SetStratum(mall, 0, true);
             Kiosk = new Kiosk();
             Kiosk.Build(mallRoot);
+            Board = new FountainBoard();
+            Board.Build(mallRoot, Sim);
+            Crowd?.Clear();
+            WishOrbs?.Clear();
             Cam.backgroundColor = world.FogColor * 0.8f;
             Fountain.Update(0.016f);
         }
@@ -144,15 +186,28 @@ namespace WishExtractor.View
             Items.AreaHighlight.Clear();
             float wallDist = 999f;
             LastHit = null;
-            if (Physics.Raycast(ray, out var hit, 60f, ~(1 << Layers.IgnoreRaycast), QueryTriggerInteraction.Ignore))
+            int solid = ~((1 << Layers.IgnoreRaycast) | (1 << WishView.Layer));
+            bool hitSomething = Physics.Raycast(ray, out var hit, 60f, solid, QueryTriggerInteraction.Ignore);
+            if (hitSomething) wallDist = hit.distance;
+            // floating wishes first: they're triggers on their own layer, and generous to aim at
+            if (Physics.SphereCast(ray, 0.12f, out var wh, Mathf.Min(Balance.WishReach, wallDist), 1 << WishView.Layer, QueryTriggerInteraction.Collide))
             {
-                wallDist = hit.distance;
+                var wct = wh.collider.GetComponent<ClickTarget>();
+                if (wct != null && wct.Kind == "wish")
+                {
+                    Current = new Target { Kind = TargetKind.Wish, Uid = wct.Uid, Point = wh.point, Distance = wh.distance };
+                    return;
+                }
+            }
+            if (hitSomething)
+            {
                 LastHit = hit.collider.name + " @" + hit.distance.ToString("0.00");
                 var ct = hit.collider.GetComponentInParent<ClickTarget>();
-                if (ct != null && ct.Kind == "kiosk" && hit.distance <= KioskReach)
+                if (ct != null && hit.distance <= KioskReach)
                 {
-                    Current = new Target { Kind = TargetKind.Kiosk, Point = hit.point, Distance = hit.distance };
-                    return;
+                    if (ct.Kind == "kiosk") { Current = new Target { Kind = TargetKind.Kiosk, Point = hit.point, Distance = hit.distance }; return; }
+                    if (ct.Kind == "board") { Current = new Target { Kind = TargetKind.Board, Point = hit.point, Distance = hit.distance }; return; }
+                    if (ct.Kind == "terminal") { Current = new Target { Kind = TargetKind.Terminal, Point = hit.point, Distance = hit.distance }; return; }
                 }
             }
             var grab = Sim.Grab;
@@ -206,6 +261,17 @@ namespace WishExtractor.View
                 case TargetKind.Kiosk:
                     Sim.Deposit();
                     break;
+                case TargetKind.Wish:
+                    Sim.CatchWish(Current.Uid);
+                    break;
+                case TargetKind.Board:
+                {
+                    int i = Sim.NextFountainTech();
+                    if (i < 0) { Message?.Invoke("Every job on the plan is done. The Maintenance Terminal has more."); break; }
+                    if (!Sim.CanAfford(i)) { Message?.Invoke($"{Content.Techs[i].Name} costs {Fmt.Money(Sim.TechCost(i))}. Go find some coins."); break; }
+                    Sim.BuyTech(i);
+                    break;
+                }
             }
         }
 
@@ -223,9 +289,16 @@ namespace WishExtractor.View
             float dt = Mathf.Min(Time.deltaTime, 0.1f);
             float time = Time.time;
             Ctx.Time = time;
+            Fountain.SetBeauty(Sim.TechLevel("fountain_scrub") > 0, Sim.TechLevel("fountain_jets") > 0, Sim.TechLevel("fountain_lights") > 0);
             Fountain.Update(dt);
             world.Animate(time, dt);
             Kiosk.Update(dt, time);
+            Board.Update(dt);
+            var feet = Player.Feet;
+            Sim.PlayerX = feet.x;
+            Sim.PlayerZ = feet.z;
+            Crowd.Update(dt, time);
+            WishOrbs.Update(dt, time);
             Fx.Update(dt);
 
             // hands: bare hands show the top item; containers show how full they are

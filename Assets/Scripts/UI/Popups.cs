@@ -85,7 +85,7 @@ namespace WishExtractor.UI
 
         void SpawnToast((string title, string detail, Color color, string glyph, float life) d)
         {
-            var rt = UIKit.Card(root, "Toast", Pal.GlassStrong, 20);
+            var rt = UIKit.Card(root, "Toast", Pal.GlassStrong, 20, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0, 0);
             rt.pivot = new Vector2(0, 0);
             rt.sizeDelta = new Vector2(480, 66);
@@ -144,7 +144,7 @@ namespace WishExtractor.UI
         public void WishQuote(Vector3 world, WishDef w, double value, bool first)
         {
             while (bubbles.Count >= 3) { Object.Destroy(bubbles[0].Rt.gameObject); bubbles.RemoveAt(0); }
-            var rt = UIKit.Card(root, "Wish", new Color(1, 1, 1, 0.95f), 20);
+            var rt = UIKit.Card(root, "Wish", new Color(1, 1, 1, 0.95f), 20, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0);
             rt.sizeDelta = new Vector2(430, 104);
@@ -161,10 +161,69 @@ namespace WishExtractor.UI
             bubbles.Add(new Bubble { Rt = rt, G = g, World = world, Life = 4.2f });
         }
 
+        // ── speech bubbles over shoppers' heads ─────────────────────────────
+
+        sealed class Speech { public RectTransform Rt; public CanvasGroup G; public Transform Anchor; public Vector3 Last; public float Age, Life; }
+        readonly List<Speech> speech = new List<Speech>();
+
+        public void Say(Transform anchor, string text, bool wish, Rarity rarity)
+        {
+            if (anchor == null) return;
+            if ((anchor.position - cam.transform.position).sqrMagnitude > 30f * 30f) return;
+            for (int i = speech.Count - 1; i >= 0; i--)
+                if (speech[i].Anchor == anchor) { Object.Destroy(speech[i].Rt.gameObject); speech.RemoveAt(i); }
+            while (speech.Count >= 5) { Object.Destroy(speech[0].Rt.gameObject); speech.RemoveAt(0); }
+            var col = wish ? Pal.Rarity[(int)rarity] : Pal.Ink;
+            var rt = UIKit.Card(root, "Speech", new Color(1, 1, 1, 0.93f), 16, false, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0);
+            var g = rt.gameObject.AddComponent<CanvasGroup>();
+            g.blocksRaycasts = false;
+            var t = UIKit.Label(rt, "Text", text, wish ? 17 : 16, wish ? Pal.Ink : Pal.Ink2, TextAnchor.MiddleCenter, wish ? UIKit.Semibold : UIKit.Regular, true);
+            if (wish) t.fontStyle = FontStyle.Italic;
+            float w = Mathf.Clamp(t.preferredWidth + 28, 120, 380);
+            t.rectTransform.TL(14, wish ? 22 : 8, w - 28, 10);
+            t.rectTransform.sizeDelta = new Vector2(w - 28, 0);
+            float h = t.preferredHeight + (wish ? 34 : 18);
+            t.rectTransform.sizeDelta = new Vector2(w - 28, h - (wish ? 30 : 16));
+            rt.sizeDelta = new Vector2(w, h);
+            if (wish)
+            {
+                var k = UIKit.Label(rt, "Kicker", "✦ " + View.RarityColors.Names[(int)rarity].ToUpperInvariant() + " WISH", 11, col, TextAnchor.UpperCenter, UIKit.Bold);
+                k.rectTransform.TL(0, 6, w, 14);
+            }
+            // a little tail
+            var tail = UIKit.Image(rt, "Tail", UIKit.Rounded, new Color(1, 1, 1, 0.93f), 4);
+            tail.rectTransform.anchorMin = tail.rectTransform.anchorMax = new Vector2(0.5f, 0);
+            tail.rectTransform.sizeDelta = new Vector2(14, 14);
+            tail.rectTransform.anchoredPosition = new Vector2(0, -2);
+            tail.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+            tail.transform.SetAsFirstSibling();
+            speech.Add(new Speech { Rt = rt, G = g, Anchor = anchor, Last = anchor.position, Life = wish ? 4.5f : 3f });
+        }
+
+        void UpdateSpeech(float dt)
+        {
+            for (int i = speech.Count - 1; i >= 0; i--)
+            {
+                var s = speech[i];
+                s.Age += dt;
+                if (s.Anchor != null) s.Last = s.Anchor.position;
+                if (s.Age >= s.Life) { Object.Destroy(s.Rt.gameObject); speech.RemoveAt(i); continue; }
+                Vector3 sp = cam.WorldToScreenPoint(s.Last + Vector3.up * 0.45f);
+                if (sp.z < 0.5f) { s.G.alpha = 0; continue; }
+                s.Rt.anchoredPosition = ToCanvas(sp);
+                float dist = sp.z;
+                s.Rt.localScale = Vector3.one * Mathf.Clamp(6f / dist, 0.55f, 1.1f);
+                s.G.alpha = Mathf.Clamp01(s.Age / 0.15f) * Mathf.Clamp01((s.Life - s.Age) / 0.4f);
+            }
+        }
+
         // ── update ────────────────────────────────────────────────────────
 
         public void Update(float dt)
         {
+            UpdateSpeech(dt);
             for (int i = floaters.Count - 1; i >= 0; i--)
             {
                 var f = floaters[i];
@@ -226,8 +285,8 @@ namespace WishExtractor.UI
                 Vector3 sp = cam.WorldToScreenPoint(b.World);
                 var p = ToCanvas(sp) + new Vector2(0, 50 + b.Age * 10 + i * 6);
                 var half = root.rect.size * 0.5f;
-                p.x = Mathf.Clamp(p.x, -half.x + 470, half.x - 800);
-                p.y = Mathf.Clamp(p.y, -half.y + 180, half.y - 280);
+                p.x = Mathf.Clamp(p.x, -half.x + 240, half.x - 240);
+                p.y = Mathf.Clamp(p.y, -half.y + 180, half.y - 200);
                 b.Rt.anchoredPosition = p;
                 b.G.alpha = Mathf.Clamp01(b.Age / 0.2f) * Mathf.Clamp01((b.Life - b.Age) / 0.5f);
             }

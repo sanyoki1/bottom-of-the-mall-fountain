@@ -16,7 +16,28 @@ static class Program
             Console.WriteLine($"achievements {Content.Achievements.Length}, objectives {Content.Objectives.Length}, wishes {Content.TotalWishes}, relics {Content.TotalRelics}");
             return 0;
         }
+        if (args.Length > 0 && args[0] == "crowd") return Crowd(args.Length > 1 ? double.Parse(args[1]) : 0);
         return Smoke();
+    }
+
+    /// <summary>Watch the crowd for two minutes at a given wishability and print what shoppers are doing.</summary>
+    static int Crowd(double wish)
+    {
+        var sim = new Sim(new SaveData(), 7);
+        sim.StartRun();
+        if (wish >= 3) sim.DebugSetTech("fountain_scrub", 1);
+        if (wish >= 7) sim.DebugSetTech("fountain_jets", 1);
+        if (wish >= 12) sim.DebugSetTech("fountain_lights", 1);
+        for (int step = 0; step < 1200; step++)
+        {
+            sim.Tick(0.1);
+            if (step % 100 == 99)
+            {
+                var states = string.Join(" ", sim.Shoppers.Select(s => $"{s.Def.Id}:{s.State}@({s.X:0.0},{s.Z:0.0})→({s.TX:0.0},{s.TZ:0.0})"));
+                Console.WriteLine($"t={sim.Time:0}s tosses={sim.S.tosses} wishes={sim.S.wishesSeen} loose={sim.Loose.Count} | {states}");
+            }
+        }
+        return 0;
     }
 
     /// <summary>Walk, grab one coin, walk back, deposit — for ten minutes of game time.</summary>

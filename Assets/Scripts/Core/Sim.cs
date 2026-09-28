@@ -19,6 +19,7 @@ namespace WishExtractor.Core
         public LooseState State;
         public float Timer;                // seconds spent in the current state
         public double Value;               // base value (mall and stratum included)
+        public WishDef Wish;               // a True Wish that rises when this toss lands (not saved)
     }
 
     /// <summary>A pile of one item type: in the player's hands or a machine buffer.</summary>
@@ -111,6 +112,7 @@ namespace WishExtractor.Core
             Mall = Content.Malls[MallDefIndex];
             Loose.Clear();
             looseIndex.Clear();
+            ClearCrowd();
             Carried.Clear();
             CarryUsed = 0;
             int n = Math.Min(S.looseType.Count, Math.Min(S.looseX.Count, Math.Min(S.looseZ.Count, S.looseValue.Count)));
@@ -127,6 +129,7 @@ namespace WishExtractor.Core
                 if (type >= 0 && st.count > 0) AddCarried(type, st.count, st.value);
             }
             Recalc();
+            SeedCrowd();
         }
 
         /// <summary>Copy the live tables back into the save object.</summary>
@@ -172,8 +175,10 @@ namespace WishExtractor.Core
             Mall = Content.Malls[MallDefIndex];
             Loose.Clear();
             looseIndex.Clear();
+            ClearCrowd();
             SeedFountain((int)Balance.SeedCoins);
             Recalc();
+            SeedCrowd();
         }
 
         static readonly double[] SeedWeights = { 70, 15, 10, 5 };
@@ -283,6 +288,8 @@ namespace WishExtractor.Core
             S.runTime += dt;
 
             UpdateLoose((float)dt);
+            UpdateCrowd(dt);
+            UpdateWishes(dt);
 
             earnWindowTime += dt;
             if (earnWindowTime >= 1)
@@ -309,7 +316,7 @@ namespace WishExtractor.Core
                 var it = Loose[i];
                 if (it.State == LooseState.Resting) continue;
                 it.Timer += dt;
-                if (it.State == LooseState.Airborne && it.Timer >= Balance.TossFlight) { it.State = LooseState.Sinking; it.Timer = 0; }
+                if (it.State == LooseState.Airborne && it.Timer >= Balance.TossFlight) { it.State = LooseState.Sinking; it.Timer = 0; Landed(it); }
                 else if (it.State == LooseState.Sinking && it.Timer >= Balance.SinkTime) { it.State = LooseState.Resting; it.Timer = 0; }
             }
         }
@@ -475,6 +482,31 @@ namespace WishExtractor.Core
             Recalc();
             OnTechBought?.Invoke(Content.Techs[i]);
             return true;
+        }
+
+        /// <summary>The cheapest fountain upgrade you could buy next (unlocked, not maxed), or -1.</summary>
+        public int NextFountainTech()
+        {
+            int best = -1;
+            double bestCost = double.MaxValue;
+            for (int i = 0; i < techLevel.Length; i++)
+            {
+                var t = Content.Techs[i];
+                if (t.Branch != TechBranch.Fountain || TechMaxed(i) || !TechUnlocked(i)) continue;
+                double c = TechCost(i);
+                if (c < bestCost) { bestCost = c; best = i; }
+            }
+            return best;
+        }
+
+        public int FountainUpgradesOwned
+        {
+            get
+            {
+                int c = 0;
+                for (int i = 0; i < techLevel.Length; i++) if (Content.Techs[i].Branch == TechBranch.Fountain) c += techLevel[i];
+                return c;
+            }
         }
 
         // ───────────────────────────── meta ─────────────────────────────

@@ -40,6 +40,16 @@ namespace WishExtractor.Core
                 t.Target = "dig"; t.Col = i - 1; t.Row = 1;
             }
 
+            // fountain beautification ("wishability"): more shoppers, more tosses, fancier tosses
+            void F(string id, string name, double wish, double cost, string desc, string req, int col)
+            {
+                var t = T(id, name, TechBranch.Fountain, TechKind.Wishability, wish, cost, desc, req == null ? new string[0] : new[] { req });
+                t.Col = col; t.Row = 0;
+            }
+            F("fountain_scrub", "Scrub the Grime", 3, 0.50, "Forty years of algae, gone. The tiles were teal this whole time. Shoppers start trusting the water with nickels.", null, 0);
+            F("fountain_jets", "Fix the Water Jets", 4, 3, "The jets sputter back to life. People love a fountain that actually fountains.", "fountain_scrub", 1);
+            F("fountain_lights", "Coloured Lights", 5, 15, "Underwater LEDs in every colour of the 1996 rainbow. Dimes incoming.", "fountain_jets", 2);
+
             var arr = list.ToArray();
             foreach (var t in arr) TechIndex[t.Id] = t.Index;
             return arr;

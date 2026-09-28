@@ -120,7 +120,7 @@ namespace WishExtractor.Game
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 150));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 200));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
@@ -166,7 +166,34 @@ namespace WishExtractor.Game
                 sfx.Play("buy_big", 0.6f, 0f, 0.2f);
                 pops.Toast("Goal complete!", reward > 0 ? $"{o.Text}  ·  +{Fmt.Money(reward)}" : o.Text, Pal.Green, "✓", 3.2f);
             };
-            sim.OnTechBought += t => sfx.Play("buy", 0.7f, 0.05f, 0.04f);
+            sim.OnTechBought += t =>
+            {
+                sfx.Play(t.Branch == TechBranch.Fountain ? "buy_big" : "buy", 0.7f, 0.05f, 0.04f);
+                if (t.Branch == TechBranch.Fountain)
+                    pops.Banner("Fountain upgraded", t.Name, $"Wishability {sim.Wishability:0}: a toss every {sim.TossInterval:0.0}s, up to {sim.CrowdTarget} shoppers. {t.Desc}", Pal.Accent, 4.5f);
+            };
+
+            // the crowd
+            view.Crowd.Speak = (head, text, wish, rarity) => pops.Say(head, text, wish, rarity);
+            view.Message += m => { hud.ShowMessage(m); sfx.Play("denied", 0.4f, 0.05f, 0.3f); };
+            sim.OnToss += (s, it) => sfx.PlayAt("throw", new Vector3(s.X, 1.5f, s.Z), 0.25f, 0.15f, 0.05f, 1.4f);
+            sim.OnLanded += it =>
+            {
+                var def = Content.Items[it.Type];
+                var p = new Vector3(it.X, view.Fountain.WaterY, it.Z);
+                if (def.Cat == ItemCat.Coin) sfx.PlayAt("plop", p, 0.55f, 0.15f, 0.03f, 1.1f + Mathf.Min(0.4f, def.Tier * 0.05f));
+                else sfx.PlayAt("splash", p, 0.8f, 0.1f, 0.05f, Mathf.Clamp(1.3f - def.Scale * 0.15f, 0.6f, 1.2f));
+                if (def.Cat == ItemCat.Oddity && def.Rarity >= Rarity.Rare)
+                    pops.Toast("Somebody threw in a " + def.Name + "!", def.Desc, Pal.Rarity[(int)def.Rarity], "!", 4f);
+            };
+            sim.OnWishSpawned += w => sfx.PlayAt("wish_spawn", new Vector3(w.X, view.Fountain.WaterY + 1, w.Z), 0.6f, 0.1f, 0.3f);
+            sim.OnWishCaught += (w, cash, tokens, first) =>
+            {
+                sfx.Play("wish_catch", 0.9f, 0.04f, 0.05f, 1f + (int)w.Def.Rarity * 0.03f);
+                pops.WishQuote(view.WishOrbs.LastCaught, w.Def, cash, first);
+                if (w.Def.Rarity == Rarity.Legendary) pops.Banner("Legendary wish!", "“" + w.Def.Text + "”", "+" + Fmt.Money(cash), Pal.Gold, 4.5f);
+            };
+            sim.OnWishEscaped += w => sfx.PlayAt("wish_escape", new Vector3(w.X, view.Fountain.WaterY + 2, w.Z), 0.3f, 0.1f, 0.4f);
         }
 
         void ResetSave()
@@ -365,6 +392,13 @@ namespace WishExtractor.Game
             yield return LookAtSmooth(view.Kiosk.Root.position + Vector3.up * 1.2f);
         }
 
+        IEnumerator GoToBoard()
+        {
+            var b = view.Board.Root;
+            yield return WalkTo(b.position + b.forward * 1.7f, 0.35f);
+            yield return LookAtSmooth(b.position + Vector3.up * 1.25f);
+        }
+
         // ───────────────────────────── screenshot tour (-autotour) ─────────────────────────────
 
         IEnumerator Shot(string name)
@@ -379,7 +413,7 @@ namespace WishExtractor.Game
 
         IEnumerator Tour()
         {
-            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 240));
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 300));
             scripted = default(FPInput);
             yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
@@ -415,6 +449,29 @@ namespace WishExtractor.Game
             Press();
             yield return new WaitForSeconds(1.4f);
             yield return Shot("07_deposit");
+
+            // the Fountain Improvement Plan, and what beautification does to the crowd
+            sim.DebugAddCash(1);
+            yield return GoToBoard();
+            yield return Shot("07b_board");
+            Press();
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("07c_board_bought");
+            sim.DebugSetTech("fountain_jets", 1);
+            sim.DebugSetTech("fountain_lights", 1);
+            view.Player.Place(new Vector3(0, 0.05f, -15.5f), 0, 4);
+            yield return new WaitForSeconds(7f);
+            yield return Shot("07d_crowd");
+            view.Player.Place(new Vector3(-9.2f, 0.95f, -3.8f), 70, -12);
+            yield return new WaitForSeconds(3f);
+            yield return Shot("07e_beautified");
+            var wish = sim.DebugSpawnWish(-4.5f, -1.5f);
+            yield return new WaitForSeconds(1.6f);
+            if (wish != null) yield return LookAtSmooth(view.WishOrbs.PositionOf(wish.Uid));
+            yield return Shot("07f_wish");
+            Press();
+            yield return new WaitForSeconds(0.5f);
+            yield return Shot("07g_wish_caught");
 
             // bigger containers (tech the terminal will sell in M3), shown off in the fountain
             sim.DebugSetTech("carry_bucket", 1);
@@ -634,6 +691,44 @@ namespace WishExtractor.Game
             yield return null;
             yield return null;
             Check(sim.S.cash > cash1 && sim.S.deposits == 2, "second deposit pays for all five");
+
+            // the crowd has been arriving and tossing the whole time
+            Check(sim.Shoppers.Count > 0 && view.Crowd.Count == sim.Shoppers.Count, $"shoppers walk in and are drawn ({sim.Shoppers.Count})");
+            float waitToss = 0;
+            while (sim.S.tosses == 0 && waitToss < 25) { waitToss += Time.deltaTime; yield return null; }
+            Check(sim.S.tosses > 0, $"shoppers toss things into the fountain ({sim.S.tosses} after {sim.Time:0}s; " +
+                  string.Join(", ", sim.Shoppers.ConvertAll(x => $"{x.Def.Id} {x.State} ({x.X:0},{x.Z:0})→({x.TX:0},{x.TZ:0})")) + ")");
+
+            // buy the first beautification at the Fountain Improvement Plan
+            sim.DebugAddCash(1);
+            double tossInterval0 = sim.TossInterval;
+            yield return GoToBoard();
+            Check(view.Current.Kind == TargetKind.Board, $"crosshair targets the Fountain Improvement Plan (got {view.Current.Kind})");
+            Press();
+            yield return null;
+            yield return null;
+            Check(sim.TechLevel("fountain_scrub") == 1 && sim.Wishability >= 3, $"approving the job buys 'Scrub the Grime' (wishability {sim.Wishability})");
+            Check(sim.TossInterval < tossInterval0, $"shoppers toss more often ({tossInterval0:0.0}s → {sim.TossInterval:0.0}s)");
+            Check(view.Fountain.Grime < 0.5f, "the fountain looks scrubbed");
+            double w0 = sim.TierWeights()[1];
+            Check(w0 > 0, "nickels are now in the toss mix");
+
+            // catch a True Wish
+            yield return EnterFountain();
+            var wish = sim.DebugSpawnWish(view.Player.Feet.x + 1.5f, view.Player.Feet.z + 1.5f);
+            Check(wish != null, "a wish rises from the water");
+            yield return new WaitForSeconds(1.6f);
+            if (wish != null)
+            {
+                yield return LookAtSmooth(view.WishOrbs.PositionOf(wish.Uid), 0.2f);
+                Check(view.Current.Kind == TargetKind.Wish && view.Current.Uid == wish.Uid, $"crosshair targets the wish (got {view.Current.Kind})");
+                double tok0 = sim.S.wishTokens;
+                Press();
+                yield return null;
+                yield return null;
+                Check(sim.S.wishesCaught == 1 && sim.S.wishTokens > tok0 && sim.WishFound(wish.Def.Id), "E catches the wish (cash, tokens and a journal entry)");
+            }
+            yield return Shot("ui_wish");
 
             // menus
             modals.OpenSettings();

@@ -92,17 +92,22 @@ namespace WishExtractor.UI
             rateText.rectTransform.TL(22, 76, 180, 22);
             tokenText = UIKit.Label(card, "Tokens", "", 15, Pal.Purple, TextAnchor.UpperRight, UIKit.Semibold);
             tokenText.rectTransform.TL(150, 76, 160, 22);
+            wishText = UIKit.Label(root, "Wishability", "", 14, Color.white, TextAnchor.UpperLeft, UIKit.Semibold);
+            wishText.rectTransform.TL(26, 132, 600, 22);
+            Shadowed(wishText);
         }
+
+        Text wishText;
 
         void BuildGoal()
         {
-            goalCard = UIKit.Card(root, "Goal", new Color(1, 1, 1, 0.84f), 18, false).Place(new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(620, 70));
+            goalCard = UIKit.Card(root, "Goal", new Color(1, 1, 1, 0.84f), 18, false).Place(new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(680, 88));
             var k = UIKit.Label(goalCard, "Kicker", "GOAL", 12, Pal.Accent, TextAnchor.UpperLeft, UIKit.Bold);
             k.rectTransform.TL(20, 10, 100, 16);
             goalText = UIKit.Label(goalCard, "Text", "", 18, Pal.Ink, TextAnchor.UpperLeft, UIKit.Semibold);
             goalText.rectTransform.TL(70, 7, 530, 26);
             goalHint = UIKit.Label(goalCard, "Hint", "", 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            goalHint.rectTransform.TL(20, 36, 580, 30);
+            goalHint.rectTransform.TL(20, 36, 640, 46);
         }
 
         void BuildCarry()
@@ -185,7 +190,8 @@ namespace WishExtractor.UI
             shownCash = Mathf.Abs((float)(sim.S.cash - shownCash)) < 0.005 ? sim.S.cash : shownCash + (sim.S.cash - shownCash) * (1 - Mathf.Exp(-dt * 10));
             cashText.text = Fmt.Money(shownCash);
             rateText.text = sim.EarnRate > 0.0001 ? $"+{Fmt.Money(sim.EarnRate * 60)}/min" : "";
-            tokenText.text = sim.S.wishTokens > 0 ? $"{Fmt.Num(sim.S.wishTokens)} wish tokens" : "";
+            tokenText.text = sim.S.wishTokens > 0 ? $"✦ {Fmt.Num(sim.S.wishTokens)} tokens" : "";
+            wishText.text = $"Wishability <b>{sim.Wishability:0}</b>  ·  a toss every {sim.TossInterval:0.0}s  ·  {sim.Shoppers.Count} shoppers";
 
             // goal
             var o = sim.CurrentObjective;
@@ -237,6 +243,23 @@ namespace WishExtractor.UI
                     double v = it.Value * sim.ValueMult * Sim.CatRate(def.Cat);
                     string key = sim.Grab.Area > 0 ? "Scoop" : "Pick up";
                     return $"<b>[E]</b> {key} {name}  <color=#FFE08A>{Fmt.Money(v)}</color>";
+                }
+                case TargetKind.Wish:
+                {
+                    var w = sim.FindWish(t.Uid);
+                    if (w == null) return "";
+                    string col = UIKit.Hex(Pal.Rarity[(int)w.Def.Rarity]);
+                    return $"<b>[E]</b> Catch the <color=#{col}>{RarityColors.Names[(int)w.Def.Rarity].ToLowerInvariant()} wish</color>  <color=#9CFFB0>{Fmt.Money(w.Value)}</color>";
+                }
+                case TargetKind.Board:
+                {
+                    int i = sim.NextFountainTech();
+                    if (i < 0) return "Fountain Improvement Plan  ·  <color=#C8C8C8>all done</color>";
+                    var tech = Content.Techs[i];
+                    string cost = Fmt.Money(sim.TechCost(i));
+                    return sim.CanAfford(i)
+                        ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
+                        : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
                 }
                 case TargetKind.Kiosk:
                     return sim.Carried.Count > 0
