@@ -383,23 +383,21 @@ namespace WishExtractor.UI
 
         public void OpenIntro(bool firstTime)
         {
-            const float w = 780, h = 560;
+            // short on purpose: the mall's one-liner, what to do, the three keys that matter (the goal line takes it from there)
+            const float w = 700, h = 420;
             var mall = sim.Mall;
             var c = Open("intro", w, h);
             Title(c, mall.Name, w, firstTime ? "WISH EXTRACTOR: MALL FOUNTAIN TYCOON" : (sim.InRemodel ? $"REMODEL {sim.Remodel}  ·  NEW CONTRACT" : "NEW CONTRACT SIGNED"));
             var tag = UIKit.Label(c, "Tag", mall.Tagline, 17, Pal.Accent, TextAnchor.UpperLeft, UIKit.Semibold, true);
             tag.rectTransform.TL(32, 92, w - 64, 26);
-            string body = mall.Intro + "\n\n";
+            string body = mall.Intro;
             if (firstTime)
-                body += "You are the new fountain maintenance contractor. Management says you can keep whatever you fish out. Management has not thought this through.\n\n" +
-                        "Hop over the rim, pick up coins <b>one at a time</b>, and carry them to the <b>COIN-O-MATIC 3000</b> by the entrance. " +
-                        "Buy bigger containers and better tools at the <b>Maintenance Terminal</b>, make the fountain prettier so shoppers throw in more (and weirder) things, " +
-                        "then build machines and conveyor belts until the whole thing runs itself.\n\n<b>WASD</b> walk  ·  <b>mouse</b> look  ·  <b>E / click</b> pick up and deposit  ·  <b>Esc</b> menu";
+                body += "\n\nGrab coins, cash them in at the <b>COIN-O-MATIC 3000</b> by the entrance, and buy bigger containers at the <b>Maintenance Terminal</b>." +
+                        "\n\n<b>WASD</b> walk  ·  <b>E</b> grab (hold to sweep)  ·  <b>Esc</b> menu";
             else
-                body += $"{sim.Mall.Wishes.Length} new wishes, {sim.Mall.Relics.Length} new relics and the '{sim.Mall.Event.Name}' event.\n\n" +
-                        $"The fountain is {Fmt.Feet(mall.DepthFeet)} deep. {mall.TreasureName} is waiting at the bottom.";
+                body += $"\n\n{Fmt.Feet(mall.DepthFeet)} deep, with {mall.TreasureName} at the bottom.";
             var b = UIKit.Label(c, "Body", body, 17, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            b.rectTransform.TL(32, 132, w - 64, 320);
+            b.rectTransform.TL(32, 132, w - 64, 190);
             var go = UIKit.Button(c, "Go", firstTime ? "Clock in" : "Let's dive", Pal.Accent, Color.white, 18, Close);
             go.Rt.TL(w - 32 - 240, h - 32 - 52, 240, 52);
         }

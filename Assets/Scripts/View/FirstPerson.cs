@@ -13,6 +13,7 @@ namespace WishExtractor.View
         public bool Primary;          // held
         public bool PrimaryDown;      // pressed this frame
         public bool Interact;         // pressed this frame
+        public bool InteractHeld;     // E held: keep grabbing
         public int Hotbar;            // 0 = no change, 1..3 = select slot
         public bool Rotate;           // R: rotate the build ghost
         public bool Demolish;         // X: toggle demolish mode

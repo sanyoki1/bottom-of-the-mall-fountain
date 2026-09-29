@@ -155,10 +155,16 @@ namespace WishExtractor.View
         /// The loose item closest to the aim ray within reach, or null. maxDist lets walls and the
         /// rim hide items behind them.
         /// </summary>
-        public LooseItem PickNearest(Ray ray, float reach, float maxDist, float slack = 0.06f)
+        /// <remarks>
+        /// Aim assist: anything within assistDeg of the crosshair counts, and the one closest to it (by angle)
+        /// wins, so a coin 10 cm across is easy to take from two metres. The last target (sticky) keeps priority
+        /// while it stays in the cone, so the highlight doesn't flicker between neighbours.
+        /// </remarks>
+        public LooseItem PickNearest(Ray ray, float reach, float maxDist, float assistDeg = 0, int sticky = -1)
         {
             LooseItem best = null;
             float bestScore = float.MaxValue;
+            float tanA = Mathf.Tan(assistDeg * Mathf.Deg2Rad);
             var loose = sim.Loose;
             for (int i = 0; i < loose.Count; i++)
             {
@@ -167,11 +173,13 @@ namespace WishExtractor.View
                 Vector3 p = PositionOf(it);
                 Vector3 v = p - ray.origin;
                 float t = Vector3.Dot(v, ray.direction);
-                if (t < 0.2f || t > reach || t > maxDist + 0.35f) continue;
+                if (t < 0.2f || t > reach) continue;
                 float d = (v - ray.direction * t).magnitude;
-                float allow = slack + For(it.Type).Scale * 0.09f + t * 0.012f;
+                float allow = Mathf.Max(0.06f + For(it.Type).Scale * 0.09f + t * 0.012f, t * tanA);
                 if (d > allow) continue;
-                float score = d / allow + t * 0.05f;
+                // the crust under the crosshair isn't a wall: an item lying just past where the ray meets it still counts
+                if (t > maxDist + 0.35f + d) continue;
+                float score = d / t + t * 0.004f - (it.Uid == sticky ? 0.035f : 0);
                 if (score < bestScore) { bestScore = score; best = it; }
             }
             return best;

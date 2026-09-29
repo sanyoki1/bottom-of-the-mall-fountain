@@ -18,8 +18,9 @@ throw things into your fountain, and making the fountain fancier makes them thro
 
 ## Core loop
 
-1. **Collect.** Coins land in the water and settle on the crust. Look at one, press E. The container decides
-   how many you can hold; grab tools add reach and area.
+1. **Collect.** Coins land in the water and settle on the crust. Look near one and press E (aim assist: anything
+   within 9° of the crosshair counts); hold E and sweep your view to keep grabbing. The container decides how
+   many you can hold; grab tools add reach, area and grab rate.
 2. **Deposit.** Walk them to the COIN-O-MATIC 3000 by the entrance. Cash, a ka-ching and a receipt joke.
 3. **Spend.** The Fountain Improvement Plan (an easel by the rim) sells the next beautification; the
    Maintenance Terminal (a laptop running MAINT-OS 95) sells everything else.
@@ -56,16 +57,19 @@ throw things into your fountain, and making the fountain fancier makes them thro
   Security, Head Office), paid in cash, Wish Tokens or Lucky Pennies. Levelled nodes repeat at growing prices;
   **Bigger Chunks** never maxes out (each level makes chunks 25% of their original size bigger, at a
   polynomial price), so cash always has something to speed up the dig.
-- **Hazards (always on)** — Officer Doug patrols the plaza and now and then catches you wading: step out
-  within five seconds or pay a fine (4% of cash). Chad the rival diver shows up every 5–9 minutes and pockets
-  the richest loose items until you get close or press E on him; he drops everything when he runs. The
-  Security branch softens both.
+- **Hazards (always on)** — Officer Doug patrols the plaza, and every 55–120 s while you wade he plays red
+  light, green light: he stops, says "Hm?" and raises his binoculars (1.4 s of warning), then looks for 3–4 s.
+  Move in his sight (walk, grab, dig) and he fines you (4% of cash); freeze until he looks away and he takes
+  you for a statue, and a passing shopper tips you a coin worth five of its kind. The centrepiece hides you
+  from him. An eye above the crosshair shows his look, his suspicion and where he is. Chad the rival diver
+  shows up every 5–9 minutes and pockets the richest loose items until you get close or press E on him; he
+  drops everything when he runs. The Security branch softens both (the Deputy Badge ends Doug's looks).
 - **Wishability** — 13 one-off fountain upgrades (scrub the grime → wormhole to other fountains, some paid in
   Wish Tokens), plus levelled tile polish, free mints, coin polish and wish-catcher's patience.
 - **Mall events** — one per mall, every 7–13 minutes for a minute (Mall Walker Rush Hour, Neon Hour, Black Card
   Hour, Exchange Rate Spike, Jackpot Hour with gold coins raining in, Wishing Hour).
 - **Goals and collections** — a 32-step objective chain (a tutorial through the first mall, then one per
-  mall), 53 achievements (+1% deposit value each), the Wish Journal (+1% per wish found), relic sets (+10%
+  mall), 54 achievements (+1% deposit value each), the Wish Journal (+1% per wish found), relic sets (+10%
   each) and bottom treasures (+25% each).
 - **Head Office** — clearing a mall pays Lucky Pennies (6 → 200). 8 perks: seed money, a bigger starting
   container, the basic factory pre-researched, seniority (value), sneakers, wishful thinking, relic radar,
@@ -139,8 +143,10 @@ Rules in `Core/SimMallMachines.cs`, models and animation in `View/MallMachines.c
   shaders (`Assets/Resources/Shaders`: lit, crust, water, glow, ghost, soft, scroll, text, bloom).
 - **Loose items and belt items** are drawn with GPU instancing per item type, so thousands of coins cost
   little. Shoppers, Doug and Chad are jointed low-poly people with walk and throw animations.
-- **UI** is uGUI built from code: a first-person HUD (crosshair, carry meter, cash, depth, hotbar, prompts,
-  receipts), speech bubbles, toasts and banners, MAINT-OS 95 (a green-on-black 1995 laptop), the build
-  catalogue, the Wish Journal and settings.
+- **UI** is uGUI built from code. The first-person HUD is deliberately quiet: text straight on the picture
+  (no cards), each piece only while it matters (cash; the goal in one line; depth while digging; the carry
+  meter; the hotbar once you own a second tool; controls until your first deposit), short prompts, one toast
+  at a time, speech bubbles for the three nearest talkers. Then MAINT-OS 95 (a green-on-black 1995 laptop),
+  the build catalogue, the Wish Journal and settings.
 - **Audio is synthesised at startup**: footsteps and wading plops, coin clinks, a ka-ching register, wish
   chimes, a whistle, fanfares, and a lo-fi "dead mall muzak" loop per mall.

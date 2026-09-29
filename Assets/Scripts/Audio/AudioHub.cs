@@ -61,6 +61,10 @@ namespace WishExtractor.Audio
             Add("throw", Synth.Whoosh(false));
             Add("step", Synth.Footstep(1), Synth.Footstep(2), Synth.Footstep(3), Synth.Footstep(4), Synth.Footstep(5), Synth.Footstep(6));
             Add("whistle", Synth.Whistle());
+            // Officer Doug's statue check
+            Add("hmm", Synth.Hmm());
+            Add("statue", Synth.Statue());
+            Add("tick", Synth.Tick());
             // the mall-only machines
             Add("pop", Synth.Pop());
             Add("reels", Synth.Reels());

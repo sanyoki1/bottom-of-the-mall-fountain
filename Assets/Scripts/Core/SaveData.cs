@@ -89,7 +89,7 @@ namespace WishExtractor.Core
         // stats
         public double itemsPicked, itemsDeposited, deposits, tosses, oddities, scoops, swings;
         public double wishesCaught, wishesSeen, relicsFound, playTime, biggestDeposit, remodelsDone, distance;
-        public double finesPaid, rivalsChased, fishReturned;
+        public double finesPaid, rivalsChased, fishReturned, statuesFooled, guardLooks;
         public double built, hopperItems, hopperCash, machinePicked;
         public double washed, sorted, bundles, wishesCompressed;
         public double cannonBlasts, droneTrips, slotSpins, jackpots, wellWishes;   // the mall-only machines

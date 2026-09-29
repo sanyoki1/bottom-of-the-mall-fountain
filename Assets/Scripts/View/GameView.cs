@@ -63,8 +63,13 @@ namespace WishExtractor.View
 
         /// <summary>World-anchored popup: position, text, colour, scale.</summary>
         public event Action<Vector3, string, Color, float> FloatText;
+        /// <summary>A running pickup total: (where, text, fresh = start a new number rather than update the last one).</summary>
+        public event Action<Vector3, string, bool> PickupTally;
 
         public const float KioskReach = 3.2f;
+        /// <summary>Aim assist for picking things up one at a time: degrees either side of the crosshair.</summary>
+        public const float AssistDeg = 9f;
+        int lastItemUid = -1;
 
         public void Init(Sim sim, Camera cam)
         {
@@ -239,7 +244,7 @@ namespace WishExtractor.View
             if (!frozen && input.Hotbar == 1) { Build.SetActive(false); DigMode = false; }
             if (!frozen && input.Hotbar == 2)
             {
-                if (Sim.DigTier <= 0) Message?.Invoke("You need something to dig with. Sandbox Shovel: Tools tab at the Maintenance Terminal.");
+                if (Sim.DigTier <= 0) Message?.Invoke("Nothing to dig with yet (Terminal: Tools)");
                 else { Build.SetActive(false); DigMode = true; }
             }
             if (!frozen && input.Catalogue && !Build.Active && Build.SetActive(true)) DigMode = false;
@@ -263,7 +268,17 @@ namespace WishExtractor.View
                 return;
             }
             if (input.Interact || input.PrimaryDown) Use();
-            else if (input.Primary && Current.Kind == TargetKind.Item && grabCooldown <= 0) Use();
+            // hold E (or the mouse button) and sweep: the aim assist hands you the next item as fast as your tool grabs
+            else if ((input.Primary || input.InteractHeld) && Current.Kind == TargetKind.Item && grabCooldown <= 0 && CanTakeCurrent()) Use();
+        }
+
+        /// <summary>Would a grab at the current item work? (Holding the button shouldn't repeat "hands full".)</summary>
+        bool CanTakeCurrent()
+        {
+            if (Sim.CarryFree <= 0) return false;
+            if (Items.AreaHighlight.Count > 0) return true;
+            var it = Sim.FindLoose(Current.Uid);
+            return it != null && (Sim.IsFish(it.Type) || Sim.CanCarry(it.Type));
         }
 
         void UpdateTarget()
@@ -333,14 +348,16 @@ namespace WishExtractor.View
                     return;
                 }
             }
-            var it = Items.PickNearest(ray, reach, wallDist);
+            var it = Items.PickNearest(ray, reach, wallDist, AssistDeg, lastItemUid);
             if (it != null)
             {
                 var p = Items.PositionOf(it);
                 Items.HighlightUid = it.Uid;
+                lastItemUid = it.Uid;
                 Current = new Target { Kind = TargetKind.Item, Uid = it.Uid, Point = p, Distance = Vector3.Distance(ray.origin, p) };
                 return;
             }
+            lastItemUid = -1;
             if (hoverBuilding >= 0 && hit.distance < 8f)
                 Current = new Target { Kind = TargetKind.Building, Uid = hoverBuilding, Point = hit.point, Distance = hit.distance };
         }
@@ -348,6 +365,8 @@ namespace WishExtractor.View
         /// <summary>Act on the current target (E or left click).</summary>
         public void Use()
         {
+            // grabbing, catching and chasing are things a statue doesn't do (Doug's statue check)
+            if (Current.Kind == TargetKind.Item || Current.Kind == TargetKind.Wish || Current.Kind == TargetKind.Rival) Sim.NoteAction();
             switch (Current.Kind)
             {
                 case TargetKind.Item:
@@ -388,8 +407,8 @@ namespace WishExtractor.View
                 case TargetKind.Board:
                 {
                     int i = Sim.NextFountainTech();
-                    if (i < 0) { Message?.Invoke("Every job on the plan is done. The Maintenance Terminal has more."); break; }
-                    if (!Sim.CanAfford(i)) { Message?.Invoke($"{Content.Techs[i].Name} costs {Fmt.Money(Sim.TechCost(i))}. Go find some coins."); break; }
+                    if (i < 0) { Message?.Invoke("The plan's all done"); break; }
+                    if (!Sim.CanAfford(i)) { Message?.Invoke($"Needs {Fmt.Money(Sim.TechCost(i))}"); break; }
                     Sim.BuyTech(i);
                     break;
                 }
@@ -401,14 +420,15 @@ namespace WishExtractor.View
             var tool = Sim.DigTool;
             swingCooldown = 1f / Mathf.Max(0.5f, tool.Rate);
             Hands.Swing();
-            if (Sim.MallCleared) { Message?.Invoke("Bare concrete! There's nothing left to dig. Sign the next contract."); return; }
+            Sim.NoteAction();
+            if (Sim.MallCleared) { Message?.Invoke("Bare concrete. Sign the next contract (C)"); return; }
             double scoops = Sim.SwingDig(p.x, p.z);
             var sp = Fountain.SurfacePoint(p.x, p.z);
             if (Sim.RubbleBlocked)
             {
                 // clang: the crust is buried under your own gunk
                 Fx.Sparks(sp + Vector3.up * 0.1f, new Color(1f, 0.9f, 0.6f), 8, 2.5f, 0.06f, 0.3f);
-                Message?.Invoke($"Clang! {Balance.RubbleCap} chunks of your own gunk are in the way. Haul them to the COIN-O-MATIC (or pump them into a line) and dig again.");
+                Message?.Invoke("Clang! Clear your rubble out of the fountain first");
                 return;
             }
             float mag = Mathf.Clamp01((float)Math.Log10(scoops + 1) / 2.5f);
@@ -457,12 +477,22 @@ namespace WishExtractor.View
             }
         }
 
+        // pickups in quick succession share one floating number: a sweep reads "+7  $0.23", not seven "+$0.01"s
+        double tallyValue;
+        int tallyCount;
+        float tallyTime = -9;
+
         void PickupFx(Vector3 at, double value, int count)
         {
             Fx.Glint(at + Vector3.up * 0.05f, new Color(1f, 0.95f, 0.7f), 0.5f, 1, 0.05f);
             if (Fountain.InWater(at)) Fx.Ripple(new Vector3(at.x, Fountain.WaterY + 0.01f, at.z), new Color(0.85f, 0.95f, 1f, 0.6f), 0.5f + count * 0.02f, 0.5f);
-            string txt = count > 1 ? $"+{count}  {Fmt.Money(value)}" : "+" + Fmt.Money(value);
-            FloatText?.Invoke(at + Vector3.up * 0.25f, txt, new Color(1f, 0.92f, 0.55f), 0.75f);
+            bool fresh = Time.time - tallyTime > 0.8f;
+            if (fresh) { tallyValue = 0; tallyCount = 0; }
+            tallyTime = Time.time;
+            tallyValue += value;
+            tallyCount += count;
+            string txt = tallyCount > 1 ? $"+{tallyCount}  {Fmt.Money(tallyValue)}" : "+" + Fmt.Money(tallyValue);
+            PickupTally?.Invoke(at + Vector3.up * 0.25f, txt, fresh);
         }
 
         void Update()
@@ -491,6 +521,8 @@ namespace WishExtractor.View
             Sim.PlayerX = feet.x;
             Sim.PlayerZ = feet.z;
             Sim.PlayerInWater = Wading;
+            // what Officer Doug's statue check sees: walking counts, looking around doesn't
+            Sim.PlayerMoving = Player.Moved / Mathf.Max(1e-4f, Time.deltaTime) > Balance.GuardMoving;
             Hazards.Update(dt, time);
             Crowd.Update(dt, time);
             WishOrbs.Update(dt, time);
@@ -519,7 +551,8 @@ namespace WishExtractor.View
         void AutoVacuum(float dt, Vector3 feet)
         {
             float r = Sim.CarryDef.AutoRadius;
-            if (r <= 0 || Sim.CarryFree <= 0) return;
+            // a statue's vacuum politely waits while Officer Doug looks
+            if (r <= 0 || Sim.CarryFree <= 0 || Sim.Guard.Watching) return;
             vacuumAcc += dt * 14f;
             if (vacuumAcc < 1) return;
             int n = (int)vacuumAcc;

@@ -90,6 +90,7 @@ namespace WishExtractor.Game
             view.Init(sim, cam);
             view.PlacePlayer(sim.S);
             view.FloatText += (p, t, c, s) => pops?.Float(p, t, c, s);
+            view.PickupTally += (p, t, fresh) => pops?.Tally(p, t, new Color(1f, 0.92f, 0.55f), fresh);
             view.Player.OnLand += v => { if (v > 6) sfx?.Play("dig", Mathf.Clamp01(v / 14f) * 0.6f, 0.1f, 0.2f, 0.7f); };
 
             UIKit.EnsureEventSystem();
@@ -98,6 +99,7 @@ namespace WishExtractor.Game
             modalCanvas = UIKit.CreateCanvas("Modals", 30);
             hud = new HUD();
             hud.Build(uiCanvas, sim);
+            hud.CameraT = cam.transform;
             pops = new Popups();
             pops.Build(popCanvas, cam);
             modals = new Modals();
@@ -168,26 +170,29 @@ namespace WishExtractor.Game
                 sfx.Play("coin", 0.5f, 0.1f, 0.02f, 0.9f);
                 hud.ShowReceipt(cash, n, joke);
             };
-            sim.OnDepositEmpty += line => { hud.ShowMessage("COIN-O-MATIC: \"" + line + "\""); sfx.Play("denied", 0.5f, 0.05f, 0.4f); };
+            // (the kiosk's own screen says why it's empty)
+            sim.OnDepositEmpty += line => sfx.Play("denied", 0.5f, 0.05f, 0.4f);
             sim.OnAchievement += a =>
             {
                 sfx.Play("achievement", 0.8f, 0.02f, 0.2f);
-                pops.Toast("Achievement: " + a.Name, $"{a.Desc}  ·  +{Fmt.Num(Balance.AchievementBonus * 100)}% value forever", Pal.Gold, "★");
+                pops.Toast("Achievement: " + a.Name, "", Pal.Gold, "★", 3f);
             };
-            sim.OnObjectiveDone += (o, reward) =>
-            {
-                sfx.Play("buy_big", 0.6f, 0f, 0.2f);
-                pops.Toast("Goal complete!", reward > 0 ? $"{o.Text}  ·  +{Fmt.Money(reward)}" : o.Text, Pal.Green, "✓", 3.2f);
-            };
+            // (the goal line ticks itself off, and a cash reward shows beside the cash)
+            sim.OnObjectiveDone += (o, reward) => sfx.Play("buy_big", 0.6f, 0f, 0.2f);
             sim.OnTechBought += t =>
             {
                 sfx.Play(t.Branch == TechBranch.Fountain ? "buy_big" : "buy", 0.7f, 0.05f, 0.04f);
                 if (t.Branch == TechBranch.Fountain)
-                    pops.Banner("Fountain upgraded", t.Name, $"Wishability {sim.Wishability:0}: a toss every {sim.TossInterval:0.0}s, up to {sim.CrowdTarget} shoppers. {t.Desc}", Pal.Accent, 4.5f);
+                    pops.Banner("Fountain upgraded", t.Name, $"Wishability {sim.Wishability:0}", Pal.Accent, 3.4f);
             };
 
-            // the crowd
-            view.Crowd.Speak = (head, text, wish, rarity) => pops.Say(head, text, wish, rarity);
+            // the crowd: wishes always get a bubble, small talk at most one every few seconds
+            view.Crowd.Speak = (head, text, wish, rarity) =>
+            {
+                if (!wish && Time.time - lastBark < 6f) return;
+                if (!wish) lastBark = Time.time;
+                pops.Say(head, text, wish, rarity);
+            };
             view.Message += m => { hud.ShowMessage(m); sfx.Play("denied", 0.4f, 0.05f, 0.3f); };
             sim.OnToss += (s, it) =>
             {
@@ -200,8 +205,9 @@ namespace WishExtractor.Game
                 var p = new Vector3(it.X, view.Fountain.WaterY, it.Z);
                 if (def.Cat == ItemCat.Coin) sfx.PlayAt("plop", p, 0.55f, 0.15f, 0.03f, 1.1f + Mathf.Min(0.4f, def.Tier * 0.05f));
                 else sfx.PlayAt("splash", p, 0.8f, 0.1f, 0.05f, Mathf.Clamp(1.3f - def.Scale * 0.15f, 0.6f, 1.2f));
+                // a rare oddity names itself where it lands (aim at it for the joke)
                 if (def.Cat == ItemCat.Oddity && def.Rarity >= Rarity.Rare)
-                    pops.Toast("Somebody threw in a " + def.Name + "!", def.Desc, Pal.Rarity[(int)def.Rarity], "!", 4f);
+                    pops.Float(p + Vector3.up * 0.5f, def.Name + "!", Color.Lerp(Pal.Rarity[(int)def.Rarity], Color.white, 0.35f), 0.9f);
             };
             sim.OnWishSpawned += w => sfx.PlayAt("wish_spawn", new Vector3(w.X, view.Fountain.WaterY + 1, w.Z), 0.6f, 0.1f, 0.3f);
             sim.OnWishCaught += (w, cash, tokens, first) =>
@@ -228,10 +234,10 @@ namespace WishExtractor.Game
             sim.OnRelicFound += (r, v, first) =>
             {
                 sfx.Play("relic", 0.7f, 0.02f, 0.3f);
-                pops.Toast((first ? "New relic! " : "Relic: ") + r.Name, $"{r.Desc}  ·  worth {Fmt.Money(v)} at the kiosk", Pal.Rarity[(int)r.Rarity], "◆", first ? 5f : 3.6f);
+                pops.Toast((first ? "New relic: " : "Relic: ") + r.Name, "", Pal.Rarity[(int)r.Rarity], "◆", first ? 3.6f : 2.8f);
                 if (r.Rarity == Rarity.Legendary) pops.Banner("Legendary find!", r.Name, r.Desc, Pal.Gold, 4.5f);
             };
-            sim.OnRelicSetComplete += m => { sfx.Play("achievement"); pops.Banner("Collection complete", m.Name + " relics", $"Every relic found: +{Fmt.Num(Balance.RelicSetBonus * 100)}% value forever", Pal.Purple, 4.5f); };
+            sim.OnRelicSetComplete += m => { sfx.Play("achievement"); pops.Banner("Collection complete", m.Name + " relics", $"+{Fmt.Num(Balance.RelicSetBonus * 100)}% value forever", Pal.Purple, 3.8f); };
             sim.OnEventChanged += on =>
             {
                 if (!on) return;
@@ -252,19 +258,32 @@ namespace WishExtractor.Game
             };
             // hazards, the goldfish, footsteps
             view.Hazards.Speak = (head, text, wish, rarity) => pops.Say(head, text, wish, rarity);
-            sim.OnGuardSpeak += (g, line) => { if (g.State == GuardState.Warning) sfx.PlayAt("whistle", new Vector3(g.X, 1.6f, g.Z), 0.9f, 0.05f, 1f); };
+            sim.OnGuardSpeak += (g, line) => { if (g.State == GuardState.Busted) sfx.PlayAt("whistle", new Vector3(g.X, 1.6f, g.Z), 0.9f, 0.05f, 1f); };
+            // Officer Doug's statue check: "Hm?", binoculars up, freeze (the HUD's eye and the ticking do the rest)
+            sim.OnGuardLook += g =>
+            {
+                sfx.PlayAt("hmm", new Vector3(g.X, 1.7f, g.Z), 1f, 0.06f, 0.5f);
+                if (sim.S.guardLooks <= 1)
+                    pops.Toast("Officer Doug is looking: freeze!", "Stand still until he looks away, or hide behind the centrepiece.", Pal.Gold, "!", 5f);
+            };
+            sim.OnGuardLookDone += (g, busted) => { if (!busted) sfx.Play("statue", 0.7f, 0.02f, 0.5f); };
+            sim.OnStatueTipped += (x, z, v) => pops.Float(new Vector3(x, view.Fountain.WaterY + 0.5f, z), "Tip!", new Color(1f, 0.85f, 0.42f), 0.9f);
             sim.OnFined += fine =>
             {
                 sfx.Play("denied", 0.7f, 0.02f, 0.5f);
-                pops.Toast("Fined by Officer Doug", $"-{Fmt.Money(fine)} for wading during mall hours. (Security tab: Donut Diplomacy.)", Pal.Red, "!", 4.5f);
+                pops.Toast(fine >= 0.005 ? $"Fined {Fmt.Money(fine)}" : "Busted!", sim.S.finesPaid <= 1 ? "Doug saw you move. Freeze while he looks." : "", Pal.Red, "!", 3.2f);
             };
-            sim.OnRivalArrived += r => { sfx.Play("event", 0.5f, 0.05f, 2f, 1.3f); pops.Toast("A rival diver is in your fountain!", "Chad is pocketing your coins. Get close to him (or press E) to chase him off.", Pal.Pink, "!", 5f); };
-            sim.OnRivalChased += (r, n) => { sfx.Play("splash", 0.9f, 0.05f, 0.3f, 0.8f); pops.Toast("Chad fled!", n > 0 ? $"He dropped {n} stolen item{(n == 1 ? "" : "s")} back in the fountain." : "He didn't get anything. Good.", Pal.Green, "✓", 3.5f); };
-            sim.OnRivalEscaped += (r, n) => pops.Toast("Chad got away", $"...with {n} of your items. He'll be back.", Pal.Ink2, "✕", 4f);
+            sim.OnRivalArrived += r =>
+            {
+                sfx.Play("event", 0.5f, 0.05f, 2f, 1.3f);
+                pops.Toast("Chad is in your fountain!", sim.S.rivalsChased == 0 ? "Walk up to him (or press E) to chase him off." : "", Pal.Pink, "!", 4f);
+            };
+            sim.OnRivalChased += (r, n) => { sfx.Play("splash", 0.9f, 0.05f, 0.3f, 0.8f); pops.Toast(n > 0 ? $"Chad fled, dropping {n}" : "Chad fled", "", Pal.Green, "✓", 2.8f); };
+            sim.OnRivalEscaped += (r, n) => pops.Toast($"Chad got away with {n}", "", Pal.Ink2, "✕", 3f);
             sim.OnFishReturned += it =>
             {
                 sfx.Play("splash", 0.7f, 0.1f, 0.2f, 1.3f);
-                hud.ShowMessage("You gently return the goldfish to the water. Nearby shoppers applaud.  +1 ✦");
+                pops.Float(new Vector3(it.FromX, view.Fountain.WaterY + 0.4f, it.FromZ), "+1 ✦", new Color(0.62f, 1f, 0.7f), 0.9f);
             };
             view.Player.OnStep += () =>
             {
@@ -277,7 +296,7 @@ namespace WishExtractor.Game
             {
                 sfx.PlayAt("pop", FactoryView.WorldCenter(b) + Vector3.up, 0.9f, 0.08f, 0.1f);
                 if (sim.S.cannonBlasts <= 1)
-                    pops.Toast("Pop!", "The Champagne Cork Cannon blasts whole slabs into the water, already rinsed. Pumps and claws by the splash can feed them straight to a sorter.", Pal.Gold, "!", 5.5f);
+                    pops.Toast("Pop!", "Rinsed slabs: pumps and claws can feed them straight to a sorter.", Pal.Gold, "!", 4.5f);
                 else if (Time.time - lastSommelierLine > 20 && UnityEngine.Random.value < 0.25f)
                 {
                     lastSommelierLine = Time.time;
@@ -288,7 +307,7 @@ namespace WishExtractor.Game
             {
                 sfx.PlayAt("drone", FactoryView.WorldCenter(b) + Vector3.up * 1.5f, 0.45f, 0.1f, 0.4f);
                 if (sim.S.droneTrips <= 1)
-                    pops.Toast("Now arriving at Carousel 4", "Cargo drones empty every rim intake with no belt behind it and fly the loads here. Start your line at the carousel's back.", Pal.Accent, "!", 5.5f);
+                    pops.Toast("Now arriving at Carousel 4", "Drones empty rim intakes that have no belt behind them.", Pal.Accent, "!", 4.5f);
                 else if (Time.time - lastPaLine > 30 && UnityEngine.Random.value < 0.2f)
                 {
                     lastPaLine = Time.time;
@@ -302,7 +321,7 @@ namespace WishExtractor.Game
                 if (Time.time - lastJackpotBanner > 45)
                 {
                     lastJackpotBanner = Time.time;
-                    pops.Banner("Jackpot!", "7 · 7 · 7", $"{Fmt.Money(v * sim.ValueMult)} in tokens just hit the fountain. Claws and pumps will find them (so will Chad).", Pal.Gold, 4f);
+                    pops.Banner("Jackpot!", "7 · 7 · 7", $"{Fmt.Money(v * sim.ValueMult)} in tokens just hit the fountain", Pal.Gold, 3.6f);
                 }
             };
             sim.OnSlotSpin += (b, r) =>
@@ -310,7 +329,7 @@ namespace WishExtractor.Game
                 sfx.PlayAt("reels", FactoryView.WorldCenter(b) + Vector3.up * 1.4f, 0.3f, 0.12f, 0.9f);
                 if (sim.S.slotSpins <= 1)
                 {
-                    pops.Toast("Spin to win", "The Slot-Machine Sorter spins every chunk of raw gunk: cherries pay it out sorted, BAR double, sevens five times, 7-7-7 sprays the fountain. The house keeps the rest.", Pal.Gold, "!", 5.5f);
+                    pops.Toast("Spin to win", "Cherries pay it sorted, BAR ×2, sevens ×5. The house keeps the rest.", Pal.Gold, "!", 4.5f);
                     return;
                 }
                 // Elvis works the floor: a word on a big win, now and then a word on the house's
@@ -323,7 +342,7 @@ namespace WishExtractor.Game
             {
                 sfx.PlayAt("well", FactoryView.WorldCenter(b) + Vector3.up, 0.7f, 0.04f, 0.3f);
                 if (sim.S.wellWishes <= 1)
-                    pops.Toast("The Old Well granted a wish", "Wishes nobody catches in a few seconds fall in, and that much crust stops existing. Catch the ones you want first.", Pal.Accent, "✦", 5.5f);
+                    pops.Toast("The Old Well granted a wish", "Uncaught wishes fall in, and that much crust vanishes.", Pal.Accent, "✦", 4.5f);
                 else if (Time.time - lastWellLine > 10)
                 {
                     lastWellLine = Time.time;
@@ -340,6 +359,7 @@ namespace WishExtractor.Game
         }
 
         float lastJackpotBanner = -999, lastWellLine = -999, lastSommelierLine = -999, lastPaLine = -999, lastElvisLine = -999;
+        float lastBark = -999, lookTick;
         static string Pick(string[] lines) => lines[UnityEngine.Random.Range(0, lines.Length)];
 
         static readonly string[] SommelierLines =
@@ -448,6 +468,13 @@ namespace WishExtractor.Game
             view.Step(input, dt, modal);
 
             hud.Refresh(dt, view.Current, view.Wading, modal, view.Build, view.DigMode);
+            // a clock ticks while Officer Doug looks, louder as his suspicion grows
+            if (sim.Guard.State == GuardState.Looking && !modal)
+            {
+                lookTick += dt;
+                if (lookTick >= 0.5f) { lookTick -= 0.5f; sfx.Play("tick", 0.3f + 0.5f * sim.Guard.Suspicion, 0.02f, 0.2f); }
+            }
+            else lookTick = 0.45f;
             pops.Update(dt);
             modals.Update(dt);
             terminal.Update(dt);
@@ -500,6 +527,7 @@ namespace WishExtractor.Game
             i.Primary = Input.GetMouseButton(0);
             i.PrimaryDown = Input.GetMouseButtonDown(0);
             i.Interact = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.F);
+            i.InteractHeld = Input.GetKey(KeyCode.E) || Input.GetKey(KeyCode.F);
             if (Input.GetKeyDown(KeyCode.Alpha1)) i.Hotbar = 1;
             if (Input.GetKeyDown(KeyCode.Alpha2)) i.Hotbar = 2;
             if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.B)) i.Hotbar = 3;
@@ -614,6 +642,7 @@ namespace WishExtractor.Game
         {
             public FPInput I;
             public int Hotbar { set => I.Hotbar = value; }
+            public bool InteractHeld { set => I.InteractHeld = value; }
             public bool Primary { set => I.Primary = value; }
             public bool PrimaryDown { set => I.PrimaryDown = value; }
             public bool Demolish { set => I.Demolish = value; }
@@ -770,16 +799,31 @@ namespace WishExtractor.Game
             yield return Shot("30_terminal_security");
             terminal.Close();
 
-            // the hazards: Officer Doug's whistle and fine, Chad the rival diver, and a goldfish that goes back
+            // the hazards: Officer Doug's statue check (move and he fines you, freeze and you're tipped),
+            // Chad the rival diver, and a goldfish that goes back
             sim.DebugAddCash(20);
             yield return EnterFountain();
             for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
             sim.DebugGuardCheck();
-            yield return new WaitForSeconds(0.6f);
+            yield return new WaitForSeconds(0.2f);
             yield return LookAtSmooth(view.Hazards.GuardHead.position);
-            yield return Shot("31_guard_warning");
-            yield return new WaitForSeconds(5f);
+            for (float w = 0; sim.Guard.State != GuardState.Looking && w < 3; w += Time.deltaTime) yield return null;
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("31_guard_look");
+            for (float w = 0; sim.Guard.State == GuardState.Looking && w < 3; w += Time.deltaTime) { Drive(new Vector2(0.6f, 0)); yield return null; }
+            Drive(Vector2.zero);
+            yield return new WaitForSeconds(0.3f);
             yield return Shot("32_guard_fine");
+            for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
+            Vector3 tipAt = Vector3.zero;
+            System.Action<float, float, double> onTip = (x, z, v) => tipAt = new Vector3(x, view.Fountain.WaterY, z);
+            sim.OnStatueTipped += onTip;
+            sim.DebugGuardCheck();
+            for (float w = 0; (sim.Guard.State == GuardState.Patrol || sim.Guard.Watching) && w < 10; w += Time.deltaTime) yield return null;
+            sim.OnStatueTipped -= onTip;
+            // the tip lands at your feet (the coin still in the air, "Tip!" rising)
+            if (tipAt != Vector3.zero) yield return LookAtSmooth(tipAt + Vector3.up * 0.3f, 0.25f);
+            yield return Shot("37_statue_tip");
             yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f);
             yield return SummonRival();
             yield return new WaitForSeconds(3f);
@@ -798,7 +842,7 @@ namespace WishExtractor.Game
             Press();
             yield return new WaitForSeconds(0.6f);
             yield return Shot("36_goldfish_returned");
-            Debug.Log($"[TOUR] hazards: fines {sim.S.finesPaid}, Chad chased {sim.S.rivalsChased}, goldfish returned {sim.S.fishReturned}");
+            Debug.Log($"[TOUR] hazards: fines {sim.S.finesPaid}, statues {sim.S.statuesFooled}, Chad chased {sim.S.rivalsChased}, goldfish returned {sim.S.fishReturned}");
 
             // every fountain upgrade, from the rim and the balcony
             foreach (var t in Content.Techs) if (t.Branch == TechBranch.Fountain && t.MaxLevel == 1) sim.DebugSetTech(t.Id, 1);
@@ -1157,6 +1201,10 @@ namespace WishExtractor.Game
             {
                 Vector3 flat = new Vector3(it.X, 0, it.Z);
                 yield return WalkTo(flat - (flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).normalized * 0.9f, 0.3f, 6f, false);
+                // aim assist: a coin 13 cm off the crosshair is still yours
+                Vector3 cp = view.Items.PositionOf(it), side = Vector3.Cross(Vector3.up, cp - cam.transform.position).normalized;
+                yield return LookAtSmooth(cp + side * 0.13f);
+                Check(view.Current.Kind == TargetKind.Item, $"aim assist: 13 cm off a coin still targets one (got {view.Current.Kind})");
                 yield return LookAtSmooth(view.Items.PositionOf(it));
                 Check(view.Current.Kind == TargetKind.Item && view.Current.Uid == it.Uid, $"crosshair targets the coin (got {view.Current.Kind})");
                 Press();
@@ -1215,8 +1263,9 @@ namespace WishExtractor.Game
             yield return null;
             Check(!terminal.IsOpen, "terminal closed");
             yield return EnterFountain();
-            int got = 0;
-            for (int i = 0; i < 5; i++)
+            // hold E and sweep the view over the coins: the aim assist hands you each one as fast as the grabber grabs
+            SetFlag(i => i.InteractHeld = true);
+            for (int i = 0; i < 12 && sim.CarriedCount < 5; i++)
             {
                 var c = NearestLoose(view.Player.Feet);
                 if (c == null) break;
@@ -1224,13 +1273,10 @@ namespace WishExtractor.Game
                 if ((flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).magnitude > 1.6f)
                     yield return WalkTo(flat - (flat - new Vector3(view.Player.Feet.x, 0, view.Player.Feet.z)).normalized * 0.9f, 0.3f, 6f, false);
                 yield return LookAtSmooth(view.Items.PositionOf(c), 0.15f);
-                int before = sim.CarriedCount;
-                Press();
-                yield return null;
-                yield return null;
-                if (sim.CarriedCount > before) got++;
+                yield return new WaitForSeconds(0.25f);
             }
-            Check(got == 5 && sim.CarriedCount == 5, $"picked up five coins into the cup ({got})");
+            SetFlag(i => i.InteractHeld = false);
+            Check(sim.CarriedCount == 5, $"holding E sweeps five coins into the cup ({sim.CarriedCount})");
             yield return GoToKiosk();
             double cash1 = sim.S.cash;
             Press();
@@ -1291,24 +1337,36 @@ namespace WishExtractor.Game
             yield return new WaitForSeconds(0.4f);
             yield return Shot("ui_goldfish");
 
-            // ── Officer Doug: wade on after his whistle and he fines you; step out and he calms down ──
+            // ── Officer Doug's statue check: move while he looks and he fines you; freeze and a shopper tips you ──
             Check(view.Wading, "still wading in the fountain");
             for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
             double cashFine = sim.S.cash;
             double fines0 = sim.S.finesPaid;
             sim.DebugGuardCheck();
             yield return new WaitForSeconds(0.4f);
-            Check(sim.Guard.State == GuardState.Warning && sim.Guard.Line != null, $"Officer Doug blows his whistle at you (\"{sim.Guard.Line}\")");
-            yield return new WaitForSeconds(5.3f);
-            Check(sim.S.finesPaid == fines0 + 1 && sim.S.cash < cashFine, $"staying in the water gets you fined ({Fmt.Money(cashFine - sim.S.cash)})");
+            Check(sim.Guard.State == GuardState.Suspicious && sim.Guard.Line != null, $"Officer Doug stops and raises his binoculars (\"{sim.Guard.Line}\")");
+            for (float w = 0; sim.Guard.State != GuardState.Looking && w < 3; w += Time.deltaTime) yield return null;
+            yield return new WaitForSeconds(0.3f);
+            var eye = GameObject.Find("Doug Eye");
+            Check(sim.Guard.State == GuardState.Looking && GameObject.Find("Binoculars") != null && eye != null && eye.GetComponent<CanvasGroup>().alpha > 0.5f,
+                  "he looks through his binoculars, and the HUD's eye opens");
+            yield return Shot("ui_guard_look");
+            float waitBust = 0;
+            while (sim.S.finesPaid == fines0 && waitBust < 2.5f) { Drive(new Vector2(0.6f, 0)); waitBust += Time.deltaTime; yield return null; }
+            Drive(Vector2.zero);
+            Check(sim.S.finesPaid == fines0 + 1 && sim.S.cash < cashFine && sim.Guard.State == GuardState.Busted,
+                  $"moving while he looks: busted and fined ({Fmt.Money(cashFine - sim.S.cash)}, {waitBust:0.0}s)");
             yield return Shot("ui_guard_fine");
             for (float w = 0; sim.Guard.State != GuardState.Patrol && w < 10; w += Time.deltaTime) yield return null;
+            double fooled0 = sim.S.statuesFooled;
+            bool tipped = false;
+            System.Action<float, float, double> onTip = (x, z, v) => tipped = true;
+            sim.OnStatueTipped += onTip;
             sim.DebugGuardCheck();
-            yield return new WaitForSeconds(0.4f);
-            Check(sim.Guard.State == GuardState.Warning, "a second whistle");
-            yield return WalkTo(new Vector3(0, 0, -11.5f), 0.5f, 4f);
-            yield return new WaitForSeconds(0.3f);
-            Check(!view.Wading && sim.Guard.State != GuardState.Warning && sim.S.finesPaid == fines0 + 1, "stepping out of the water after the whistle avoids the fine");
+            for (float w = 0; (sim.Guard.State == GuardState.Patrol || sim.Guard.Watching) && w < 10; w += Time.deltaTime) yield return null;
+            sim.OnStatueTipped -= onTip;
+            Check(sim.S.statuesFooled == fooled0 + 1 && sim.S.finesPaid == fines0 + 1, "standing still until he looks away: he takes you for a statue");
+            Check(tipped, "a passing shopper tips the statue");
 
             // ── Chad the rival diver: wade up to him and he drops everything and runs; E works too ──
             double chased0 = sim.S.rivalsChased;

@@ -37,6 +37,19 @@ namespace WishExtractor.Core
         // ── manual collection ────────────────────────────────────────────────────
         public const float WalkSpeed = 4.6f, SprintMult = 1.55f, WadeMult = 0.72f;
 
+        // ── Officer Doug's statue check (red light, green light) ─────────────────
+        // Now and then while you wade he stops, raises his binoculars (the tell) and looks your way. Move in his
+        // sight (walk, grab, dig) and his suspicion fills: busted, fined. Freeze like a statue until he looks
+        // away and a passing shopper tips the "statue". The fountain's centrepiece hides you from him.
+        public const double GuardLookMin = 55, GuardLookMax = 120;   // seconds between looks while you wade
+        public const double GuardFirstLook = 60;                      // the first one comes early, to teach it
+        public const float GuardTell = 1.4f;                          // seconds of warning before he looks
+        public const double GuardLookLenMin = 2.6, GuardLookLenMax = 4.2;
+        public const float GuardNotice = 3.2f;                        // suspicion per second of moving in his sight (1 = busted)
+        public const float GuardMoving = 0.3f;                        // m/s: anything faster counts as moving
+        public const float StatueHideR = 1.1f;                        // the centrepiece hides anyone in its shadow
+        public const double StatueTip = 5;                            // the tip: one coin worth five of its kind
+
         // ── wishes ───────────────────────────────────────────────────────────────
         public const double WishChanceBase = 0.05;      // per toss, before tier bonus
         public const double WishChancePerTier = 0.03;

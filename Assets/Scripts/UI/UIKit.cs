@@ -154,6 +154,102 @@ namespace WishExtractor.UI
             }
         }
 
+        static Sprite gradient, vignette, eyeLens, triangle;
+
+        static Sprite Make(Texture2D t, Color32[] px)
+        {
+            t.SetPixels32(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, t.width, t.height), new Vector2(0.5f, 0.5f), 100);
+        }
+
+        /// <summary>White fading from opaque at the bottom to clear at the top (screen-edge shading behind HUD text).</summary>
+        public static Sprite Gradient
+        {
+            get
+            {
+                if (gradient != null) return gradient;
+                const int n = 64;
+                var t = new Texture2D(4, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                var px = new Color32[4 * n];
+                for (int y = 0; y < n; y++)
+                {
+                    float a = 1 - y / (n - 1f);
+                    a = a * a * (3 - 2 * a);
+                    for (int x = 0; x < 4; x++) px[y * 4 + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+                return gradient = Make(t, px);
+            }
+        }
+
+        /// <summary>Clear in the middle, white towards the edges (stretched over the screen as a vignette).</summary>
+        public static Sprite Vignette
+        {
+            get
+            {
+                if (vignette != null) return vignette;
+                const int n = 128;
+                var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                var px = new Color32[n * n];
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float dx = (x + 0.5f) / (n / 2f) - 1, dy = (y + 0.5f) / (n / 2f) - 1;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy);
+                        float a = Mathf.Clamp01((d - 0.55f) / 0.6f);
+                        a = a * a * (3 - 2 * a);
+                        px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                    }
+                return vignette = Make(t, px);
+            }
+        }
+
+        /// <summary>An almond eye outline filled white (two circle arcs meeting at the corners).</summary>
+        public static Sprite EyeLens
+        {
+            get
+            {
+                if (eyeLens != null) return eyeLens;
+                const int w = 128, h = 72;
+                var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                var px = new Color32[w * h];
+                // each arc is a circle through both corners and the top (or bottom) middle
+                float hw = w / 2f - 2, hh = h / 2f - 2;
+                float c = (hw * hw - hh * hh) / (2 * hh), r = c + hh;
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        float px0 = x + 0.5f - w / 2f, py0 = y + 0.5f - h / 2f;
+                        float d1 = Mathf.Sqrt(px0 * px0 + (py0 + c) * (py0 + c)), d2 = Mathf.Sqrt(px0 * px0 + (py0 - c) * (py0 - c));
+                        float a = Mathf.Clamp01(Mathf.Min(r - d1, r - d2) + 0.5f);
+                        px[y * w + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                    }
+                return eyeLens = Make(t, px);
+            }
+        }
+
+        /// <summary>A small triangle pointing up (the HUD's pointer at Officer Doug).</summary>
+        public static Sprite Triangle
+        {
+            get
+            {
+                if (triangle != null) return triangle;
+                const int n = 64;
+                var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                var px = new Color32[n * n];
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        // apex at the top middle, base along the bottom; distance to the two slanted edges
+                        float fx = x + 0.5f, fy = y + 0.5f;
+                        float half = (1 - fy / n) * (n / 2f - 4);
+                        float edge = Mathf.Min(half - Mathf.Abs(fx - n / 2f), fy - 4, n - 4 - fy + 0.0001f);
+                        px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(edge + 0.5f) * 255));
+                    }
+                return triangle = Make(t, px);
+            }
+        }
+
         // ── canvas ─────────────────────────────────────────────────────────
 
         public static Canvas CreateCanvas(string name, int order)

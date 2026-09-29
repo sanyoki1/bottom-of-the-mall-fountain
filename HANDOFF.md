@@ -1,27 +1,105 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-28 (session 6, on Nico's Windows PC with Unity 6000.4.2f1: M6 and M7 built and run
-in Unity for the first time; four problems found in the screenshots and fixed; build, tour, uitest and
-loadtest all pass)._
+_Last updated 2026-09-29 (session 7, a cloud session with no Unity license: Nico's first hand playtest said
+the UI was cluttered, picking up coins at the start dragged, and Officer Doug needed a minigame. All three
+are done in code and compile with Unity 6's compiler, but none of it has been built or run in Unity)._
 
 ## NEXT
 
-1. **Play it by hand.** Nobody has yet: the first 20 minutes and the start of a dig (session 4 changed the
-   early economy and digging, and only the bot and the scripted tour/uitest have played it), then `-dev` (F6
-   finishes a mall, F5 adds cash) to reach the later malls and use each machine. The new sounds (pop, reels,
-   jackpot, drone whirr, well chime, whistle, footsteps) have never been listened to.
-2. **Merge into `master`** (Nico's call): this branch now holds M6 and M7, verified in Unity.
-3. **Decide about the other line.** A separate cloud session left `claude/gracious-feynman-izvxcg`: M6 done
+1. **Verify session 7 in Unity on Windows** (CLAUDE.md steps 1–4): build; `-autotour` (61 shots) and look at
+   every one, above all the HUD in the early shots, `31_guard_look` (Doug's binoculars, the eye above the
+   crosshair, amber screen edges), `32_guard_fine`, `37_statue_tip`; `-uitest` should say
+   `123 passed, 0 failed`; `-loadtest`. Nothing in session 7 has been rendered: expect to tune positions,
+   sizes and alphas in `HUD.cs` / `Popups.cs`, and Doug's arm angles in `Hazards.cs`.
+2. **Play the first 20 minutes again** and judge the three changes by feel: is the aim assist (9°) generous
+   enough and does hold-E sweeping feel good; is the HUD quiet enough (or too quiet); is Doug's statue check
+   fun, fair and often enough (every 55–120 s while you wade).
+3. **Merge into `master`** (Nico's call). `99db1e5` is the head verified in Unity (M6 + M7); session 7's
+   commits sit on top of it, unverified. Merge `99db1e5` alone if session 7 isn't verified yet.
+4. **Decide about the other line.** A separate cloud session left `claude/gracious-feynman-izvxcg`: M6 done
    its own way, then a Core-only late-game redesign (mall Wonders, buried finds, frenzies, income-scaled
    wishes) with no view yet. It branched from `master` in parallel with this branch, and the two diverge in
    `Balance`, `ContentMalls`, `SimCrust`, `SimFactory` and the bot. Bringing its ideas here would mean
    re-implementing them on this branch's economy and re-fitting. Port, park or delete it.
-4. Ideas and later work: see "Ideas / later" below (unchanged from session 5).
+5. Ideas and later work: see "Ideas / later" below.
 
 **Git:** `master` holds M1–M5 and the M6 WIP commit `4a99037`. This branch,
 `claude/wish-extractor-m6-verify-m6ww7w`, adds session 4's M6 (`93cae22`, first pushed as
 `claude/upbeat-dijkstra-ypw7nn`), session 5's verification pass (`0360e0d`) and M7 (`d495008`, `12e70ac`),
-then session 6's Unity fixes.
+session 6's Unity fixes (`99db1e5`, verified), then session 7's playtest changes (unverified).
+
+## Session 7 (cloud): the playtest's three notes
+
+Nico played the verified build by hand and wrote: "The UI is too cluttered. Always too many words on the screen
+at once. Make the UI less cluttered and more tasteful. Also the start of the game is too boring because you are
+not good at aiming at the coins, it makes picking up the coins feel like forever. The guard mechanic should
+also have some kind of minigame."
+
+### A quiet HUD (`UI/HUD.cs`, `UI/Popups.cs`, rewritten)
+- **No opaque cards.** Text sits on the picture with a soft shadow; a faint dark gradient along the top and
+  bottom edges keeps white text readable over the bright mall.
+- **Only what matters now.** Cash top-left, with a brief green "+$" beside it when it grows (tokens and Lucky
+  Pennies once you have any). Removed: the income rate, the wishability / toss rate / shoppers line, the
+  hoppers' income. Power shows in build mode, or as a red warning when it runs short.
+- **The goal is one line** (top-centre). Its hint shows for 9 s and fades; a finished goal ticks green for a
+  moment instead of a "Goal complete!" toast.
+- **Depth** (top-right) shows only in dig mode, for 6 s after the crust changes, or at bare concrete. The
+  mall event is a single pink line.
+- **Carry** (bottom-left): "3 / 5" and a thin bar; the container's name only for 4 s after it changes, or
+  FULL in pink. The wading badge and the carried value are gone.
+- **Hotbar** (bottom-centre): small Grab / Dig / Build pills, hidden until you own a second tool, dimmed when
+  idle. **Controls hint**: only until your first deposit (and a short one in build mode).
+- **Prompts** are short ("E  Penny  $0.01", "E  Shoo Chad", "Click  Dig"); a rare oddity's joke shows as a dim
+  second line while you look at it. Messages are one short line.
+- **One toast at a time**, a dark pill at the right edge: a title, and a second line only when it teaches
+  something (Doug's first look, the first fine, Chad's first visit, each mall machine's first use). At most
+  three wait; the oldest waiting one is dropped. Dropped toasts: goal complete (the goal line does it),
+  oddity tossed (its name floats up where it lands instead). Achievements and relics are one line.
+- **Smaller banners** (42 px title, higher up, ≤ 4.2 s, short subtitles); **wish cards** 360 px; **speech
+  bubbles** three at most, within 18 m; shopper small talk at most one every 6 s (wishes always show).
+- **Receipts**: a small slip with the total and the joke, at most one every 30 s (the kiosk's "+$" floats up
+  every time). **Pickups** share one running floating total ("+7  $0.23") instead of one number each.
+- **Intro**: the mall's one-liner, one sentence of what to do, three keys.
+
+### Picking up coins (`View/ItemRenderer.cs`, `View/GameView.cs`)
+- **Aim assist**: anything within 9° of the crosshair (and within reach) counts, the one nearest the crosshair
+  by angle wins, and the current target keeps a small priority so the highlight doesn't flicker. Before, a coin
+  had to sit within about 12 cm of the exact ray (3–4°), which is what made the start feel slow.
+- **Hold E (or the mouse button) to sweep**: you keep grabbing whatever the assist targets, at the tool's grab
+  rate (fingers 4/s). It stops when your hands are full instead of repeating "hands full". The prompt says
+  "hold to sweep" for the first 20 pickups.
+
+### Officer Doug's statue check (`Core/SimHazards.cs`, `View/Hazards.cs`, `UI/HUD.cs`)
+- Red light, green light. Every 55–120 s while you wade (the first one about a minute in), Doug stops, says
+  "Hm?" and raises his binoculars (1.4 s of warning), then looks for 2.6–4.2 s. Move in his sight (walk, grab,
+  dig, catch a wish) and his suspicion fills in about 0.3 s: whistle, fine (4% of cash, as before). Freeze until
+  he looks away and he takes you for a statue ("Huh. Nice statue. Very lifelike."), and a passing shopper tosses
+  the statue a tip: one coin worth five of its kind lands at your feet. The centrepiece hides you: stand behind
+  it and you can keep working. Looking around is fine; the shop-vac's auto-hoover waits.
+- The HUD shows an eye above the crosshair: half open and twitching during the warning, wide open while he
+  looks, the pupil reddening with his suspicion (and shrinking while he can't see you), a ring for the time
+  left, a pointer toward him when he's out of view, "FREEZE" for the first three looks, amber screen edges
+  (red when he catches you). A clock ticks while he looks, louder as his suspicion grows. New sounds: "hmm",
+  "statue" (a two-note chime), "tick".
+- The Honorary Deputy Badge (fines × 0) still means he just nods. New achievement: Living Statue (fool him five
+  times). New save counters `statuesFooled`, `guardLooks`. `GuardState.Warning` became `Suspicious`, `Looking`,
+  `Busted`.
+- The bot freezes for 95% of looks when engaged and 70% when casual (`Bot.Advance`); a missed look means a fine.
+- `dotnet run -c Release --project Tools/BalanceSim -- guard` checks the rules in the Core: moving while he
+  looks is fined, freezing is tipped, moving behind the centrepiece isn't seen, a deputy is never looked at.
+
+### Balance
+- On session 6's crusts, with the statue check: engaged seed 1234 26.40 h, seeds 1–5 25.92–26.47 h, casual
+  28.09 h (all ≥ 24 h). The engaged bot got a little faster: it now freezes and is rarely fined, where before it
+  was fined whenever Doug caught it wading. `fit --apply` was still running when this was first committed; the
+  re-fitted crusts and the seed checks follow in the next commit.
+
+### Tour and uitest (written, compile-checked, not run)
+- Tour: `31_guard_warning` became `31_guard_look`; `32_guard_fine` now catches you moving; new `37_statue_tip`
+  (61 shots).
+- uitest (123 checks): +1 aim assist (13 cm off a coin still targets one); the five-coin pickup is now a hold-E
+  sweep; Doug's four whistle checks became five: he stops and raises his binoculars, looks (binoculars up, the
+  HUD's eye open), moving gets you fined, standing still makes you a statue, a shopper tips it.
 
 ## Session 6 (Windows, Unity 6000.4.2f1)
 

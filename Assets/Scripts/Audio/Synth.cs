@@ -287,6 +287,39 @@ namespace WishExtractor.Audio
         public static float[] Golden() => Arp(new[] { 88, 91, 95, 100, 103, 100, 107 }, 0.035f, 0.25f, 1.4f, 0.9f, 0.7f);
         public static float[] Ting() => Arp(new[] { 96, 103 }, 0.06f, 0.2f, 1.0f, 0.5f, 0.35f);
         public static float[] Achievement() => Arp(new[] { 76, 83, 88 }, 0.08f, 0.45f, 1.2f, 1.1f, 0.65f);
+        /// <summary>Officer Doug's "Hm?": a hummed rising question, the tell before he looks.</summary>
+        public static float[] Hmm()
+        {
+            var b = Buffer(0.55f);
+            double ph = 0;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                // "hm" on one note, a breath, then a rising "?"
+                float f = t < 0.2f ? 165 : 165 + (t - 0.2f) / 0.3f * 95;
+                ph += (f + Math.Sin(t * 2 * Math.PI * 6) * 3) / Rate;
+                float env = (t < 0.03f ? t / 0.03f : 1) * (t > 0.44f ? Math.Max(0, 1 - (t - 0.44f) / 0.1f) : 1) * (t > 0.17f && t < 0.23f ? 0.5f : 1);
+                b[i] = (Sin(ph) * 0.6f + Sin(ph * 2) * 0.25f + Sin(ph * 3) * 0.12f + Sin(ph * 4) * 0.05f) * env;
+            }
+            Normalize(b, 0.5f);
+            Fade(b);
+            return b;
+        }
+
+        /// <summary>He looked away and you're still a statue: a soft two-note chime.</summary>
+        public static float[] Statue() => Arp(new[] { 76, 83 }, 0.12f, 0.4f, 0.6f, 0.9f, 0.5f);
+
+        /// <summary>A quiet clock tick while he looks.</summary>
+        public static float[] Tick()
+        {
+            var b = Buffer(0.06f);
+            Tone(b, 0, 1100, 0.4f, 0.001f, 0.012f);
+            Tone(b, 0, 2300, 0.15f, 0.001f, 0.006f);
+            Normalize(b, 0.3f);
+            Fade(b);
+            return b;
+        }
+
         public static float[] UIClick()
         {
             var b = Buffer(0.05f);

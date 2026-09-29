@@ -304,9 +304,9 @@ namespace WishExtractor.Core
         /// <summary>Said when your hands are full and you try to grab more.</summary>
         public static readonly string[] FullHandsLines =
         {
-            "Your hands are full. Go cash in at the COIN-O-MATIC.",
-            "You physically cannot hold one more thing. Deposit first.",
-            "Full! A bigger container would help. (Maintenance Terminal)",
+            "Hands full. Cash in at the COIN-O-MATIC.",
+            "Not one more thing. Deposit first.",
+            "Full! A bigger container would help.",
         };
     }
 }

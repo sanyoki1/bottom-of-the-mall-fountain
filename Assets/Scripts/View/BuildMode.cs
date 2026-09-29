@@ -44,6 +44,12 @@ namespace WishExtractor.View
             ghostMat = Mats.NewGhost(Ok);
         }
 
+        /// <summary>Is anything buildable yet? (No allocation: the HUD asks every frame.)</summary>
+        public bool AnyUnlocked
+        {
+            get { foreach (var d in Content.Buildables) if (sim.BuildUnlocked(d)) return true; return false; }
+        }
+
         public List<BuildDef> Unlocked()
         {
             var list = new List<BuildDef>();
@@ -53,7 +59,7 @@ namespace WishExtractor.View
 
         public bool SetActive(bool on)
         {
-            if (on && Unlocked().Count == 0) { Denied?.Invoke("Nothing to build yet. Research something at the Maintenance Terminal."); return false; }
+            if (on && !AnyUnlocked) { Denied?.Invoke("Nothing to build yet (Terminal)"); return false; }
             Active = on;
             if (on && (Selected == null || !sim.BuildUnlocked(Selected))) Select(Unlocked()[0]);
             if (!on) { Demolish = false; dragging = false; HideGhost(); }

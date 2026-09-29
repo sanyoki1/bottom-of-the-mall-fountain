@@ -22,7 +22,7 @@ Ask Nico before any git commit.
 
 1. Compile + build: `Unity.exe -batchmode -nographics -projectPath . -executeMethod WishExtractor.EditorTools.ProjectBuilder.BuildWindowsCI -logFile Logs/build.log` (look for `error CS` and `[WishExtractor] build Succeeded`).
 2. Visual check: `Builds/Windows/WishExtractor.exe -autotour -shots Screenshots -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 -logFile Logs/player_tour.log`, then read every PNG.
-3. Input check: `... -uitest -savefile wishextractor_uitest.json -fresh ...` → expect `[UITEST] done: 121 passed, 0 failed` in the log.
+3. Input check: `... -uitest -savefile wishextractor_uitest.json -fresh ...` → expect `[UITEST] done: 123 passed, 0 failed` in the log.
 4. Save check: `... -loadtest -savefile wishextractor_uitest.json ...` reads the uitest's save back (`[LOADTEST]` line).
 5. Balance: `dotnet run -c Release --project Tools/BalanceSim -- 40 1234 engaged` (and `casual`, and a few other seeds): every engaged total must stay ≥ 24 h.
 
@@ -76,3 +76,10 @@ steps 1–4 on Windows.
 - A mall's own machine hangs off a `TechDef` with `MallOnly = true` and `UnlockMall` set: `Sim.TechInThisMall` /
   `BuildInThisMall` hide it everywhere else (terminal, catalogue, `CanPlace`), and it comes back on that mall's remodel
   laps. Nothing it buys may outlive the mall. `Tools/BalanceSim -- machines` checks all four in the Core.
+- **Keep the HUD quiet** (Nico's first playtest: "too many words on the screen at once"). No opaque cards over the
+  game; a thing shows only while it matters (depth in dig mode or when it changes, the hotbar from the second tool,
+  the controls until the first deposit); one toast at a time, a title plus a second line only when it teaches;
+  prompts and messages are a few words. New HUD text has to earn its place.
+- Officer Doug's statue check sees walking (`Sim.PlayerMoving`, from the view) and actions: anything new a statue
+  wouldn't do (grab, dig, catch) must call `Sim.NoteAction()`. The bot freezes in `Bot.Advance` while he watches;
+  `Tools/BalanceSim -- guard` checks the rules.

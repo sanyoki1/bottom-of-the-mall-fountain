@@ -1,6 +1,11 @@
-// First-person HUD: crosshair and interact prompt (centre), wallet (top-left), goal (top-centre),
-// carry meter (bottom-left), tool hotbar (bottom-centre), COIN-O-MATIC receipts (right) and a
-// short message line for things like "your hands are full".
+// First-person HUD, kept quiet. Everything sits straight on the picture (no cards; a soft shade along the
+// top and bottom edges keeps it legible), and most of it only shows while it matters:
+// - top-left: cash, with a brief "+$" when it grows (tokens and pennies once you have any);
+// - top-centre: the current goal in one line (its hint fades after a few seconds; a tick when it's done);
+// - top-right: depth, while digging or when it changes, and the mall event while it runs;
+// - bottom-left: how full your hands are (the container's name only when it changes);
+// - bottom-centre: the hotbar, once you have more than one tool (it dims when idle);
+// - centre: crosshair, a short prompt, a one-line message, and Officer Doug's eye while he looks.
 using UnityEngine;
 using UnityEngine.UI;
 using WishExtractor.Core;
@@ -10,189 +15,260 @@ namespace WishExtractor.UI
 {
     public sealed class HUD
     {
+        static readonly Color Soft = new Color(1, 1, 1, 0.72f);
+        static readonly Color Money = new Color32(0xFF, 0xD8, 0x6B, 0xFF);
+        static readonly Color Good = new Color32(0x8E, 0xF0, 0xA8, 0xFF);
+        static readonly Color Bad = new Color32(0xFF, 0x8F, 0xA8, 0xFF);
+        static readonly Color GoalInk = new Color32(0x7C, 0xE8, 0xDC, 0xFF);
+        static readonly Color Amber = new Color32(0xFF, 0xB8, 0x3A, 0xFF);
+        static string Hex(Color c) => UIKit.Hex(c);
+
         Sim sim;
         RectTransform root;
         public RectTransform Root => root;
-        // crosshair + prompt
-        Image dot, ring;
-        Text prompt;
-        float ringScale = 1;
-        // wallet
-        Text cashText, rateText, tokenText;
-        double shownCash;
-        // goal
-        RectTransform goalCard;
-        Text goalText, goalHint;
-        // carry
-        Text carryName, carryCount, carryValue, wadeText;
-        UIKit.Bar carryBar;
-        Image carryBarFill;
-        // hotbar
-        readonly Text[] slotName = new Text[3];
-        readonly Image[] slotBg = new Image[3];
         public int Slot = 1;
-        // receipt + message
-        RectTransform receipt;
-        CanvasGroup receiptGroup;
-        Text receiptBody;
-        float receiptAge = 99;
-        Text message;
-        float messageAge = 99;
-        Text keysHint;
+        /// <summary>The camera, so the HUD can point at Officer Doug when he's out of view.</summary>
+        public Transform CameraT;
+
+        // crosshair + prompt + message
+        Image dot, ring;
+        Text prompt, message, keysHint;
+        float ringScale = 1, messageAge = 99;
+
+        // wallet
+        Text cashText, tokenText, deltaText, powerText;
+        double shownCash, lastCash, delta;
+        float deltaAge = 99;
+
+        // goal
+        Text goalText, goalHint;
+        int shownGoal = -1;
+        string doneText;
+        float goalAge, doneAge = 99;
 
         // depth + event
-        RectTransform depthCard, eventChip;
+        RectTransform depthRt;
+        CanvasGroup depthGroup;
         Text depthText, stratumText, eventText;
         UIKit.Bar depthBar;
-        Image stratumDot;
+        double lastDug = -1;
+        float depthSeen = -99, depthAlpha;
 
-        void BuildDepth()
-        {
-            depthCard = UIKit.Card(root, "Depth", new Color(1, 1, 1, 0.86f), 22, false).Place(new Vector2(1, 1), new Vector2(-20, -20), new Vector2(380, 104));
-            UIKit.Label(depthCard, "Caption", "CRUST", 13, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold).rectTransform.TL(22, 12, 200, 18);
-            depthText = UIKit.Label(depthCard, "Depth", "", 26, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold);
-            depthText.rectTransform.TL(20, 28, 340, 34);
-            stratumDot = UIKit.Dot(depthCard, "Dot", Color.white, 12);
-            stratumDot.rectTransform.TL(22, 68, 12, 12);
-            stratumText = UIKit.Label(depthCard, "Stratum", "", 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold);
-            stratumText.rectTransform.TL(40, 64, 320, 20);
-            depthBar = UIKit.ProgressBar(depthCard, "Bar", new Color(0, 0, 0, 0.08f), Pal.GoldInk);
-            depthBar.Rt.TL(22, 88, 336, 8);
-            eventChip = UIKit.Card(root, "Event", new Color(1f, 0.35f, 0.55f, 0.92f), 18, false).Place(new Vector2(1, 1), new Vector2(-20, -134), new Vector2(380, 56));
-            eventText = UIKit.Label(eventChip, "Text", "", 16, Color.white, TextAnchor.MiddleLeft, UIKit.Bold, true);
-            eventText.rectTransform.Stretch(18, 4, 14, 4);
-        }
+        // carry
+        Text carryName, carryCount;
+        UIKit.Bar carryBar;
+        int shownTier = -1;
+        float tierAge = 99;
+
+        // hotbar
+        RectTransform hotbar;
+        CanvasGroup hotbarGroup;
+        readonly Image[] slotBg = new Image[3];
+        readonly Text[] slotKey = new Text[3], slotName = new Text[3];
+        readonly bool[] has = new bool[3];
+        int lastSlot = 1;
+        float slotAge = 99;
+
+        // receipt
+        RectTransform receipt;
+        CanvasGroup receiptGroup;
+        Text receiptTotal, receiptJoke;
+        float receiptAge = 99, lastReceipt = -99;
+
+        // Officer Doug's statue check
+        RectTransform eyeRoot, eyeArrow;
+        CanvasGroup eyeGroup;
+        Image eyeWhite, iris, eyeRing, vignette;
+        Text eyeLabel;
+        float eyeAlpha, eyeOpen = 0.1f, vigAlpha;
 
         public void Build(Canvas canvas, Sim s)
         {
             sim = s;
             root = UIKit.Rect(canvas.transform, "HUD").Stretch();
+            BuildEdges();
+            BuildEye();
             BuildCrosshair();
-            BuildDepth();
             BuildWallet();
             BuildGoal();
+            BuildDepth();
             BuildCarry();
             BuildHotbar();
             BuildReceipt();
-            message = UIKit.Label(root, "Message", "", 22, Color.white, TextAnchor.MiddleCenter, UIKit.Semibold);
-            message.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0, -150), new Vector2(1200, 40));
-            Shadowed(message);
-            keysHint = UIKit.Label(root, "Keys", "", 14, new Color(1, 1, 1, 0.75f), TextAnchor.LowerRight, UIKit.Semibold);
-            keysHint.rectTransform.Place(new Vector2(1, 0), new Vector2(-24, 20), new Vector2(700, 24));
-            Shadowed(keysHint);
-            shownCash = sim.S.cash;
+            message = Label("Message", "", 20, Color.white, TextAnchor.MiddleCenter, UIKit.Semibold);
+            message.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0, -132), new Vector2(1100, 34));
+            keysHint = Label("Keys", "", 14, Soft, TextAnchor.LowerRight, UIKit.Semibold);
+            keysHint.rectTransform.Place(new Vector2(1, 0), new Vector2(-28, 24), new Vector2(760, 22));
+            shownCash = lastCash = sim.S.cash;
         }
 
-        static void Shadowed(Text t)
+        Text Label(string name, string text, int size, Color color, TextAnchor anchor, Font font, bool wrap = false, RectTransform parent = null)
         {
+            var t = UIKit.Label(parent ?? root, name, text, size, color, anchor, font, wrap);
             var sh = t.gameObject.AddComponent<Shadow>();
-            sh.effectColor = new Color(0, 0, 0, 0.6f);
-            sh.effectDistance = new Vector2(1.5f, -2f);
+            sh.effectColor = new Color(0, 0, 0, 0.55f);
+            sh.effectDistance = new Vector2(1.2f, -1.6f);
+            return t;
+        }
+
+        /// <summary>A soft dark shade along the top and bottom edges, so white text reads over a bright mall.</summary>
+        void BuildEdges()
+        {
+            var top = UIKit.Image(root, "ShadeTop", UIKit.Gradient, new Color(0, 0, 0, 0.26f));
+            top.rectTransform.anchorMin = new Vector2(0, 1);
+            top.rectTransform.anchorMax = new Vector2(1, 1);
+            top.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            top.rectTransform.sizeDelta = new Vector2(0, 150);
+            top.rectTransform.anchoredPosition = new Vector2(0, -75);
+            top.rectTransform.localScale = new Vector3(1, -1, 1);   // flipped in place: the dark edge at the top
+            var bottom = UIKit.Image(root, "ShadeBottom", UIKit.Gradient, new Color(0, 0, 0, 0.3f));
+            bottom.rectTransform.anchorMin = new Vector2(0, 0);
+            bottom.rectTransform.anchorMax = new Vector2(1, 0);
+            bottom.rectTransform.pivot = new Vector2(0.5f, 0);
+            bottom.rectTransform.sizeDelta = new Vector2(0, 170);
+            bottom.rectTransform.anchoredPosition = Vector2.zero;
         }
 
         void BuildCrosshair()
         {
             ring = UIKit.Image(root, "Ring", UIKit.SoftRing, new Color(1, 1, 1, 0.85f));
-            ring.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(34, 34));
+            ring.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30, 30));
             ring.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             dot = UIKit.Image(root, "Dot", UIKit.Circle, new Color(1, 1, 1, 0.9f));
-            dot.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(6, 6));
+            dot.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(5, 5));
             dot.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             var dsh = dot.gameObject.AddComponent<Shadow>();
             dsh.effectColor = new Color(0, 0, 0, 0.5f);
-            prompt = UIKit.Label(root, "Prompt", "", 20, Color.white, TextAnchor.UpperCenter, UIKit.Semibold);
-            prompt.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0, -34), new Vector2(900, 60));
+            prompt = Label("Prompt", "", 18, Color.white, TextAnchor.UpperCenter, UIKit.Semibold);
+            prompt.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0, -30), new Vector2(900, 30));
             prompt.rectTransform.pivot = new Vector2(0.5f, 1);
-            Shadowed(prompt);
         }
 
         void BuildWallet()
         {
-            var card = UIKit.Card(root, "Wallet", new Color(1, 1, 1, 0.86f), 22, false).TL(20, 20, 330, 104);
-            UIKit.Label(card, "Caption", "CASH", 13, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold).rectTransform.TL(22, 12, 200, 18);
-            cashText = UIKit.Label(card, "Cash", "$0.00", 40, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold);
-            cashText.rectTransform.TL(18, 26, 300, 50);
-            rateText = UIKit.Label(card, "Rate", "", 15, Pal.Green, TextAnchor.UpperLeft, UIKit.Semibold);
-            rateText.rectTransform.TL(22, 76, 180, 22);
-            tokenText = UIKit.Label(card, "Tokens", "", 15, Pal.Purple, TextAnchor.UpperRight, UIKit.Semibold);
-            tokenText.rectTransform.TL(150, 76, 160, 22);
-            wishText = UIKit.Label(root, "Wishability", "", 14, Color.white, TextAnchor.UpperLeft, UIKit.Semibold);
-            wishText.rectTransform.TL(26, 132, 600, 22);
-            Shadowed(wishText);
-            powerText = UIKit.Label(root, "Power", "", 14, Color.white, TextAnchor.UpperLeft, UIKit.Semibold);
-            powerText.rectTransform.TL(26, 154, 700, 22);
-            Shadowed(powerText);
+            cashText = Label("Cash", "$0.00", 34, Color.white, TextAnchor.UpperLeft, UIKit.Bold);
+            cashText.rectTransform.TL(28, 18, 420, 44);
+            deltaText = Label("Delta", "", 18, Good, TextAnchor.UpperLeft, UIKit.Bold);
+            deltaText.rectTransform.TL(200, 32, 260, 24);
+            tokenText = Label("Tokens", "", 16, new Color(0.84f, 0.78f, 1f), TextAnchor.UpperLeft, UIKit.Semibold);
+            tokenText.rectTransform.TL(30, 62, 420, 22);
+            powerText = Label("Power", "", 15, Soft, TextAnchor.UpperLeft, UIKit.Semibold);
+            powerText.rectTransform.TL(30, 86, 520, 22);
         }
-
-        Text wishText;
 
         void BuildGoal()
         {
-            goalCard = UIKit.Card(root, "Goal", new Color(1, 1, 1, 0.84f), 18, false).Place(new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(680, 88));
-            var k = UIKit.Label(goalCard, "Kicker", "GOAL", 12, Pal.Accent, TextAnchor.UpperLeft, UIKit.Bold);
-            k.rectTransform.TL(20, 10, 100, 16);
-            goalText = UIKit.Label(goalCard, "Text", "", 18, Pal.Ink, TextAnchor.UpperLeft, UIKit.Semibold);
-            goalText.rectTransform.TL(70, 7, 530, 26);
-            goalHint = UIKit.Label(goalCard, "Hint", "", 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
-            goalHint.rectTransform.TL(20, 36, 640, 46);
+            goalText = Label("Goal", "", 20, Color.white, TextAnchor.UpperCenter, UIKit.Semibold);
+            goalText.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0, -22), new Vector2(1000, 28));
+            goalHint = Label("GoalHint", "", 15, Soft, TextAnchor.UpperCenter, UIKit.Regular, true);
+            goalHint.rectTransform.Place(new Vector2(0.5f, 1), new Vector2(0, -52), new Vector2(760, 44));
+        }
+
+        void BuildDepth()
+        {
+            depthRt = UIKit.Rect(root, "Depth").Place(new Vector2(1, 1), new Vector2(-28, -20), new Vector2(360, 64));
+            depthGroup = depthRt.gameObject.AddComponent<CanvasGroup>();
+            depthGroup.blocksRaycasts = false;
+            depthGroup.alpha = 0;
+            depthText = Label("Depth", "", 22, Color.white, TextAnchor.UpperRight, UIKit.Bold, false, depthRt);
+            depthText.rectTransform.TL(0, 0, 360, 28);
+            stratumText = Label("Stratum", "", 14, Soft, TextAnchor.UpperRight, UIKit.Semibold, false, depthRt);
+            stratumText.rectTransform.TL(0, 30, 360, 18);
+            depthBar = UIKit.ProgressBar(depthRt, "Bar", new Color(1, 1, 1, 0.2f), Money);
+            depthBar.Rt.TL(200, 54, 160, 4);
+            eventText = Label("Event", "", 15, new Color32(0xFF, 0x9E, 0xC4, 0xFF), TextAnchor.UpperRight, UIKit.Bold);
+            eventText.rectTransform.Place(new Vector2(1, 1), new Vector2(-28, -92), new Vector2(460, 22));
         }
 
         void BuildCarry()
         {
-            var card = UIKit.Card(root, "Carry", new Color(1, 1, 1, 0.86f), 22, false).Place(new Vector2(0, 0), new Vector2(20, 20), new Vector2(360, 108));
-            carryName = UIKit.Label(card, "Name", "", 13, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Semibold);
-            carryName.rectTransform.TL(22, 12, 240, 18);
-            wadeText = UIKit.Label(card, "Wade", "", 13, Pal.Blue, TextAnchor.UpperRight, UIKit.Bold);
-            wadeText.rectTransform.TL(200, 12, 140, 18);
-            carryCount = UIKit.Label(card, "Count", "", 30, Pal.Ink, TextAnchor.UpperLeft, UIKit.Bold);
-            carryCount.rectTransform.TL(20, 28, 200, 40);
-            carryValue = UIKit.Label(card, "Value", "", 16, Pal.GoldInk, TextAnchor.UpperRight, UIKit.Semibold);
-            carryValue.rectTransform.TL(180, 38, 160, 24);
-            carryBar = UIKit.ProgressBar(card, "Bar", new Color(0, 0, 0, 0.08f), Pal.Accent);
-            carryBar.Rt.TL(22, 76, 316, 12);
-            carryBarFill = carryBar.Fill;
+            carryName = Label("CarryName", "", 13, Soft, TextAnchor.LowerLeft, UIKit.Semibold);
+            carryName.rectTransform.Place(new Vector2(0, 0), new Vector2(30, 78), new Vector2(360, 18));
+            carryCount = Label("CarryCount", "", 26, Color.white, TextAnchor.LowerLeft, UIKit.Bold);
+            carryCount.rectTransform.Place(new Vector2(0, 0), new Vector2(28, 40), new Vector2(360, 34));
+            carryBar = UIKit.ProgressBar(root, "CarryBar", new Color(1, 1, 1, 0.22f), Pal.Accent);
+            carryBar.Rt.Place(new Vector2(0, 0), new Vector2(30, 28), new Vector2(180, 5));
         }
+
+        const float SlotW = 112, SlotH = 32, SlotGap = 8;
 
         void BuildHotbar()
         {
-            var bar = UIKit.Rect(root, "Hotbar").Place(new Vector2(0.5f, 0), new Vector2(0, 20), new Vector2(3 * 170 + 20, 64));
+            hotbar = UIKit.Rect(root, "Hotbar").Place(new Vector2(0.5f, 0), new Vector2(0, 26), new Vector2(3 * SlotW + 2 * SlotGap, SlotH));
+            hotbarGroup = hotbar.gameObject.AddComponent<CanvasGroup>();
+            hotbarGroup.blocksRaycasts = false;
             for (int i = 0; i < 3; i++)
             {
-                var bg = UIKit.Image(bar, "Slot" + (i + 1), UIKit.Rounded, new Color(0, 0, 0, 0.35f), 14);
-                bg.rectTransform.TL(i * 177, 0, 166, 64);
+                var bg = UIKit.Image(hotbar, "Slot" + (i + 1), UIKit.Rounded, new Color(0, 0, 0, 0.32f), SlotH / 2);
+                bg.rectTransform.TL(i * (SlotW + SlotGap), 0, SlotW, SlotH);
                 slotBg[i] = bg;
-                UIKit.Label(bg.rectTransform, "Key", (i + 1).ToString(), 13, new Color(1, 1, 1, 0.6f), TextAnchor.UpperLeft, UIKit.Bold).rectTransform.TL(10, 6, 20, 16);
-                slotName[i] = UIKit.Label(bg.rectTransform, "Name", "", 15, Color.white, TextAnchor.MiddleCenter, UIKit.Semibold, true);
-                slotName[i].rectTransform.TL(14, 8, 140, 50);
+                slotKey[i] = UIKit.Label(bg.rectTransform, "Key", (i + 1).ToString(), 13, Soft, TextAnchor.MiddleLeft, UIKit.Bold);
+                slotKey[i].rectTransform.TL(14, 0, 16, SlotH);
+                slotName[i] = UIKit.Label(bg.rectTransform, "Name", "", 14, Color.white, TextAnchor.MiddleLeft, UIKit.Semibold);
+                slotName[i].rectTransform.TL(32, 0, SlotW - 40, SlotH);
             }
         }
 
         void BuildReceipt()
         {
-            receipt = UIKit.Card(root, "Receipt", new Color(0.99f, 0.98f, 0.95f, 0.97f), 6, false).Place(new Vector2(1, 0.5f), new Vector2(-24, 60), new Vector2(300, 250));
+            receipt = UIKit.Card(root, "Receipt", new Color(0.99f, 0.98f, 0.95f, 0.94f), 6, false).Place(new Vector2(1, 0.5f), new Vector2(-28, 40), new Vector2(236, 118));
             receiptGroup = receipt.gameObject.AddComponent<CanvasGroup>();
             receiptGroup.blocksRaycasts = false;
             receiptGroup.alpha = 0;
             var mono = UIKit.Mono;
-            var head = UIKit.Label(receipt, "Head", "COIN-O-MATIC 3000", 17, Pal.Ink, TextAnchor.UpperCenter, UIKit.Bold);
-            head.rectTransform.TL(0, 14, 300, 24);
-            receiptBody = UIKit.Label(receipt, "Body", "", 14, Pal.Ink2, TextAnchor.UpperLeft, mono, true);
-            receiptBody.rectTransform.TL(20, 44, 260, 200);
+            var head = UIKit.Label(receipt, "Head", "COIN-O-MATIC 3000", 12, Pal.Ink2, TextAnchor.UpperCenter, mono);
+            head.rectTransform.TL(0, 10, 236, 16);
+            receiptTotal = UIKit.Label(receipt, "Total", "", 16, Pal.Ink, TextAnchor.UpperCenter, mono);
+            receiptTotal.rectTransform.TL(0, 30, 236, 22);
+            receiptJoke = UIKit.Label(receipt, "Joke", "", 12, Pal.Ink2, TextAnchor.UpperCenter, mono, true);
+            receiptJoke.rectTransform.TL(14, 58, 208, 54);
+            receiptJoke.fontStyle = FontStyle.Italic;
+        }
+
+        void BuildEye()
+        {
+            vignette = UIKit.Image(root, "Vignette", UIKit.Vignette, new Color(1f, 0.62f, 0.15f, 0));
+            vignette.rectTransform.Stretch();
+            eyeRoot = UIKit.Rect(root, "Doug Eye").Place(new Vector2(0.5f, 0.5f), new Vector2(0, 104), new Vector2(120, 120));
+            eyeRoot.pivot = new Vector2(0.5f, 0.5f);
+            eyeGroup = eyeRoot.gameObject.AddComponent<CanvasGroup>();
+            eyeGroup.blocksRaycasts = false;
+            eyeGroup.alpha = 0;
+            eyeRing = UIKit.Image(eyeRoot, "Ring", UIKit.SoftRing, Amber);
+            eyeRing.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(98, 98));
+            eyeRing.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            eyeRing.type = Image.Type.Filled;
+            eyeRing.fillMethod = Image.FillMethod.Radial360;
+            eyeRing.fillOrigin = (int)Image.Origin360.Top;
+            eyeRing.fillClockwise = false;
+            eyeWhite = UIKit.Image(eyeRoot, "Eye", UIKit.EyeLens, new Color(1, 1, 1, 0.95f));
+            eyeWhite.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64, 36));
+            eyeWhite.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            iris = UIKit.Image(eyeWhite.rectTransform, "Iris", UIKit.Circle, new Color(0.12f, 0.12f, 0.14f));
+            iris.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(22, 22));
+            iris.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            var arrow = UIKit.Image(eyeRoot, "Pointer", UIKit.Triangle, Amber);
+            eyeArrow = arrow.rectTransform;
+            eyeArrow.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(16, 14));
+            eyeArrow.pivot = new Vector2(0.5f, 0.5f);
+            eyeLabel = Label("Freeze", "", 18, Amber, TextAnchor.UpperCenter, UIKit.Bold, false, eyeRoot);
+            eyeLabel.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0, -56), new Vector2(300, 24));
+            eyeLabel.rectTransform.pivot = new Vector2(0.5f, 1);
         }
 
         // ───────────────────────────── events ─────────────────────────────
 
+        /// <summary>A receipt slip for a deposit (at most one every half minute; the kiosk's "+$" floats up every time).</summary>
         public void ShowReceipt(double cash, int items, string joke)
         {
-            string line = new string('-', 32);
-            receiptBody.text =
-                $"{line}\nITEMS COUNTED{Pad(items.ToString("#,0"), 19)}\n" +
-                $"<b>TOTAL{Pad(Fmt.Money(cash), 27)}</b>\n" +
-                $"FEE (9%){Pad("WAIVED", 24)}\n{line}\n<i>{joke}</i>";
+            if (Time.time - lastReceipt < 30 && sim.S.deposits > 1) return;
+            lastReceipt = Time.time;
+            receiptTotal.text = $"<b>TOTAL {Fmt.Money(cash)}</b>";
+            receiptJoke.text = joke;
+            float h = 58 + Mathf.Min(54, receiptJoke.preferredHeight) + 12;
+            receipt.sizeDelta = new Vector2(236, h);
             receiptAge = 0;
         }
-
-        static string Pad(string s, int width) => s.PadLeft(width);
 
         public void ShowMessage(string text)
         {
@@ -204,15 +280,12 @@ namespace WishExtractor.UI
 
         public void Refresh(float dt, Target target, bool wading, bool frozen, BuildMode build, bool digMode)
         {
-            // depth
-            var mall = sim.Mall;
-            depthText.text = sim.MallCleared ? "BARE CONCRETE!" : $"{Fmt.Feet(sim.DepthFeet)} / {Fmt.Feet(mall.DepthFeet)}";
-            var st = sim.CurStratum;
-            stratumDot.color = MeshKit.Hex(st.Color) + new Color(0, 0, 0, 1);
-            stratumText.text = sim.MallCleared ? mall.TreasureName : $"{st.Name}" + (st.Loose ? "  ·  loose coins" : "  ·  gunk: wash & sort it");
-            depthBar.Set((float)sim.DepthFrac);
-            eventChip.gameObject.SetActive(sim.EventActive);
-            if (sim.EventActive) eventText.text = $"{mall.Event.Name.ToUpperInvariant()}  ·  {sim.EventRemaining:0}s\n<size=12>{mall.Event.Desc}</size>";
+            RefreshWallet(dt, build);
+            RefreshGoal(dt);
+            RefreshDepth(dt, digMode);
+            RefreshCarry(dt);
+            RefreshHotbar(dt, build, digMode);
+            RefreshEye(dt, frozen);
 
             // crosshair + prompt
             bool on = target.Kind != TargetKind.None && !frozen;
@@ -221,75 +294,192 @@ namespace WishExtractor.UI
             ring.color = on ? Pal.A(Color.Lerp(Pal.Accent, Color.white, 0.35f), 0.95f) : new Color(1, 1, 1, 0.35f);
             dot.enabled = !frozen;
             ring.enabled = !frozen;
-            Slot = build.Active ? 3 : digMode ? 2 : 1;
-            prompt.text = frozen ? "" : build.Active ? BuildPrompt(build, target) : digMode && target.Kind == TargetKind.None ? "<color=#C8C8C8>Aim at the crust in the fountain to dig</color>" : PromptFor(target);
-            powerText.text = sim.Buildings.Count > 0 || build.Active
-                ? $"⚡ {sim.PowerGen:0.#} / {sim.PowerUse:0.#} kW" + (sim.PowerRatio < 0.999 ? $"  <color=#FF8FA8>({sim.PowerRatio * 100:0}%)</color>" : "") +
-                  (sim.HopperCashRate > 0.0001 ? $"   ·   hoppers {Fmt.Money(sim.HopperCashRate * 60)}/min" : "")
-                : "";
-
-            // wallet
-            shownCash = Mathf.Abs((float)(sim.S.cash - shownCash)) < 0.005 ? sim.S.cash : shownCash + (sim.S.cash - shownCash) * (1 - Mathf.Exp(-dt * 10));
-            cashText.text = Fmt.Money(shownCash);
-            rateText.text = sim.EarnRate > 0.0001 ? $"+{Fmt.Money(sim.EarnRate * 60)}/min" : "";
-            tokenText.text = (sim.S.wishTokens > 0 ? $"✦ {Fmt.Num(sim.S.wishTokens)}" : "") + (sim.S.luckyPennies > 0 ? $"   ¢ {Fmt.Num(sim.S.luckyPennies)} LP" : "");
-            wishText.text = $"Wishability <b>{sim.Wishability:0}</b>  ·  a toss every {sim.TossInterval:0.0}s  ·  {sim.Shoppers.Count} shoppers";
-
-            // goal
-            var o = sim.CurrentObjective;
-            goalCard.gameObject.SetActive(o != null);
-            if (o != null)
-            {
-                goalText.text = o.Text;
-                goalHint.text = o.Hint;
-            }
-
-            // carry
-            var c = sim.CarryDef;
-            carryName.text = c.Name.ToUpperInvariant();
-            carryCount.text = $"{sim.CarryUsed} / {Fmt.Int(sim.CarryCapacity)}";
-            carryValue.text = sim.Carried.Count > 0 ? Fmt.Money(sim.CarriedValue) : "";
-            float frac = sim.CarryUsed / (float)Mathf.Max(1, sim.CarryCapacity);
-            carryBar.Set(frac);
-            carryBarFill.color = frac >= 1 ? Pal.Pink : Pal.Accent;
-            wadeText.text = wading ? "WADING" : "";
-
-            // hotbar
-            slotName[0].text = sim.Grab.Name;
-            slotName[1].text = sim.DigTier > 0 ? sim.DigTool.Name : "—";
-            slotName[2].text = build.Active ? (build.Demolish ? "DEMOLISH" : build.Selected?.Name ?? "Build") : "Build";
-            for (int i = 0; i < 3; i++)
-                slotBg[i].color = i + 1 == Slot ? Pal.A(Pal.Accent, 0.75f) : new Color(0, 0, 0, 0.35f);
+            prompt.text = frozen ? "" : build.Active ? BuildPrompt(build) : digMode && target.Kind == TargetKind.None ? $"<color=#{Hex(Soft)}>Aim at the crust</color>" : PromptFor(target);
 
             // receipt + message
             receiptAge += dt;
-            receiptGroup.alpha = receiptAge < 4.5f ? Mathf.Clamp01(receiptAge / 0.2f) * Mathf.Clamp01((4.5f - receiptAge) / 0.6f) : 0;
-            receipt.anchoredPosition = new Vector2(-24 + (1 - Mathf.Clamp01(receiptAge / 0.25f)) * 60, 60);
+            receiptGroup.alpha = receiptAge < 4f ? Mathf.Clamp01(receiptAge / 0.2f) * Mathf.Clamp01((4f - receiptAge) / 0.6f) : 0;
+            receipt.anchoredPosition = new Vector2(-28 + (1 - Mathf.Clamp01(receiptAge / 0.25f)) * 40, 40);
             messageAge += dt;
             message.color = new Color(1, 1, 1, messageAge < 2.6f ? Mathf.Clamp01((2.6f - messageAge) / 0.5f) : 0);
 
-            keysHint.text = frozen ? "" : build.Active
-                ? "Click build · R rotate · Wheel next · Tab catalogue · X demolish · 1 grab mode"
-                : "WASD move · Shift sprint · Space jump · E / click use · 3 build · J journal · Esc menu";
+            // the controls: until your first deposit (and in build mode, which has its own keys)
+            keysHint.text = frozen ? "" : build.Active ? "Click build  ·  R rotate  ·  Tab catalogue  ·  X demolish  ·  1 done"
+                : sim.S.deposits == 0 ? "WASD move  ·  E grab (hold to sweep)  ·  Shift sprint  ·  Esc menu" : "";
         }
 
-        Text powerText;
+        void RefreshWallet(float dt, BuildMode build)
+        {
+            shownCash = System.Math.Abs(sim.S.cash - shownCash) < 0.005 ? sim.S.cash : shownCash + (sim.S.cash - shownCash) * (1 - Mathf.Exp(-dt * 10));
+            cashText.text = Fmt.Money(shownCash);
+            // a brief "+$" beside the cash when it grows (a quick run of deposits adds up)
+            double gain = sim.S.cash - lastCash;
+            lastCash = sim.S.cash;
+            if (gain > 1e-9)
+            {
+                delta = deltaAge < 1.8f ? delta + gain : gain;
+                deltaAge = 0;
+            }
+            deltaAge += dt;
+            deltaText.text = deltaAge < 1.8f ? "+" + Fmt.Money(delta) : "";
+            deltaText.color = Pal.A(Good, Mathf.Clamp01((1.8f - deltaAge) / 0.5f));
+            deltaText.rectTransform.anchoredPosition = new Vector2(28 + cashText.preferredWidth + 12, -32);
+            string tokens = sim.S.wishTokens > 0 ? $"✦ {Fmt.Num(sim.S.wishTokens)}" : "";
+            if (sim.S.luckyPennies > 0) tokens += (tokens.Length > 0 ? "    " : "") + $"¢ {Fmt.Num(sim.S.luckyPennies)}";
+            tokenText.text = tokens;
+            // power only matters while building, or when it runs short
+            bool shortPower = sim.Buildings.Count > 0 && sim.PowerRatio < 0.999;
+            powerText.rectTransform.anchoredPosition = new Vector2(30, tokens.Length > 0 ? -86 : -64);
+            powerText.text = build.Active && (sim.Buildings.Count > 0 || sim.PowerUse > 0)
+                ? $"⚡ {sim.PowerGen:0.#} / {sim.PowerUse:0.#} kW" + (shortPower ? $"  <color=#{Hex(Bad)}>{sim.PowerRatio * 100:0}%</color>" : "")
+                : shortPower ? $"<color=#{Hex(Bad)}>⚡ {sim.PowerRatio * 100:0}% power</color>" : "";
+        }
 
-        string BuildPrompt(BuildMode b, Target t)
+        void RefreshGoal(float dt)
+        {
+            var o = sim.CurrentObjective;
+            if (sim.S.objective != shownGoal)
+            {
+                // a finished goal ticks green for a moment before the next one fades in
+                if (shownGoal >= 0 && sim.S.objective > shownGoal && shownGoal < Content.Objectives.Length) { doneText = Content.Objectives[shownGoal].Text; doneAge = 0; }
+                shownGoal = sim.S.objective;
+                goalAge = 0;
+            }
+            doneAge += dt;
+            if (doneAge < 1.6f)
+            {
+                goalText.text = "✓  " + doneText;
+                goalText.color = Pal.A(Good, Mathf.Clamp01((1.6f - doneAge) / 0.3f));
+                goalHint.color = Pal.A(Soft, 0);
+                return;
+            }
+            goalAge += dt;
+            goalText.text = o != null ? $"<color=#{Hex(GoalInk)}>●</color>  {o.Text}" : "";
+            goalText.color = Pal.A(Color.white, Mathf.Clamp01(goalAge / 0.4f));
+            goalHint.text = o != null ? o.Hint : "";
+            // the hint is a first-look thing: it fades after a few seconds
+            goalHint.color = Pal.A(Soft, 0.72f * Mathf.Clamp01(goalAge / 0.4f) * Mathf.Clamp01((9f - goalAge) / 1f));
+        }
+
+        void RefreshDepth(float dt, bool digMode)
+        {
+            var mall = sim.Mall;
+            if (sim.S.dug != lastDug) { if (lastDug >= 0) depthSeen = Time.time; lastDug = sim.S.dug; }
+            bool show = digMode || sim.MallCleared || Time.time - depthSeen < 6f;
+            depthAlpha = Mathf.MoveTowards(depthAlpha, show ? 1 : 0, dt * 3);
+            depthGroup.alpha = depthAlpha;
+            if (depthAlpha > 0.001f)
+            {
+                var st = sim.CurStratum;
+                depthText.text = sim.MallCleared ? "Bare concrete" : $"{Fmt.Feet(sim.DepthFeet)} / {Fmt.Feet(mall.DepthFeet)}";
+                stratumText.text = sim.MallCleared ? mall.TreasureName : st.Name;
+                depthBar.Set((float)sim.DepthFrac);
+                depthBar.Fill.color = MeshKit.Hex(st.Color) + new Color(0.15f, 0.15f, 0.15f, 1);
+            }
+            eventText.rectTransform.anchoredPosition = new Vector2(-28, depthAlpha > 0.5f ? -92 : -22);
+            eventText.text = sim.EventActive ? $"{mall.Event.Name.ToUpperInvariant()}  ·  {sim.EventRemaining:0}s" : "";
+        }
+
+        void RefreshCarry(float dt)
+        {
+            var c = sim.CarryDef;
+            if (sim.CarryTier != shownTier) { shownTier = sim.CarryTier; tierAge = 0; }
+            tierAge += dt;
+            float frac = sim.CarryUsed / (float)Mathf.Max(1, sim.CarryCapacity);
+            bool full = frac >= 1;
+            carryName.text = full ? "FULL" : c.Name.ToUpperInvariant();
+            carryName.color = full ? Bad : Pal.A(Soft, 0.72f * Mathf.Clamp01((4f - tierAge) / 0.8f));
+            carryCount.text = $"{Fmt.Int(sim.CarryUsed)} / {Fmt.Int(sim.CarryCapacity)}";
+            carryCount.color = full ? Bad : Color.white;
+            carryBar.Set(frac);
+            carryBar.Fill.color = full ? Pal.Pink : Pal.Accent;
+        }
+
+        void RefreshHotbar(float dt, BuildMode build, bool digMode)
+        {
+            Slot = build.Active ? 3 : digMode ? 2 : 1;
+            if (Slot != lastSlot) { lastSlot = Slot; slotAge = 0; }
+            slotAge += dt;
+            has[0] = true;
+            has[1] = sim.DigTier > 0;
+            has[2] = build.AnyUnlocked;
+            int n = 0;
+            foreach (bool h in has) if (h) n++;
+            // one tool is no choice at all: the hotbar appears with the second
+            hotbar.gameObject.SetActive(n > 1);
+            if (n <= 1) return;
+            float x = -(n * SlotW + (n - 1) * SlotGap) / 2 + (3 * SlotW + 2 * SlotGap) / 2;
+            for (int i = 0; i < 3; i++)
+            {
+                slotBg[i].gameObject.SetActive(has[i]);
+                if (!has[i]) continue;
+                bool sel = i + 1 == Slot;
+                slotBg[i].rectTransform.anchoredPosition = new Vector2(x, 0);
+                x += SlotW + SlotGap;
+                slotBg[i].color = sel ? Pal.A(Pal.Accent, 0.8f) : new Color(0, 0, 0, 0.32f);
+                slotName[i].text = i == 0 ? "Grab" : i == 1 ? "Dig" : build.Demolish ? "Demolish" : "Build";
+                slotName[i].color = sel ? Color.white : Soft;
+                slotKey[i].color = sel ? Color.white : Pal.A(Soft, 0.5f);
+            }
+            // dim when you haven't switched for a while
+            hotbarGroup.alpha = Mathf.MoveTowards(hotbarGroup.alpha, slotAge < 3f ? 1f : 0.45f, dt * 2);
+        }
+
+        void RefreshEye(float dt, bool frozen)
+        {
+            var g = sim.Guard;
+            bool busted = g.State == GuardState.Busted && g.Timer < 1.4f;
+            eyeAlpha = Mathf.MoveTowards(eyeAlpha, (g.Watching || busted) && !frozen ? 1 : 0, dt * 5);
+            eyeGroup.alpha = eyeAlpha;
+            // half open and twitching during the tell, wide open while he looks
+            float open = g.State == GuardState.Suspicious ? 0.35f + 0.12f * Mathf.Abs(Mathf.Sin(Time.time * 9)) : g.State == GuardState.Looking || busted ? 1f : 0.08f;
+            eyeOpen = Mathf.Lerp(eyeOpen, open, 1 - Mathf.Exp(-dt * 14));
+            eyeWhite.rectTransform.localScale = new Vector3(1, Mathf.Max(0.06f, eyeOpen), 1);
+            // the pupil reddens as his suspicion grows; it shrinks while he can't see you (hidden, or out of the water)
+            iris.color = busted ? Pal.Red : Color.Lerp(new Color(0.12f, 0.12f, 0.14f), Pal.Red, g.Suspicion);
+            iris.rectTransform.localScale = Vector3.one * (g.State != GuardState.Looking || g.Sees ? 1f : 0.55f);
+            eyeRing.fillAmount = g.State == GuardState.Looking ? 1 - g.LookProgress : g.State == GuardState.Suspicious ? 1 : 0;
+            eyeRing.color = busted ? Pal.Red : Pal.A(Amber, g.State == GuardState.Suspicious ? 0.5f : 0.95f);
+            eyeLabel.text = busted ? "" : g.Watching && sim.S.guardLooks <= 3 ? "FREEZE" : "";
+            eyeLabel.color = Amber;
+            // point at him when he's out of view
+            bool point = false;
+            if (CameraT != null && eyeAlpha > 0.01f)
+            {
+                var f = CameraT.forward;
+                var to = new Vector3(g.X - CameraT.position.x, 0, g.Z - CameraT.position.z);
+                f.y = 0;
+                float bearing = Vector3.SignedAngle(f, to, Vector3.up);
+                point = Mathf.Abs(bearing) > 40f;
+                float a = bearing * Mathf.Deg2Rad;
+                eyeArrow.anchoredPosition = new Vector2(Mathf.Sin(a), Mathf.Cos(a)) * 60f;
+                eyeArrow.localRotation = Quaternion.Euler(0, 0, -bearing);
+            }
+            eyeArrow.gameObject.SetActive(point);
+            // amber edges while he looks, a red flash when he catches you
+            float vig = frozen ? 0 : busted ? 0.5f * Mathf.Clamp01(1 - g.Timer / 1.4f) : g.State == GuardState.Looking ? 0.22f + 0.35f * g.Suspicion : g.State == GuardState.Suspicious ? 0.12f : 0;
+            vigAlpha = Mathf.Lerp(vigAlpha, vig, 1 - Mathf.Exp(-dt * 8));
+            var vc = busted ? new Color(1f, 0.2f, 0.25f) : new Color(1f, 0.62f, 0.15f);
+            vc.a = vigAlpha;
+            vignette.color = vc;
+        }
+
+        // ───────────────────────────── prompts ─────────────────────────────
+
+        string BuildPrompt(BuildMode b)
         {
             if (b.Demolish)
             {
                 var hb = b.HoverBuilding >= 0 ? sim.FindBuilding(b.HoverBuilding) : null;
                 return hb != null
-                    ? $"<color=#FF8FA8><b>[Click]</b> Demolish {hb.Def.Name}</color>  <color=#C8C8C8>(refund {Fmt.Money(hb.Def.Cost * sim.Scale)})</color>"
-                    : "<color=#FF8FA8>DEMOLISH MODE</color>  ·  aim at something you built  ·  X to stop";
+                    ? $"<color=#{Hex(Bad)}><b>Click</b>  Demolish {hb.Def.Name}</color>  <color=#{Hex(Soft)}>+{Fmt.Money(hb.Def.Cost * sim.Scale)}</color>"
+                    : $"<color=#{Hex(Bad)}>Demolish</color>  <color=#{Hex(Soft)}>· X to stop</color>";
             }
             var d = b.Selected;
             if (d == null) return "";
-            string power = d.Power > 0 ? $"+{d.Power:0.#} kW" : d.Power < 0 ? $"{d.Power:0.#} kW" : "";
-            string head = $"<b>{d.Name}</b>  <color=#FFE08A>{Fmt.Money(d.Cost * sim.Scale)}</color>  <color=#9CD8FF>{power}</color>";
-            if (!b.HasSpot) return head + "  ·  <color=#C8C8C8>aim at the floor</color>";
-            return b.Valid ? head + "  ·  <b>[Click]</b> build" + (d.IsBelt ? " (drag for a line)" : "") : head + $"  ·  <color=#FF8FA8>{b.Reason}</color>";
+            string power = d.Power > 0 ? $"  <color=#9CD8FF>+{d.Power:0.#} kW</color>" : d.Power < 0 ? $"  <color=#9CD8FF>{d.Power:0.#} kW</color>" : "";
+            string head = $"<b>{d.Name}</b>  <color=#{Hex(Money)}>{Fmt.Money(d.Cost * sim.Scale)}</color>{power}";
+            return !b.HasSpot || b.Valid ? head : head + $"  <color=#{Hex(Bad)}>· {b.Reason}</color>";
         }
 
         string PromptFor(Target t)
@@ -301,62 +491,52 @@ namespace WishExtractor.UI
                     var it = sim.FindLoose(t.Uid);
                     if (it == null) return "";
                     var def = Content.Items[it.Type];
-                    string name = def.Name;
-                    if (sim.IsFish(it.Type)) return "<b>[E]</b> Put the goldfish back in the water  <color=#9CFFB0>+1 ✦</color>  <color=#C8C8C8>(it's not yours)</color>";
-                    if (!sim.CanCarry(it.Type)) return $"<color=#FF8FA8>Hands full</color>  ·  deposit at the COIN-O-MATIC";
+                    if (sim.IsFish(it.Type)) return $"<b>E</b>  Put the goldfish back  <color=#{Hex(Good)}>+1 ✦</color>";
+                    if (!sim.CanCarry(it.Type)) return $"<color=#{Hex(Bad)}>Hands full</color>";
                     double v = it.Value * sim.ValueMult * Sim.CatRate(def.Cat);
-                    string key = sim.Grab.Area > 0 ? "Scoop" : "Pick up";
-                    return $"<b>[E]</b> {key} {name}  <color=#FFE08A>{Fmt.Money(v)}</color>";
+                    // teach the sweep for the first handful of pickups; an oddity's joke shows while you look at it
+                    string hold = sim.S.itemsPicked < 20 ? $"  <color=#{Hex(Soft)}>· hold to sweep</color>" : "";
+                    string joke = def.Cat == ItemCat.Oddity && !string.IsNullOrEmpty(def.Desc) ? $"\n<size=14><i><color=#{Hex(Soft)}>{def.Desc}</color></i></size>" : "";
+                    return $"<b>E</b>  {def.Name}  <color=#{Hex(Money)}>{Fmt.Money(v)}</color>{hold}{joke}";
                 }
                 case TargetKind.Wish:
                 {
                     var w = sim.FindWish(t.Uid);
                     if (w == null) return "";
                     string col = UIKit.Hex(Pal.Rarity[(int)w.Def.Rarity]);
-                    return $"<b>[E]</b> Catch the <color=#{col}>{RarityColors.Names[(int)w.Def.Rarity].ToLowerInvariant()} wish</color>  <color=#9CFFB0>{Fmt.Money(w.Value)}</color>";
+                    return $"<b>E</b>  Catch the <color=#{col}>wish</color>  <color=#{Hex(Good)}>{Fmt.Money(w.Value)}</color>";
                 }
                 case TargetKind.Board:
                 {
                     int i = sim.NextFountainTech();
-                    if (i < 0) return "Fountain Improvement Plan  ·  <color=#C8C8C8>all done</color>";
+                    if (i < 0) return $"<color=#{Hex(Soft)}>Improvement plan: all done</color>";
                     var tech = Content.Techs[i];
                     string cost = Fmt.Money(sim.TechCost(i));
                     return sim.CanAfford(i)
-                        ? $"<b>[E]</b> Approve: {tech.Name}  <color=#FFE08A>{cost}</color>  <color=#C8C8C8>(wishability +{tech.Value:0})</color>"
-                        : $"{tech.Name}  <color=#FF8FA8>{cost}</color>  <color=#C8C8C8>· can't afford yet</color>";
+                        ? $"<b>E</b>  {tech.Name}  <color=#{Hex(Money)}>{cost}</color>"
+                        : $"{tech.Name}  <color=#{Hex(Bad)}>{cost}</color>";
                 }
                 case TargetKind.Rival:
-                    return $"<b>[E]</b> Shoo Chad out of your fountain  <color=#C8C8C8>(he drops everything he took: {sim.Rival.Loot.Count} items)</color>";
+                    return "<b>E</b>  Shoo Chad";
                 case TargetKind.Crust:
-                {
-                    var tool = sim.DigTool;
-                    if (sim.MallCleared) return "Bare concrete. Nothing left to dig!";
-                    return $"<b>[Click]</b> Dig with the {tool.Name}  <color=#C8C8C8>· {Fmt.Num(tool.DigPower * sim.DigMult)} scoops/swing · {sim.CurStratum.Name}</color>";
-                }
+                    return sim.MallCleared ? $"<color=#{Hex(Soft)}>Bare concrete</color>" : "<b>Click</b>  Dig";
                 case TargetKind.Building:
                 {
                     var b = sim.FindBuilding(t.Uid);
                     if (b == null) return "";
-                    if (b.Def.IsBelt) return $"Conveyor Belt  <color=#C8C8C8>· {b.Items.Count} item{(b.Items.Count == 1 ? "" : "s")} · {sim.BeltSpeedNow(b.Def):0.#} m/s</color>";
-                    string status = string.IsNullOrEmpty(b.Status) ? "<color=#9CFFB0>running</color>" : $"<color=#FF8FA8>{b.Status}</color>";
-                    string buf = b.Def.Cat == BuildCat.Power ? $"+{b.Def.Power * sim.CatSpeed(BuildCat.Power):0.#} kW"
-                        : b.Def.Intake == "cannon" ? $"{Balance.CannonChunks + sim.CannonBonusChunks} chunks a pop · {Fmt.Int(sim.S.cannonBlasts)} pops so far"
-                        : b.Def.Intake == "well" ? $"{Fmt.Int(sim.S.wellWishes)} wishes granted"
-                        : b.Def.IsCarousel ? $"holding {b.BufCount}/{b.Def.Capacity} · {b.Drones.Count} drone{(b.Drones.Count == 1 ? "" : "s")}"
-                        : b.Def.Process == "slots" ? $"{Fmt.Int(b.Spins)} spins · {Fmt.Int(sim.S.jackpots)} jackpots"
-                        : $"holding {b.BufCount}/{b.Def.Capacity}";
-                    return $"{b.Def.Name}  ·  {status}  <color=#C8C8C8>· {buf}</color>  <color=#8A8A8A>(3: build mode, X: demolish)</color>";
+                    if (b.Def.IsBelt) return $"Conveyor Belt  <color=#{Hex(Soft)}>· {b.Items.Count}</color>";
+                    return string.IsNullOrEmpty(b.Status) ? b.Def.Name : $"{b.Def.Name}  <color=#{Hex(Bad)}>· {b.Status}</color>";
                 }
                 case TargetKind.Terminal:
                 {
                     int ready = 0;
                     for (int i = 0; i < Content.Techs.Length; i++) if (sim.CanBuyTech(i)) ready++;
-                    return "<b>[E]</b> Use the Maintenance Terminal" + (ready > 0 ? $"  <color=#9CFFB0>{ready} upgrade{(ready == 1 ? "" : "s")} affordable</color>" : "");
+                    return "<b>E</b>  Maintenance Terminal" + (ready > 0 ? $"  <color=#{Hex(Good)}>· {ready} ready</color>" : "");
                 }
                 case TargetKind.Kiosk:
                     return sim.Carried.Count > 0
-                        ? $"<b>[E]</b> Deposit {Fmt.Int(sim.CarriedCount)} item{(sim.CarriedCount == 1 ? "" : "s")}  <color=#9CFFB0>{Fmt.Money(sim.CarriedValue)}</color>"
-                        : "COIN-O-MATIC 3000  ·  <color=#C8C8C8>nothing to deposit</color>";
+                        ? $"<b>E</b>  Deposit  <color=#{Hex(Good)}>{Fmt.Money(sim.CarriedValue)}</color>"
+                        : $"<color=#{Hex(Soft)}>COIN-O-MATIC 3000</color>";
             }
             return "";
         }

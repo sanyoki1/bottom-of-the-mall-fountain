@@ -32,6 +32,7 @@ static class Program
         if (args.Length > 0 && args[0] == "crust") return Crust();
         if (args.Length > 0 && args[0] == "smoke") return Smoke();
         if (args.Length > 0 && args[0] == "machines") return Machines();
+        if (args.Length > 0 && args[0] == "guard") return GuardCheck();
         if (args.Length > 0 && args[0] == "slots") { Console.Write(new Bot(new SaveData(), 1, "engaged").ProbeSlots()); return 0; }
         double hours = args.Length > 0 ? double.Parse(args[0]) : 40;
         int seed = args.Length > 1 ? int.Parse(args[1]) : 1234;
@@ -330,6 +331,47 @@ static class Program
         for (int i = 0; i < 40; i++) s5.Tick(0.1);
         Check(w != null && s5.S.wellWishes >= 1 && s5.S.dug > dug5, $"an uncaught wish falls in and crust vanishes ({s5.S.wellWishes} granted, {s5.S.dug - dug5:0} scoops)");
         Console.WriteLine(ok ? "all machines OK" : "SOME MACHINES FAILED");
+        return ok ? 0 : 1;
+    }
+
+    /// <summary>Officer Doug's statue check in the Core: move while he looks and you're fined; freeze, or hide
+    /// behind the centrepiece, and a shopper tips the statue; a sworn-in deputy never gets looked at.</summary>
+    static int GuardCheck()
+    {
+        bool ok = true;
+        void Check(bool cond, string what) { ok &= cond; Console.WriteLine($"{(cond ? "PASS" : "FAIL")}  {what}"); }
+        var s = new Sim(new SaveData(), 5);
+        s.StartRun();
+        s.DebugAddCash(100);
+        int tips = 0;
+        s.OnStatueTipped += (x, z, v) => tips++;
+        // one look with the player wading where `at` puts them (once Doug has stopped); true if busted
+        bool Look(Func<Guard, (float x, float z)> at, bool moving)
+        {
+            for (int i = 0; i < 400 && s.Guard.State != GuardState.Patrol; i++) { s.PlayerInWater = false; s.Tick(0.1); }
+            s.PlayerX = 3; s.PlayerZ = 3; s.PlayerInWater = true; s.PlayerMoving = false;
+            s.DebugGuardCheck();
+            double fines = s.S.finesPaid;
+            for (int i = 0; i < 120 && (s.Guard.State == GuardState.Patrol || s.Guard.Watching); i++)
+            {
+                if (s.Guard.Watching) { (s.PlayerX, s.PlayerZ) = at(s.Guard); s.PlayerMoving = moving && s.Guard.State == GuardState.Looking; }
+                s.Tick(0.1);
+            }
+            s.PlayerMoving = false;
+            return s.S.finesPaid > fines;
+        }
+        (float, float) Near(Guard g) => (3, 3);
+        // two metres from the centre, straight across from Doug: the centrepiece is in the way
+        (float, float) Hidden(Guard g) { float l = (float)Math.Sqrt(g.X * g.X + g.Z * g.Z); return (-g.X / l * 2f, -g.Z / l * 2f); }
+        double cash0 = s.S.cash;
+        Check(Look(Near, true) && s.S.cash < cash0, $"moving while Doug looks: busted and fined ({Fmt.Money(cash0 - s.S.cash)})");
+        double fooled0 = s.S.statuesFooled;
+        Check(!Look(Near, false) && s.S.statuesFooled == fooled0 + 1 && tips == 1, "freezing until he looks away: a shopper tips the statue");
+        Check(!Look(Hidden, true) && s.S.statuesFooled == fooled0 + 2 && tips == 2, "moving behind the centrepiece: he never sees you");
+        double looks = s.S.guardLooks;
+        s.DebugSetTech("sec_badge", 1);
+        Check(!Look(Near, true) && s.S.guardLooks == looks, "a sworn-in deputy gets a nod, not a look");
+        Console.WriteLine(ok ? "guard OK" : "GUARD FAILED");
         return ok ? 0 : 1;
     }
 

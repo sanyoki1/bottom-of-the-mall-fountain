@@ -52,6 +52,7 @@ namespace WishExtractor.Core
             A("dig_1", "Groundbreaking", "Dig into the crust.", s => s.S.scoops >= 1);
             A("dig_10k", "Excavator", "Dig 10,000 scoops of crust.", s => s.S.scoops >= 1e4);
             A("fine_1", "Please Exit the Fountain", "Get fined by mall security.", s => s.S.finesPaid >= 1);
+            A("statue_5", "Living Statue", "Freeze until Officer Doug looks away, five times.", s => s.S.statuesFooled >= 5);
             A("rival_1", "Territorial", "Chase off the rival fountain diver.", s => s.S.rivalsChased >= 1);
             A("rival_25", "This Fountain Ain't Big Enough", "Chase off the rival 25 times.", s => s.S.rivalsChased >= 25);
             A("mall_1", "Bare Concrete", "Clear Crestview Commons.", s => s.S.maxMallCleared >= 0);

@@ -9,7 +9,8 @@ namespace WishExtractor.View
     public sealed class HazardsView
     {
         Person guard, rival;
-        Transform sack;
+        Transform sack, binoculars;
+        float raise;                        // 0 = arms down, 1 = binoculars at his eyes
         Sim sim;
         ViewContext ctx;
         string guardLine, rivalLine;
@@ -37,6 +38,17 @@ namespace WishExtractor.View
             var wk = new MeshKit();
             wk.Box(new Vector3(0, -0.02f, 0.05f), new Vector3(0.03f, 0.03f, 0.08f), C(0xC8CCD2));
             wk.Build("Whistle", guard.Hand, false);
+            // binoculars at his eyes while he looks (the statue check); glinting lenses so you see them from the water
+            var nk = new MeshKit();
+            var along = Quaternion.Euler(90, 0, 0);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                nk.Cylinder(new Vector3(side * 0.045f, 0.03f, 0.2f), along, 0.034f, 0.12f, 10, C(0x1A1A1A));
+                nk.Cylinder(new Vector3(side * 0.045f, 0.03f, 0.262f), along, 0.026f, 0.006f, 10, C(0x9CD8FF, 0.9f));
+            }
+            nk.Box(new Vector3(0, 0.03f, 0.2f), new Vector3(0.05f, 0.03f, 0.06f), C(0x2A2A2A));
+            binoculars = nk.Build("Binoculars", guard.Head, false).transform;
+            binoculars.gameObject.SetActive(false);
 
             rival = Actors.MakePerson(parent, C(0x1A1A1E), C(0x1A1A1E), C(0xE0B08A), C(0x1A1A1E), false, 1.0f);
             rival.Root.name = "Chad the Rival Diver";
@@ -73,7 +85,19 @@ namespace WishExtractor.View
             guard.Root.position = new Vector3(g.X, 0, g.Z);
             guard.Root.rotation = Quaternion.Slerp(guard.Root.rotation, Quaternion.Euler(0, g.Heading, 0), dt * 6);
             Actors.Animate(guard, time, Mathf.Clamp01(g.Speed / 1.2f), 25);
-            if (g.State == GuardState.Warning)
+            // the statue check: binoculars up during the tell, held at his eyes while he looks
+            raise = Mathf.MoveTowards(raise, g.Watching ? 1 : 0, dt / (g.Watching ? Balance.GuardTell * 0.8f : 0.35f));
+            if (binoculars.gameObject.activeSelf != raise > 0.6f) binoculars.gameObject.SetActive(raise > 0.6f);
+            if (raise > 0.001f)
+            {
+                float k = Mathf.SmoothStep(0, 1, raise);
+                guard.ArmR.localRotation = Quaternion.Slerp(guard.ArmR.localRotation, Quaternion.Euler(-128, 0, -28), k);
+                guard.ArmL.localRotation = Quaternion.Slerp(guard.ArmL.localRotation, Quaternion.Euler(-128, 0, 28), k);
+            }
+            // a slow scan across the water while he looks (Animate never turns the head, so ease it back after)
+            var headAim = g.State == GuardState.Looking ? Quaternion.Euler(0, Mathf.Sin(time * 1.3f) * 12, 0) : Quaternion.identity;
+            guard.Head.localRotation = Quaternion.Slerp(guard.Head.localRotation, headAim, 1 - Mathf.Exp(-dt * 6));
+            if (g.State == GuardState.Busted)
             {
                 // arm up, whistle to the mouth, finger pointing at you
                 guard.ArmR.localRotation = Quaternion.Euler(-150, 0, -10);

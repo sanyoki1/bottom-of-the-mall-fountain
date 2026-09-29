@@ -72,6 +72,10 @@ sealed class Bot
     public List<(double t, double dug)> Curve;
     double nextCurve;
 
+    // Officer Doug's statue check: which look the bot last decided about, and whether it froze for it
+    double lookSeen = -1;
+    bool freezeThisLook;
+
     /// <summary>Let time pass; the bot keeps an eye on wishes and Chad while it does.</summary>
     void Advance(double seconds)
     {
@@ -81,6 +85,19 @@ sealed class Bot
             Sim.PlayerX = px;
             Sim.PlayerZ = pz;
             Sim.PlayerInWater = px * px + pz * pz < 64;
+            // Doug raises his binoculars: freeze until he looks away (the time passes, the bot's errand waits).
+            // A player notices the tell almost every time when engaged, and misses it now and then when casual.
+            if (Sim.Guard.Watching && Sim.PlayerInWater)
+            {
+                if (lookSeen != Sim.S.guardLooks) { lookSeen = Sim.S.guardLooks; freezeThisLook = rng.NextDouble() < (engaged ? 0.95 : 0.7); }
+                if (freezeThisLook)
+                {
+                    Sim.PlayerMoving = false;
+                    Sim.Tick(0.25);
+                    continue;
+                }
+            }
+            Sim.PlayerMoving = Sim.PlayerInWater;
             Sim.Tick(step);
             seconds -= step;
             if (Curve != null && Sim.Time >= nextCurve) { Curve.Add((Sim.Time - mallStart, Sim.S.dug)); nextCurve = Sim.Time + 5; }

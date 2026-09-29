@@ -1,13 +1,14 @@
-// Hazards (always on, deliberately light): Officer Doug, mall security, patrols the plaza and every
-// so often notices you wading; stay in the water after his whistle and he writes you a fine. And
-// Chad, a rival fountain diver in a wetsuit, who sneaks in to pocket your coins until you chase
-// him off (he drops everything when he runs).
+// Hazards (always on, deliberately light): Officer Doug, mall security, patrols the plaza, and now and
+// then while you wade he stops, raises his binoculars and looks: the statue check, a game of red light,
+// green light. Move in his sight and you're fined; freeze until he looks away and a shopper tips the
+// "statue". And Chad, a rival fountain diver in a wetsuit, who sneaks in to pocket your coins until you
+// chase him off (he drops everything when he runs).
 using System;
 using System.Collections.Generic;
 
 namespace WishExtractor.Core
 {
-    public enum GuardState : byte { Patrol, Warning, Leaving }
+    public enum GuardState : byte { Patrol, Suspicious, Looking, Busted, Leaving }
     public enum RivalState : byte { Away, Arriving, Stealing, Fleeing, Leaving }
 
     public sealed class Guard
@@ -18,6 +19,13 @@ namespace WishExtractor.Core
         public float Timer;
         public string Line;
         public float LineTimer;
+        // the statue check: while he looks, moving in his sight fills Suspicion (1 = busted)
+        public float Suspicion, LookLen;
+        public bool Sees;                    // you're wading in his line of sight right now
+        /// <summary>Suspicious (the tell) or Looking: freeze.</summary>
+        public bool Watching => State == GuardState.Suspicious || State == GuardState.Looking;
+        /// <summary>How far through his look he is (0..1).</summary>
+        public float LookProgress => State == GuardState.Looking && LookLen > 0 ? Math.Min(1f, Timer / LookLen) : 0;
     }
 
     public sealed class Rival
@@ -36,10 +44,19 @@ namespace WishExtractor.Core
         public readonly Guard Guard = new Guard { Angle = 2.5f };
         public readonly Rival Rival = new Rival();
         public bool PlayerInWater;           // set by the view every frame
-        double guardCheck = 90, rivalTimer = 240;
+        public bool PlayerMoving;            // set by the view (and the bot): walking or wading, not just looking around
+        double guardCheck = Balance.GuardFirstLook, rivalTimer = 240, lastAction = -99;
+
+        /// <summary>The player did something a statue wouldn't (grab, dig, catch): the view calls this.</summary>
+        public void NoteAction() => lastAction = Time;
+        /// <summary>Moving, or acted in the last moment: what Doug notices while he looks.</summary>
+        public bool PlayerActive => PlayerMoving || Time - lastAction < 0.35;
 
         public event Action<Guard, string> OnGuardSpeak;
         public event Action<double> OnFined;
+        public event Action<Guard> OnGuardLook;              // he stops and raises the binoculars: freeze
+        public event Action<Guard, bool> OnGuardLookDone;    // true = busted, false = he looked away
+        public event Action<float, float, double> OnStatueTipped;   // where the tip lands, and its value
         public event Action<Rival, string> OnRivalSpeak;
         public event Action<Rival> OnRivalArrived;
         public event Action<Rival, int> OnRivalChased;     // items dropped
@@ -47,19 +64,19 @@ namespace WishExtractor.Core
 
         const float PatrolR = 13.5f;
 
-        static readonly string[] GuardWarnings =
+        static readonly string[] GuardHmm = { "Hm?", "Hold on...", "Now what was THAT?", "Something moved.", "Wait a minute..." };
+        static readonly string[] GuardBusted =
         {
-            "Sir! SIR! That's a WISHING fountain, not a WADING fountain!",
-            "Mall policy 14b: no swimming. I will not repeat myself. (I will repeat myself.)",
-            "Out of the fountain, pal. I've got my eye on you. My good eye.",
-            "*whistle* Hey! Feet out of the water! Both of them!",
-            "Ma'am, the fountain is for coins. Are you a coin? You are not a coin.",
+            "*whistle* Statues don't wade, pal. That's a fine.",
+            "*whistle* I SAW that. Wading, first degree.",
+            "*whistle* Statues don't pick up coins. I'm writing you up.",
+            "*whistle* That's a fine. Don't make me get the clipboard. ...I've got the clipboard.",
+            "*whistle* Mall policy 14b: no swimming. The statue exemption does not apply to you.",
         };
-        static readonly string[] GuardFines =
+        static readonly string[] GuardFooled =
         {
-            "That's a fine. Don't make me get the clipboard. ...I've got the clipboard.",
-            "Citation issued. Wading, first degree.",
-            "I'm writing you up. For the record, I'm very disappointed.",
+            "Huh. Nice statue. Very lifelike.", "Must be one of those art installations.", "Could've sworn... nah. Carry on, statue.",
+            "Is that new? It's very... damp.", "Management never tells me when they buy art.",
         };
         static readonly string[] GuardRelief = { "Thank you. The system works.", "Good. Very good. Carry on.", "That's what I like to see. Dry ankles." };
         static readonly string[] GuardNods = { "Deputy. *tips cap*", "Carry on, Deputy. Ankles are your business now.", "Nothing to see here, folks. That's a deputy." };
@@ -109,6 +126,7 @@ namespace WishExtractor.Core
             var g = Guard;
             if (g.LineTimer > 0) { g.LineTimer -= dt; if (g.LineTimer <= 0) g.Line = null; }
             g.Timer += dt;
+            g.Sees = false;
             switch (g.State)
             {
                 case GuardState.Patrol:
@@ -124,47 +142,117 @@ namespace WishExtractor.Core
                     guardCheck -= dt;
                     if (guardCheck <= 0)
                     {
-                        guardCheck = RandRange(60, 150);
-                        float dx = PlayerX - g.X, dz = PlayerZ - g.Z;
-                        if (PlayerInWater && dx * dx + dz * dz < 22f * 22f)
+                        guardCheck = RandRange(Balance.GuardLookMin, Balance.GuardLookMax);
+                        if (PlayerInWater)
                         {
-                            if (FineMult <= 1e-9)
-                            {
-                                // a sworn-in deputy (fines × 0) gets a nod instead of a whistle
-                                if (Rng.NextDouble() < 0.5) GuardSay(GuardNods[Rng.Next(GuardNods.Length)]);
-                            }
-                            else
-                            {
-                                g.State = GuardState.Warning;
-                                g.Timer = 0;
-                                GuardSay(GuardWarnings[Rng.Next(GuardWarnings.Length)]);
-                            }
+                            // a sworn-in deputy (fines × 0) gets a nod instead of a look
+                            if (FineMult <= 1e-9) { if (Rng.NextDouble() < 0.5) GuardSay(GuardNods[Rng.Next(GuardNods.Length)]); }
+                            else StartGuardLook();
                         }
                     }
                     break;
                 }
-                case GuardState.Warning:
-                {
+                case GuardState.Suspicious:
+                    // the tell: he stops, turns to you and raises his binoculars
                     g.Speed = 0;
-                    g.Heading = (float)(Math.Atan2(PlayerX - g.X, PlayerZ - g.Z) * 180 / Math.PI);
-                    if (!PlayerInWater) { GuardSay(GuardRelief[Rng.Next(GuardRelief.Length)]); g.State = GuardState.Leaving; g.Timer = 0; break; }
-                    if (g.Timer >= 5f)
-                    {
-                        double fine = FineAmount;
-                        fine = Math.Min(fine, S.cash);
-                        S.cash -= fine;
-                        S.finesPaid++;
-                        GuardSay(GuardFines[Rng.Next(GuardFines.Length)]);
-                        OnFined?.Invoke(fine);
-                        g.State = GuardState.Leaving;
-                        g.Timer = 0;
-                    }
+                    FacePlayer(g);
+                    if (g.Timer >= Balance.GuardTell) { g.State = GuardState.Looking; g.Timer = 0; g.Suspicion = 0; }
                     break;
-                }
+                case GuardState.Looking:
+                    g.Speed = 0;
+                    FacePlayer(g);
+                    g.Sees = PlayerInWater && GuardCanSee(g);
+                    if (g.Sees && PlayerActive) g.Suspicion += dt * Balance.GuardNotice;
+                    else g.Suspicion = Math.Max(0, g.Suspicion - dt * 0.6f);
+                    if (g.Suspicion >= 1) BustPlayer();
+                    else if (g.Timer >= g.LookLen) EndGuardLook();
+                    break;
+                case GuardState.Busted:
+                    g.Speed = 0;
+                    FacePlayer(g);
+                    if (g.Timer > 2.5f) { g.State = GuardState.Leaving; g.Timer = 0; }
+                    break;
                 case GuardState.Leaving:
-                    if (g.Timer > 3f) { g.State = GuardState.Patrol; g.Timer = 0; }
+                    if (g.Timer > 2f) { g.State = GuardState.Patrol; g.Timer = 0; }
                     break;
             }
+        }
+
+        void FacePlayer(Guard g) => g.Heading = (float)(Math.Atan2(PlayerX - g.X, PlayerZ - g.Z) * 180 / Math.PI);
+
+        /// <summary>Doug can see you unless the fountain's centrepiece stands between you.</summary>
+        bool GuardCanSee(Guard g)
+        {
+            // closest point to the fountain's centre on the line of sight from Doug to you
+            float bx = PlayerX - g.X, bz = PlayerZ - g.Z, len2 = bx * bx + bz * bz;
+            float t = len2 > 1e-4f ? Math.Max(0, Math.Min(1, -(g.X * bx + g.Z * bz) / len2)) : 0;
+            float cx = g.X + bx * t, cz = g.Z + bz * t;
+            return cx * cx + cz * cz > Balance.StatueHideR * Balance.StatueHideR;
+        }
+
+        void StartGuardLook()
+        {
+            var g = Guard;
+            g.State = GuardState.Suspicious;
+            g.Timer = 0;
+            g.Suspicion = 0;
+            g.LookLen = (float)RandRange(Balance.GuardLookLenMin, Balance.GuardLookLenMax);
+            S.guardLooks++;
+            GuardSay(GuardHmm[Rng.Next(GuardHmm.Length)]);
+            OnGuardLook?.Invoke(g);
+        }
+
+        /// <summary>You moved while he looked: whistle, fine.</summary>
+        void BustPlayer()
+        {
+            var g = Guard;
+            double fine = Math.Min(FineAmount, S.cash);
+            S.cash -= fine;
+            S.finesPaid++;
+            g.State = GuardState.Busted;
+            g.Timer = 0;
+            g.Suspicion = 1;
+            GuardSay(GuardBusted[Rng.Next(GuardBusted.Length)]);
+            OnFined?.Invoke(fine);
+            OnGuardLookDone?.Invoke(g, true);
+        }
+
+        /// <summary>He looks away. Still in the water (and still a statue)? A passing shopper tips you.</summary>
+        void EndGuardLook()
+        {
+            var g = Guard;
+            g.State = GuardState.Leaving;
+            g.Timer = 0;
+            if (PlayerInWater)
+            {
+                S.statuesFooled++;
+                GuardSay(GuardFooled[Rng.Next(GuardFooled.Length)]);
+                TipTheStatue();
+            }
+            else GuardSay(GuardRelief[Rng.Next(GuardRelief.Length)]);
+            OnGuardLookDone?.Invoke(g, false);
+        }
+
+        /// <summary>A shopper takes you for the fountain's newest statue and tosses you a coin: it lands at your feet.</summary>
+        void TipTheStatue()
+        {
+            int tier = Math.Max(0, Math.Min(Content.CoinTiers.Count - 1, (int)Math.Round(Wishability * Balance.TierPerWish) + 1));
+            int type = Content.CoinTiers[tier];
+            (float x, float y, float z) from = (PlayerX * 1.6f, 1.5f, PlayerZ * 1.6f - 2f);
+            float best = float.MaxValue;
+            foreach (var s in Shoppers)
+            {
+                float d = (s.X - PlayerX) * (s.X - PlayerX) + (s.Z - PlayerZ) * (s.Z - PlayerZ);
+                if (d < best) { best = d; from = (s.X, 1.5f, s.Z); }
+            }
+            double a = Rng.NextDouble() * Math.PI * 2;
+            float x = PlayerX + (float)Math.Cos(a) * 0.7f, z = PlayerZ + (float)Math.Sin(a) * 0.7f;
+            float r = (float)Math.Sqrt(x * x + z * z);
+            if (r > Balance.LandMaxR) { x *= Balance.LandMaxR / r; z *= Balance.LandMaxR / r; }
+            else if (r < Balance.LandMinR && r > 0.01f) { x *= Balance.LandMinR / r; z *= Balance.LandMinR / r; }
+            double value = Content.Items[type].BaseValue * Scale * Balance.StatueTip;
+            AddLoose(type, x, z, value, from);
+            OnStatueTipped?.Invoke(x, z, value);
         }
 
         void UpdateRival(float dt)
@@ -295,6 +383,7 @@ namespace WishExtractor.Core
         }
 
         public void DebugRival() { rivalTimer = 0; S.tosses = Math.Max(S.tosses, 40); }
+        /// <summary>Tests and the tour: Doug starts a look on his next patrol step (if you're wading).</summary>
         public void DebugGuardCheck() { guardCheck = 0; }
     }
 }

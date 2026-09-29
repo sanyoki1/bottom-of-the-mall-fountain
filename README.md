@@ -8,8 +8,9 @@ hoppers at the Maintenance Terminal. Beautify the fountain so the crowd throws m
 (quarters, gold coins, diamonds, then car keys, dentures, a whole vending machine). Then dig through forty
 years of crust to bare concrete and sign with the next mall.
 
-Mall security fines you for wading, a rival diver named Chad pockets your coins, and every goldfish has to
-go back in the water.
+Officer Doug, mall security, doesn't like wading: when he raises his binoculars, freeze like a statue (or
+hide behind the centrepiece) until he looks away, and a passing shopper might even tip the statue; move and
+he fines you. A rival diver named Chad pockets your coins, and every goldfish has to go back in the water.
 
 The later malls each sell one machine you can only build there: Galleria Aurelia's Champagne Cork Cannon
 blasts rinsed slabs of crust into the water from behind the rim, Skyport's Baggage Claim Carousel sends cargo
@@ -30,8 +31,8 @@ The Windows build is not committed; rebuild it with the command below.
 | Input | Action |
 |---|---|
 | **WASD** / mouse | Walk / look · **Shift** sprint · **Space** jump |
-| **E** or left click | Pick up what you're looking at, deposit at the kiosk, use the terminal or the easel, catch a wish, chase Chad |
-| Hold left click | Keep grabbing (nets, rakes and magnets scoop everything in their circle) |
+| **E** or left click | Pick up what you're looking at (aim assist: close is good enough), deposit at the kiosk, use the terminal or the easel, catch a wish, chase Chad |
+| Hold **E** or left click | Keep grabbing: sweep your view over the coins (nets, rakes and magnets scoop everything in their circle) |
 | **1** / **2** / **3** (or **B**) | Grab tool / dig tool / build mode |
 | In build mode | Click build (drag for belt lines) · **R** rotate · wheel next item · **Tab** catalogue · **X** demolish |
 | **J** / **Esc** | Journal (wishes, relics, achievements, stats) / settings |
@@ -70,8 +71,8 @@ uses Unity 2022.3 reference assemblies from NuGet and reports one expected error
 
 | Flag | What it does |
 |---|---|
-| `-autotour -shots <dir>` | A scripted walk through every system and mall; saves 60 screenshots, then quits |
-| `-uitest -savefile <name> -fresh` | Drives the real controller, crosshair and uGUI through 121 checks (walk, pick up, deposit, terminal, crowd, wishes, the goldfish, Officer Doug, Chad, build mode, digging, the contract, Head Office, the four mall machines, menus, save) and logs PASS/FAIL |
+| `-autotour -shots <dir>` | A scripted walk through every system and mall; saves 61 screenshots, then quits |
+| `-uitest -savefile <name> -fresh` | Drives the real controller, crosshair and uGUI through 123 checks (walk, aim assist, pick up, sweep, deposit, terminal, crowd, wishes, the goldfish, Officer Doug's statue check, Chad, build mode, digging, the contract, Head Office, the four mall machines, menus, save) and logs PASS/FAIL |
 | `-loadtest -savefile <name>` | Loads a save and logs what came back (pose, cash, carried items, buildings) |
 | `-savefile <name>` / `-fresh` | Use a different save file / erase it first |
 | `-dev` | Debug keys: F5 cash, F6 finish the mall, F7 dig 10% deeper, F8 start the mall event |
@@ -96,7 +97,8 @@ The first plays all six malls and writes `report_<profile>.txt`: hourly income, 
 each layer was reached; the first time each key upgrade was bought; the longest gap between purchases;
 where the money came from; and which rim slots got a line. The second fits every mall's crust size and
 layer boundaries to the planned hours and writes them into `ContentMalls.cs`; run it after any change to
-prices, rates or multipliers. `counts`, `crowd <wishability>`, `factory`, `crust`, `smoke`, `slots` and
-`machines` (the four mall machines, each in its own mall) check individual systems.
+prices, rates or multipliers. `counts`, `crowd <wishability>`, `factory`, `crust`, `smoke`, `slots`,
+`machines` (the four mall machines, each in its own mall) and `guard` (Officer Doug's statue check) check
+individual systems.
 
 See `DESIGN.md` for the game design and `HANDOFF.md` for the current state and next steps.
