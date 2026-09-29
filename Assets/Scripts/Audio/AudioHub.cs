@@ -61,6 +61,12 @@ namespace WishExtractor.Audio
             Add("throw", Synth.Whoosh(false));
             Add("step", Synth.Footstep(1), Synth.Footstep(2), Synth.Footstep(3), Synth.Footstep(4), Synth.Footstep(5), Synth.Footstep(6));
             Add("whistle", Synth.Whistle());
+            // the mall-only machines
+            Add("pop", Synth.Pop());
+            Add("reels", Synth.Reels());
+            Add("jackpot", Synth.Jackpot());
+            Add("drone", Synth.DroneWhirr());
+            Add("well", Synth.WellChime());
         }
 
         void Add(string name, params float[][] buffers)

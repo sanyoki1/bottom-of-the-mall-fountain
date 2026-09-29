@@ -70,6 +70,28 @@ namespace WishExtractor.Core
         public const double RelicValueScale = 0.05;
         public static readonly double[] RelicRarityWeight = { 55, 27, 12, 5, 1 };
 
+        // ── the mall-only machines (each sold in one late mall only) ──────────────────
+        // Galleria Aurelia: the Champagne Cork Cannon breaks a slab of chunks per blast into the water, pre-rinsed
+        public const int CannonChunks = 24;             // chunks per blast (+ Vintage Reserve)
+        public const float CannonRange = 20f;           // it stands anywhere this close to the fountain's centre and lobs over the rim
+        public const float CannonImpactR = 4.2f;        // the cork lands this far from the fountain's centre, in front of the cannon
+        public const float CannonSplash = 2.3f;         // the slab scatters over this radius around the impact
+        public const float CannonHoldR = 3.6f;          // it holds fire while CannonHoldCount items lie this close to the impact
+        public const int CannonHoldCount = 160;
+        // Skyport: the Baggage Claim Carousel's cargo drones empty rim intakes that have no line behind them
+        public const int CarouselDrones = 1;            // per carousel (+ Priority Tags)
+        public const int DroneCapacity = 100;           // items per trip (one drone keeps a line about two-thirds busy)
+        public const float DroneSpeed = 6f;             // m/s
+        public const float DroneHandle = 0.5f;          // seconds to load or unload
+        // the Lucky Lagoon: the Slot-Machine Sorter spins once per chunk (the rest of a spin's odds lose)
+        public const double SlotCherries = 0.38, SlotBar = 0.15, SlotSevens = 0.05;    // pay 1×, 2×, 5× the chunk's sorted value
+        public const double SlotJackpot = 1.0 / 20000;  // 7-7-7: sprays JackpotPayout × the chunk's value into the fountain
+        public const double JackpotPayout = 1500;
+        public const int JackpotTokens = 30;
+        // Eternity Plaza: the Old Well grants wishes nobody catches by dissolving crust (no rubble, no loot)
+        public const double WellPull = 3.0;             // seconds a wish floats before the well pulls it in
+        public const double WellChunks = 24;            // chunks of crust per granted wish, × the wish's rarity weight (WishTokens)
+
         // ── mall events ──────────────────────────────────────────────────────────
         public const double EventMin = 420, EventMax = 780, EventDuration = 60;
 

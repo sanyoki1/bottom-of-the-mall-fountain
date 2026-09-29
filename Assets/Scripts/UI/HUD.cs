@@ -339,7 +339,12 @@ namespace WishExtractor.UI
                     if (b == null) return "";
                     if (b.Def.IsBelt) return $"Conveyor Belt  <color=#C8C8C8>· {b.Items.Count} item{(b.Items.Count == 1 ? "" : "s")} · {sim.BeltSpeedNow(b.Def):0.#} m/s</color>";
                     string status = string.IsNullOrEmpty(b.Status) ? "<color=#9CFFB0>running</color>" : $"<color=#FF8FA8>{b.Status}</color>";
-                    string buf = b.Def.Cat == BuildCat.Power ? $"+{b.Def.Power * sim.CatSpeed(BuildCat.Power):0.#} kW" : $"holding {b.BufCount}/{b.Def.Capacity}";
+                    string buf = b.Def.Cat == BuildCat.Power ? $"+{b.Def.Power * sim.CatSpeed(BuildCat.Power):0.#} kW"
+                        : b.Def.Intake == "cannon" ? $"{Balance.CannonChunks + sim.CannonBonusChunks} chunks a pop · {Fmt.Int(sim.S.cannonBlasts)} pops so far"
+                        : b.Def.Intake == "well" ? $"{Fmt.Int(sim.S.wellWishes)} wishes granted"
+                        : b.Def.IsCarousel ? $"holding {b.BufCount}/{b.Def.Capacity} · {b.Drones.Count} drone{(b.Drones.Count == 1 ? "" : "s")}"
+                        : b.Def.Process == "slots" ? $"{Fmt.Int(b.Spins)} spins · {Fmt.Int(sim.S.jackpots)} jackpots"
+                        : $"holding {b.BufCount}/{b.Def.Capacity}";
                     return $"{b.Def.Name}  ·  {status}  <color=#C8C8C8>· {buf}</color>  <color=#8A8A8A>(3: build mode, X: demolish)</color>";
                 }
                 case TargetKind.Terminal:

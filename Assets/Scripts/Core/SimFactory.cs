@@ -14,6 +14,19 @@ namespace WishExtractor.Core
         public float Pos;      // 0 = entry edge, 1 = exit edge
     }
 
+    public enum DroneState : byte { Docked, Outbound, Loading, Inbound, Unloading }
+
+    /// <summary>A Skyport baggage drone: flies from its carousel to a rim intake with no line, empties it, flies back.</summary>
+    public sealed class Drone
+    {
+        public float X, Z;                    // where it is (metres); the view adds the flying height
+        public DroneState State;
+        public int Target;                    // uid of the intake it's collecting from
+        public float Timer;
+        public readonly List<ItemStack> Cargo = new List<ItemStack>();
+        public int CargoCount;
+    }
+
     public sealed class Building
     {
         public int Uid;
@@ -39,6 +52,9 @@ namespace WishExtractor.Core
         public int LastPicked = -1;           // uid of the item the intake just grabbed (for the view)
         public float LastPickX, LastPickZ;
         public int PickSerial;
+        // the mall-only machines
+        public readonly List<Drone> Drones = new List<Drone>();   // baggage carousel
+        public int Spins, SpinResult = -1;    // slot machine: spins so far and the last result (SlotResult)
 
         public static readonly int[] DX = { 0, 1, 0, -1 }, DZ = { 1, 0, -1, 0 };
         public int Fx => DX[Rot];
@@ -81,7 +97,11 @@ namespace WishExtractor.Core
         public Building At(int x, int z) => grid.TryGetValue(Key(x, z), out var b) ? b : null;
         public Building FindBuilding(int buildingUid) => Buildings.Find(b => b.Uid == buildingUid);
 
-        public bool BuildUnlocked(BuildDef d) => string.IsNullOrEmpty(d.Tech) || TechLevel(d.Tech) > 0;
+        public bool BuildUnlocked(BuildDef d) => (string.IsNullOrEmpty(d.Tech) || TechLevel(d.Tech) > 0) && BuildInThisMall(d);
+
+        /// <summary>False for another mall's own machine (its tech is MallOnly): the catalogue doesn't list it here.</summary>
+        public bool BuildInThisMall(BuildDef d) =>
+            string.IsNullOrEmpty(d.Tech) || !Content.TechIndex.TryGetValue(d.Tech, out int i) || TechInThisMall(Content.Techs[i]);
 
         double MachineMult(BuildCat cat)
         {
@@ -137,6 +157,7 @@ namespace WishExtractor.Core
             reason = null;
             if (!BuildUnlocked(d)) { reason = "Not researched yet"; return false; }
             if (!ignoreCost && S.cash < d.Cost * Scale - 1e-9) { reason = $"Costs {Fmt.Money(d.Cost * Scale)}"; return false; }
+            if (d.Unique && CountBuilt(d.Id) > 0) { reason = d.Intake == "well" ? "There's only one Old Well. It's a very old well." : "Only one of those allowed"; return false; }
             var probe = new Building { Def = d, X = x, Z = z, Rot = rot & 3 };
             bool nearRim = false;
             for (int lx = 0; lx < d.W; lx++)
@@ -148,11 +169,12 @@ namespace WishExtractor.Core
                     float px = cx + 0.5f, pz = cz + 0.5f;
                     if (px * px + pz * pz < (Balance.BasinRadius + 3.2f) * (Balance.BasinRadius + 3.2f)) nearRim = true;
                 }
-            if (d.RimOnly)
+            if (d.RimOnly && !nearRim) { reason = "Must stand at the fountain's edge"; return false; }
+            if (d.RimOnly || d.MaxRange > 0)
             {
-                if (!nearRim) { reason = "Must stand at the fountain's edge"; return false; }
                 var (mx, mz) = probe.Center;
                 float len = (float)Math.Sqrt(mx * mx + mz * mz);
+                if (d.MaxRange > 0 && len > d.MaxRange) { reason = $"Too far from the fountain (it reaches {d.MaxRange:0} m)"; return false; }
                 float dot = (probe.Fx * -mx + probe.Fz * -mz) / Math.Max(0.01f, len);
                 if (dot < 0.5f) { reason = "Face it toward the fountain (R)"; return false; }
             }
@@ -295,10 +317,12 @@ namespace WishExtractor.Core
             if (Buildings.Count == 0) { PowerGen = PowerUse = 0; PowerRatio = 1; return; }
             float fdt = (float)dt;
             double gen = 0, use = 0;
+            carousels = 0;
             foreach (var b in Buildings)
             {
                 if (b.Def.Power > 0) gen += b.Def.Power * CatSpeed(BuildCat.Power);
                 else use -= b.Def.Power;
+                if (b.Def.IsCarousel) carousels++;
             }
             PowerGen = gen;
             PowerUse = use;
@@ -339,6 +363,7 @@ namespace WishExtractor.Core
                 if (d.Cat == BuildCat.Intake) TickIntake(b, dt, speed);
                 else if (d.Cat == BuildCat.Output) TickHopper(b, dt, speed);
                 else if (d.IsSplitter) TickSplitter(b, dt);
+                else if (d.IsCarousel) TickCarousel(b, dt, speed);
                 else if (d.Cat == BuildCat.Processing) TickProcessor(b, dt, speed);
                 else if (d.Cat == BuildCat.Power) b.Activity = 1;
                 // push buffered output through the output ports
@@ -363,7 +388,11 @@ namespace WishExtractor.Core
                 var (cx, cz) = b.Cell(p.x, p.z);
                 int d = (p.side + b.Rot) & 3;
                 var target = At(cx + Building.DX[d], cz + Building.DZ[d]);
-                if (target == null || target == b) { if (b.Status == "") b.Status = "Output needs a belt"; continue; }
+                if (target == null || target == b)
+                {
+                    if (b.Status == "") b.Status = carousels > 0 && b.Def.Cat == BuildCat.Intake ? "Waiting for a baggage drone" : "Output needs a belt";
+                    continue;
+                }
                 // machines hand over as much as the next one takes (a belt takes one per gap)
                 for (int moved = 0; list.Count > 0 && moved < 32; moved++)
                 {
@@ -446,7 +475,10 @@ namespace WishExtractor.Core
 
         void TickIntake(Building b, double dt, double speed)
         {
-            if (b.BufCount >= b.Def.Capacity) { b.Status = "Full: output blocked"; b.Activity = 0; return; }
+            // the champagne cannon throws its slabs into the water, and the Old Well grants wishes (SimMallMachines)
+            if (b.Def.Intake == "cannon") { TickCannon(b, dt, speed); return; }
+            if (b.Def.Intake == "well") { b.Activity = Math.Max(0, b.Activity - (float)dt * 0.8f); return; }
+            if (b.BufCount >= b.Def.Capacity) { b.Status = carousels > 0 && !HasLine(b) ? "Full: waiting for a baggage drone" : "Full: output blocked"; b.Activity = 0; return; }
             if (speed <= 0) { b.Activity = 0; return; }
             var d = b.Def;
             switch (d.Intake)
@@ -577,6 +609,8 @@ namespace WishExtractor.Core
                 foreach (var s in b.Buf) sb.buf.Add(new SavedStack { type = slot(s.Type), count = s.Count, value = s.Value });
                 foreach (var s in b.Out) sb.buf.Add(new SavedStack { type = slot(s.Type), count = s.Count, value = s.Value });
                 foreach (var l in b.BotLoad) sb.buf.Add(new SavedStack { type = slot(l.type), count = 1, value = l.value });
+                // a drone's cargo comes back in its carousel
+                foreach (var dr in b.Drones) foreach (var s in dr.Cargo) sb.buf.Add(new SavedStack { type = slot(s.Type), count = s.Count, value = s.Value });
                 S.buildings.Add(sb);
                 foreach (var it in b.Items) S.beltItems.Add(new SavedBeltItem { b = i, type = slot(it.Type), pos = it.Pos, value = it.Value });
             }

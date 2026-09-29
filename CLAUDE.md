@@ -8,8 +8,8 @@ Ask Nico before any git commit.
 
 | Path | What |
 |---|---|
-| `Assets/Scripts/Core/` | Pure C# rules (no UnityEngine): `Sim.cs` (loose items, carrying, deposits, tech tree, recalc), `SimCrowd.cs` (shoppers, tosses, wishes), `SimFactory.cs` (build grid, belts, intakes, hoppers, power), `SimCrust.cs` (digging, strata, processing, relics, events, prestige), `SimHazards.cs` (Officer Doug, Chad), `Content*.cs` (all content data), `Defs.cs`, `Balance.cs` (tunables), `Layout.cs`, `SaveData.cs`, `Fmt.cs`. Compiled by Unity AND by `Tools/BalanceSim`. |
-| `Assets/Scripts/View/` | Procedural 3D: `GameView` (orchestrator, aiming, interaction), `FirstPerson` (controller + injectable `FPInput`), `Hands`, `ItemRenderer` (instanced loose and belt items), `WorldBuilder` (mall hall), `FountainView` (basin, water, crust heightfield, colliders, ramp), `Kiosk`, `Terminal`, `Board`, `Decor`, `Crowd`, `Wishes`, `Hazards`, `FactoryView`, `BuildMode`, `FX`, `BloomFX`, `MeshKit`, `TexKit`, `Mats`, `Loot`, `Actors`, `ViewCommon`. |
+| `Assets/Scripts/Core/` | Pure C# rules (no UnityEngine): `Sim.cs` (loose items, carrying, deposits, tech tree, recalc), `SimCrowd.cs` (shoppers, tosses, wishes), `SimFactory.cs` (build grid, belts, intakes, hoppers, power), `SimCrust.cs` (digging, strata, processing, relics, events, prestige), `SimHazards.cs` (Officer Doug, Chad), `SimMallMachines.cs` (the late malls' own machines: cork cannon, baggage carousel and drones, slot machine, Old Well), `Content*.cs` (all content data), `Defs.cs`, `Balance.cs` (tunables), `Layout.cs`, `SaveData.cs`, `Fmt.cs`. Compiled by Unity AND by `Tools/BalanceSim`. |
+| `Assets/Scripts/View/` | Procedural 3D: `GameView` (orchestrator, aiming, interaction), `FirstPerson` (controller + injectable `FPInput`), `Hands`, `ItemRenderer` (instanced loose and belt items), `WorldBuilder` (mall hall), `FountainView` (basin, water, crust heightfield, colliders, ramp), `Kiosk`, `Terminal`, `Board`, `Decor`, `Crowd`, `Wishes`, `Hazards`, `FactoryView`, `MallMachines` (models and animation of the mall machines), `BuildMode`, `FX`, `BloomFX`, `MeshKit`, `TexKit`, `Mats`, `Loot`, `Actors`, `ViewCommon`. |
 | `Assets/Scripts/UI/` | uGUI built from code: `UIKit`, `HUD`, `Popups`, `Modals`, `TerminalPanel` (MAINT-OS 95, the tech tree), `BuildMenu`. |
 | `Assets/Scripts/Audio/` | `Synth` (procedural SFX + music), `AudioHub`. |
 | `Assets/Scripts/Game/` | `GameRoot` (entry point, input, events → feedback, `-autotour` / `-uitest` / `-loadtest`), `SaveSystem`. |
@@ -22,11 +22,11 @@ Ask Nico before any git commit.
 
 1. Compile + build: `Unity.exe -batchmode -nographics -projectPath . -executeMethod WishExtractor.EditorTools.ProjectBuilder.BuildWindowsCI -logFile Logs/build.log` (look for `error CS` and `[WishExtractor] build Succeeded`).
 2. Visual check: `Builds/Windows/WishExtractor.exe -autotour -shots Screenshots -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 -logFile Logs/player_tour.log`, then read every PNG.
-3. Input check: `... -uitest -savefile wishextractor_uitest.json -fresh ...` → expect `[UITEST] done: 96 passed, 0 failed` in the log.
+3. Input check: `... -uitest -savefile wishextractor_uitest.json -fresh ...` → expect `[UITEST] done: 121 passed, 0 failed` in the log.
 4. Save check: `... -loadtest -savefile wishextractor_uitest.json ...` reads the uitest's save back (`[LOADTEST]` line).
 5. Balance: `dotnet run -c Release --project Tools/BalanceSim -- 40 1234 engaged` (and `casual`, and a few other seeds): every engaged total must stay ≥ 24 h.
 
-Players and editor runs block the shell until they exit; the tour and uitest quit on their own (watchdogs at 660 s / 600 s).
+Players and editor runs block the shell until they exit; the tour and uitest quit on their own (watchdogs at 720 s / 780 s).
 Never kill processes; close a stray player window gracefully (WM_CLOSE).
 
 No Unity (cloud or Linux sessions): `bash Tools/UnityCompileCheck/unity6_compile.sh <extracted editor>` compiles every
@@ -65,3 +65,6 @@ steps 1–4 on Windows.
 - The balance bot must play like a competent player (save for the next big thing, upgrade lines, fill the rim), or the
   ≥ 24 h check is optimistic: fitting 12 dig lines instead of 5 cut the same crusts from 26 h to 15 h. After bot changes,
   read the report's `lines at the end` and `longest gap` lines.
+- A mall's own machine hangs off a `TechDef` with `MallOnly = true` and `UnlockMall` set: `Sim.TechInThisMall` /
+  `BuildInThisMall` hide it everywhere else (terminal, catalogue, `CanPlace`), and it comes back on that mall's remodel
+  laps. Nothing it buys may outlive the mall. `Tools/BalanceSim -- machines` checks all four in the Core.

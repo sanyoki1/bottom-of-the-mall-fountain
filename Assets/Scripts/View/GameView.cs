@@ -113,8 +113,9 @@ namespace WishExtractor.View
                 var p = new Vector3(it.X, Fountain.WaterY + 0.01f, it.Z);
                 var def = Content.Items[it.Type];
                 float big = def.Cat == ItemCat.Coin ? 0.5f : Mathf.Clamp(def.Scale, 0.8f, 2.5f);
+                bool rubble = def.Cat == ItemCat.Gunk || def.Cat == ItemCat.Washed;   // a champagne-cannon slab lands two dozen at once
                 Fx.Ripple(p, new Color(0.9f, 0.97f, 1f, 0.7f), 0.8f + big * 0.6f, 0.7f);
-                Fx.Sparks(p, new Color(0.8f, 0.92f, 1f), def.Cat == ItemCat.Coin ? 5 : 16, 2.2f + big, 0.07f, 0.5f);
+                Fx.Sparks(p, new Color(0.8f, 0.92f, 1f), def.Cat == ItemCat.Coin || rubble ? 5 : 16, 2.2f + big, 0.07f, 0.5f);
             };
             Sim.OnTechBought += t => { if (t.Branch == TechBranch.Fountain) { Board.Flash(); FountainCelebrate(); } };
 
@@ -148,6 +149,8 @@ namespace WishExtractor.View
                 Building comp = Sim.Buildings.Find(b => b.Def.Process == "compress");
                 WishOrbs.Compressed(w, comp != null ? FactoryView.WorldCenter(comp) + Vector3.up * 1.8f : new Vector3(0, 10, 0));
             };
+            // Eternity's Old Well: an uncaught wish drifts over and drops in
+            Sim.OnWellGranted += (well, w, scoops) => WishOrbs.Compressed(w, FactoryView.WorldCenter(well) + Vector3.up * 0.5f, new Color(0.6f, 0.95f, 1f));
             Sim.OnHopperSold += (b, cash, n) =>
             {
                 if (UnityEngine.Random.value < 0.25f)

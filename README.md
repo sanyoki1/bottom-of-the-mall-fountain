@@ -11,6 +11,12 @@ years of crust to bare concrete and sign with the next mall.
 Mall security fines you for wading, a rival diver named Chad pockets your coins, and every goldfish has to
 go back in the water.
 
+The later malls each sell one machine you can only build there: Galleria Aurelia's Champagne Cork Cannon
+blasts rinsed slabs of crust into the water from behind the rim, Skyport's Baggage Claim Carousel sends cargo
+drones to empty rim intakes that have no belt behind them, the Lucky Lagoon's Slot-Machine Sorter gambles raw
+gunk into sorted loot (or nothing, or a jackpot), and Eternity Plaza's Old Well grants the wishes nobody
+catches and makes that much crust disappear.
+
 ## Play
 
 - **Windows build:** `Builds/Windows/WishExtractor.exe` (windowed 1600×900, resizable). No install needed.
@@ -64,8 +70,8 @@ uses Unity 2022.3 reference assemblies from NuGet and reports one expected error
 
 | Flag | What it does |
 |---|---|
-| `-autotour -shots <dir>` | A scripted walk through every system and mall; saves 52 screenshots, then quits |
-| `-uitest -savefile <name> -fresh` | Drives the real controller, crosshair and uGUI through 96 checks (walk, pick up, deposit, terminal, crowd, wishes, the goldfish, Officer Doug, Chad, build mode, digging, the contract, Head Office, menus, save) and logs PASS/FAIL |
+| `-autotour -shots <dir>` | A scripted walk through every system and mall; saves 60 screenshots, then quits |
+| `-uitest -savefile <name> -fresh` | Drives the real controller, crosshair and uGUI through 121 checks (walk, pick up, deposit, terminal, crowd, wishes, the goldfish, Officer Doug, Chad, build mode, digging, the contract, Head Office, the four mall machines, menus, save) and logs PASS/FAIL |
 | `-loadtest -savefile <name>` | Loads a save and logs what came back (pose, cash, carried items, buildings) |
 | `-savefile <name>` / `-fresh` | Use a different save file / erase it first |
 | `-dev` | Debug keys: F5 cash, F6 finish the mall, F7 dig 10% deeper, F8 start the mall event |
@@ -90,7 +96,7 @@ The first plays all six malls and writes `report_<profile>.txt`: hourly income, 
 each layer was reached; the first time each key upgrade was bought; the longest gap between purchases;
 where the money came from; and which rim slots got a line. The second fits every mall's crust size and
 layer boundaries to the planned hours and writes them into `ContentMalls.cs`; run it after any change to
-prices, rates or multipliers. `counts`, `crowd <wishability>`, `factory`, `crust`, `smoke` and `slots`
-check individual systems.
+prices, rates or multipliers. `counts`, `crowd <wishability>`, `factory`, `crust`, `smoke`, `slots` and
+`machines` (the four mall machines, each in its own mall) check individual systems.
 
 See `DESIGN.md` for the game design and `HANDOFF.md` for the current state and next steps.

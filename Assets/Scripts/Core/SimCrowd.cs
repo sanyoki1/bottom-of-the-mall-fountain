@@ -466,10 +466,18 @@ namespace WishExtractor.Core
 
         void UpdateWishes(double dt)
         {
+            // Eternity Plaza's Old Well pulls in any wish nobody has caught after a few seconds
+            var well = Wishes.Count > 0 && !S.mallCleared ? FindWell() : null;
             for (int i = Wishes.Count - 1; i >= 0; i--)
             {
                 var w = Wishes[i];
                 w.Age += dt;
+                if (well != null && w.Age >= Balance.WellPull && !S.mallCleared)
+                {
+                    Wishes.RemoveAt(i);
+                    GrantWish(well, w);
+                    continue;
+                }
                 if (w.Age >= w.Life)
                 {
                     Wishes.RemoveAt(i);

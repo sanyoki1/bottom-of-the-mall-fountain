@@ -50,8 +50,9 @@ throw things into your fountain, and making the fountain fancier makes them thro
   intakes (skimmer bot, drain pump, claw crane), 2 dig intakes (jackhammer rig, tunnel borer), 8 processors
   (tumbler, pigeon sorter, coin sorter, roller, bagger, palletiser, gold melter, wish compressor), belts,
   splitters and 2 deposit hoppers. Intakes must stand at the rim facing the fountain. One power budget:
-  short on power, everything slows by the same ratio. The simulation steps at a fixed 60 Hz.
-- **The tech tree** — 81 nodes in 9 branches (Carry, Tools, Fountain, Power, Intake, Logistics, Processing,
+  short on power, everything slows by the same ratio. The simulation steps at a fixed 60 Hz. Four more
+  buildables exist only in their own mall (see "The mall machines").
+- **The tech tree** — 89 nodes in 9 branches (Carry, Tools, Fountain, Power, Intake, Logistics, Processing,
   Security, Head Office), paid in cash, Wish Tokens or Lucky Pennies. Levelled nodes repeat at growing prices;
   **Bigger Chunks** never maxes out (each level makes chunks 25% of their original size bigger, at a
   polynomial price), so cash always has something to speed up the dig.
@@ -73,16 +74,43 @@ throw things into your fountain, and making the fountain fancier makes them thro
 
 ## The six malls
 
-| # | Mall | Depth | Event | Bottom treasure |
-|---|---|---|---|---|
-| 1 | Crestview Commons | 30 ft | Mall Walker Rush Hour (tosses ×3) | The Founder's Penny |
-| 2 | Neon Galaxy Mega-Mall | 45 ft | Neon Hour (wishes ×3) | Golden Arcade Token #0001 |
-| 3 | Galleria Aurelia | 60 ft | Black Card Hour (relics ×4) | The Platinum Membership Card |
-| 4 | Skyport Terminal C | 75 ft | Exchange Rate Spike (value ×2.5) | The Lost Passport of Everyone |
-| 5 | The Lucky Lagoon | 90 ft | Jackpot Hour (gold coins rain in) | The Lucky Die |
-| 6 | Eternity Plaza | 120 ft | Wishing Hour (everything ×2) | The First Wish (ending) |
+| # | Mall | Depth | Event | Own machine | Bottom treasure |
+|---|---|---|---|---|---|
+| 1 | Crestview Commons | 30 ft | Mall Walker Rush Hour (tosses ×3) | | The Founder's Penny |
+| 2 | Neon Galaxy Mega-Mall | 45 ft | Neon Hour (wishes ×3) | | Golden Arcade Token #0001 |
+| 3 | Galleria Aurelia | 60 ft | Black Card Hour (relics ×4) | Champagne Cork Cannon | The Platinum Membership Card |
+| 4 | Skyport Terminal C | 75 ft | Exchange Rate Spike (value ×2.5) | Baggage Claim Carousel | The Lost Passport of Everyone |
+| 5 | The Lucky Lagoon | 90 ft | Jackpot Hour (gold coins rain in) | Slot-Machine Sorter | The Lucky Die |
+| 6 | Eternity Plaza | 120 ft | Wishing Hour (everything ×2) | The Old Well | The First Wish (ending) |
 
 Each mall has its own theme, storefront signs, music loop, loot table, 17–22 wishes and 12 relics.
+
+## The mall machines
+
+The four later malls each sell one machine that exists nowhere else (`TechDef.MallOnly`: its techs are only
+in that mall's terminal, it isn't in any other mall's catalogue, and nothing about it carries over; it comes
+back on that mall's remodel laps). Each one changes how that mall is built or dug, not just how fast.
+Rules in `Core/SimMallMachines.cs`, models and animation in `View/MallMachines.cs`.
+
+- **Galleria Aurelia — the Champagne Cork Cannon** (Champagne Blasting, $120K, Intake, after the drain pump;
+  $40K to build). A gilded cannon with a magnum for a barrel. It stands anywhere within 20 m of the fountain,
+  facing it, and every 4 s lobs a cork over the rim: a slab of 24 chunks (+6 per Vintage Reserve level) comes
+  off the crust and lands around a point 4.2 m from the centre, already rinsed. So the rim holds pumps and
+  claws that feed sorters directly (no tumbler), and the cannons stand back in the second row. It holds fire
+  while its splash zone is full of rubble. The sommelier has opinions.
+- **Skyport Terminal C — the Baggage Claim Carousel** (Baggage Claim, $3M, Logistics; $250K to build). Its
+  cargo drones (one, +1 per Priority Tags level) fly to every rim intake that has no belt behind it, take up
+  to 100 items and bring them back; the line starts at the carousel's back. The rim fills with bare borers and
+  pumps, and the processing lines move to the back of the hall. The sign keeps changing between Carousel 4 and 7.
+- **The Lucky Lagoon — the Slot-Machine Sorter** (Gaming License, $12M, Processing; $800K to build). Takes raw
+  gunk and spins once per chunk: cherries pay it out as sorted loot (38%), BAR double (15%), sevens five times
+  (5%), 7-7-7 (1 in 20,000) sprays 30 jackpot tokens worth 1,500 chunks over the fountain and drops a relic;
+  otherwise the house keeps it (42%, less 3 points per Loosen the Reels level). One machine replaces the
+  tumbler and the sorter, at the house's price. Elvis works the floor.
+- **Eternity Plaza — the Old Well** (Reopen the Old Well, $60M, Intake; $8M to build, one per mall, at the rim).
+  Every wish still uncaught 3 s after it rises falls in, and 24 chunks × the wish's token value (1, 2, 4, 8, 25
+  by rarity) of crust stop existing: no rubble, no loot. Deeper Wishes (+50% each, polynomial price, endless)
+  is the mall's second money sink. Catching a wish is still worth it for the tokens and the journal.
 
 ## Economy (how 24+ hours is guaranteed)
 

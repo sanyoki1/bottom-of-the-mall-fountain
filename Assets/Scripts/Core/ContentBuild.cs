@@ -100,6 +100,19 @@ namespace WishExtractor.Core
                 "Bulletproof, bank-grade and deeply overqualified for a mall fountain. Pays a little extra, for dignity.");
             hop2.AnySideInput = true; hop2.Rate = 60; hop2.Capacity = 400; hop2.SellMult = 1.05;
 
+            // ── the mall-only machines: one per late mall, researched there and nowhere else (SimMallMachines) ──
+            var cannon = B("dig_cannon", "Champagne Cork Cannon", BuildCat.Intake, 2, 2, 40000, -30, "unlock_cannon", 0xE8C878,
+                "A gilded cannon with a magnum of '96 for a barrel. Lobs a cork over the rim and a slab of crust comes off, rinsed on the way down. Leave the rim to pumps and claws.");
+            cannon.Intake = "cannon"; cannon.Rate = 0.25; cannon.MaxRange = Balance.CannonRange;
+            var carousel = B("carousel", "Baggage Claim Carousel", BuildCat.Logistics, 3, 3, 250000, -20, "unlock_carousel", 0x9AA4AE,
+                "Carousel 4 (now Carousel 7). Its cargo drones empty every rim intake with no line behind it and bring it all here. The line starts at its back.");
+            carousel.IsCarousel = true; carousel.Capacity = 800; carousel.Outputs = new[] { (1, 2, 0) };
+            P("proc_slots", "Slot-Machine Sorter", 2, 2, 800000, -30, "slots", 9, 80, "unlock_slots", 0xD8283A,
+                "One arm, no conscience. Spins once per chunk of raw gunk: cherries pay it out sorted, BAR double, 7-7-BAR five times, 7-7-7 sprays the fountain. The house keeps the rest.");
+            var well = B("wishing_well", "The Old Well", BuildCat.Intake, 2, 2, 8000000, 0, "unlock_well", 0x8A8F7A,
+                "The well Eternity Plaza was poured over, reopened. Wishes nobody catches fall in, and a chunk of crust simply stops existing. There is only one.");
+            well.RimOnly = true; well.Intake = "well"; well.Unique = true;
+
             var arr = list.ToArray();
             foreach (var b in arr) BuildIndex[b.Id] = b.Index;
             return arr;
@@ -155,6 +168,26 @@ namespace WishExtractor.Core
             Lv("belt_express", "Express Belts", TechBranch.Logistics, TechKind.BeltSpeed, null, 2, 20000, 1, 1, 1, 1, "Twice as fast again. Coins arrive slightly warm.", "belt_fast");
             Lv("hopper_speed", "Hopper Throughput", TechBranch.Logistics, TechKind.MachineSpeed, "Output", 0.2, 100, 1.9, 10, 2, 1,
                 "Greased the chutes with butter from the pretzel stand.", "unlock_hopper");
+
+            // ── the mall-only machines: sold only in their own mall (MallOnly), so nothing stacks across the game.
+            // The cannon (Aurelia) and the well (Eternity) share grid cells: they never show at the same time.
+            TechDef M(TechDef t, int mall) { t.UnlockMall = mall; t.MallOnly = true; return t; }
+            M(U("unlock_cannon", "Champagne Blasting", TechBranch.Intake, "dig_cannon", 120000, 2, 2,
+                "The Champagne Bar's sommelier insists the crust must be opened, not dug. He brought a cannon.", "unlock_pump"), 2);
+            M(Lv("cannon_vintage", "Vintage Reserve", TechBranch.Intake, TechKind.CannonSlab, null, 6, 150000, 2.1, 10, 3, 2,
+                "Older bottles, bigger pops. The '82 took out a skylight panel. Management is calling it a feature.", "unlock_cannon"), 2);
+            M(U("unlock_carousel", "Baggage Claim", TechBranch.Logistics, "carousel", 3000000, 0, 2,
+                "Airport-grade baggage handling. Your coins will be waiting at Carousel 4. Or 7. Please check the screens.", "unlock_hopper"), 3);
+            M(Lv("carousel_tags", "Priority Tags", TechBranch.Logistics, TechKind.DroneCount, null, 1, 1500000, 3, 4, 1, 2,
+                "Bright orange PRIORITY tags for every bag. They change nothing, but each roll of tags comes with a new drone.", "unlock_carousel"), 3);
+            M(U("unlock_slots", "Gaming License", TechBranch.Processing, "proc_slots", 12000000, 2, 2,
+                "The gaming commission approves one (1) fountain-based slot machine. You build forty. Nobody reads the forms here.", "unlock_tumbler"), 4);
+            M(Lv("slots_reels", "Loosen the Reels", TechBranch.Processing, TechKind.SlotOdds, null, 0.03, 6000000, 2.4, 6, 3, 2,
+                "A man named Sal adjusts the reels with a butter knife. The house edge gets a little less edgy.", "unlock_slots"), 4);
+            M(U("unlock_well", "Reopen the Old Well", TechBranch.Intake, "wishing_well", 60000000, 2, 2,
+                "The blueprints say the fountain was 'poured over an existing well'. Corporate approves one jackhammer to find out what that means.", "unlock_digrig"), 5);
+            M(Lv("well_deeper", "Deeper Wishes", TechBranch.Intake, TechKind.WellDepth, null, 0.5, 30000000, 1, 999, 3, 2,
+                "More rope, a heavier bucket, bigger wishes. The well has started granting wishes nobody made, just to keep busy.", "unlock_well"), 5).CostPower = 2.5;
         }
     }
 }

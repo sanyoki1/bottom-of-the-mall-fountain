@@ -92,6 +92,7 @@ namespace WishExtractor.Core
         public double finesPaid, rivalsChased, fishReturned;
         public double built, hopperItems, hopperCash, machinePicked;
         public double washed, sorted, bundles, wishesCompressed;
+        public double cannonBlasts, droneTrips, slotSpins, jackpots, wellWishes;   // the mall-only machines
         public bool legendaryWish, legendaryRelic, endingSeen;
 
         // settings

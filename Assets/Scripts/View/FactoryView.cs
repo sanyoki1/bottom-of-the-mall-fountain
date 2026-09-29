@@ -27,6 +27,7 @@ namespace WishExtractor.View
         ViewContext ctx;
         static Mesh beltFrame, beltSurface;
         Material beltMat;
+        readonly MallMachines mall = new MallMachines();
 
         static Color C(uint hex, float glow = 0) => MeshKit.Hex(hex, glow);
         static Color C(int hex, float glow = 0) => MeshKit.Hex((uint)hex, glow);
@@ -38,12 +39,20 @@ namespace WishExtractor.View
             root = new GameObject("Factory").transform;
             root.SetParent(parent, false);
             beltMat = new Material(Mats.Belt);
+            mall.Init(root, c);
         }
 
         public void Clear()
         {
-            foreach (var n in nodes.Values) if (n.T != null) Object.Destroy(n.T.gameObject);
+            foreach (var n in nodes.Values)
+            {
+                if (n.T != null) Object.Destroy(n.T.gameObject);
+                if (n.Bot != null) Object.Destroy(n.Bot.gameObject);
+                if (n.Arm != null) Object.Destroy(n.Arm.gameObject);
+                if (n.Claw != null) Object.Destroy(n.Claw.gameObject);
+            }
             nodes.Clear();
+            mall.Clear();
         }
 
         public static Vector3 WorldCenter(Building b)
@@ -251,7 +260,8 @@ namespace WishExtractor.View
                     break;
                 }
                 default:
-                    k.Box(new Vector3(0, 0.5f, 0), new Vector3(w * 0.9f, 1f, dd * 0.9f), main);
+                    // the mall-only machines (champagne cannon, baggage carousel, slot machine, the Old Well)
+                    if (!MallMachines.Model(d, t, k)) k.Box(new Vector3(0, 0.5f, 0), new Vector3(w * 0.9f, 1f, dd * 0.9f), main);
                     break;
             }
             if (k.VertexCount > 0) k.Build("Body", t);
@@ -333,10 +343,14 @@ namespace WishExtractor.View
                     }
                 n.Claw = ck.Build("Head", root, false).transform;
             }
+            if (MallMachines.Handles(b.Def)) mall.Attach(b, n.T);
             return n;
         }
 
         public Transform BuildingTransform(int buildingUid) => nodes.TryGetValue(buildingUid, out var n) ? n.T : null;
+
+        /// <summary>Where a talking machine's speech bubble hangs (the sommelier, Elvis, the Old Well), or null.</summary>
+        public Transform Voice(int buildingUid) => mall.Voice(buildingUid);
 
         public void Update(float dt, float time)
         {
@@ -406,6 +420,12 @@ namespace WishExtractor.View
                 foreach (var pg in n.Pigeons) Actors.AnimatePigeon(pg, time, act);
                 if (b.Def.Id == "proc_tumbler" || b.Def.Id == "proc_roller" || b.Def.Id == "proc_bagger")
                     n.T.localScale = new Vector3(1, 1 + Mathf.Sin(time * 25) * 0.01f * act, 1);
+                if (MallMachines.Handles(b.Def))
+                {
+                    // the cannon and the well draw their own effects (MallMachines)
+                    mall.Animate(b, n.T, dt, time);
+                    n.PickSerial = b.PickSerial;
+                }
                 if (b.PickSerial != n.PickSerial)
                 {
                     n.PickSerial = b.PickSerial;
@@ -428,6 +448,7 @@ namespace WishExtractor.View
                 if (n.Bot != null) Object.Destroy(n.Bot.gameObject);
                 if (n.Arm != null) Object.Destroy(n.Arm.gameObject);
                 if (n.Claw != null) Object.Destroy(n.Claw.gameObject);
+                mall.Detach(u);
                 nodes.Remove(u);
             }
         }

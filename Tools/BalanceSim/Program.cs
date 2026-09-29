@@ -31,6 +31,7 @@ static class Program
         if (args.Length > 0 && args[0] == "factory") return Factory();
         if (args.Length > 0 && args[0] == "crust") return Crust();
         if (args.Length > 0 && args[0] == "smoke") return Smoke();
+        if (args.Length > 0 && args[0] == "machines") return Machines();
         if (args.Length > 0 && args[0] == "slots") { Console.Write(new Bot(new SaveData(), 1, "engaged").ProbeSlots()); return 0; }
         double hours = args.Length > 0 ? double.Parse(args[0]) : 40;
         int seed = args.Length > 1 ? int.Parse(args[1]) : 1234;
@@ -256,6 +257,81 @@ static class Program
     }
 
     static string Can(Sim sim, BuildDef d, int x, int z, int rot) => sim.CanPlace(d, x, z, rot, out var why) ? $"{d.Id} @({x},{z}) r{rot}: ok" : $"{d.Id} @({x},{z}) r{rot}: NO — {why}";
+
+    /// <summary>
+    /// The four mall-only machines, each in its own mall: only sold there, and each does its job
+    /// (cannon slabs collected by a pump line, drones emptying a lineless borer into a carousel line,
+    /// slot spins and a jackpot, the Old Well granting wishes by dissolving crust).
+    /// </summary>
+    static int Machines()
+    {
+        BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+        bool ok = true;
+        void Check(bool cond, string what) { ok &= cond; Console.WriteLine($"{(cond ? "PASS" : "FAIL")}  {what}"); }
+        Sim Mall(int m, int seed)
+        {
+            var s = new Sim(new SaveData(), seed);
+            s.DebugJumpToMall(m);
+            foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock && s.TechInThisMall(t)) s.DebugSetTech(t.Id, 1);
+            s.DebugAddCash(1e12);
+            s.DebugSetDepth(0.3);
+            for (int i = 0; i < 6; i++) s.Place(D("gen_solar"), 20 + (i % 3) * 3, -27 + (i / 3) * 3, 0, true);
+            return s;
+        }
+        // mall-only techs are sold in their own mall only
+        var probe = new Sim(new SaveData(), 1);
+        probe.DebugJumpToMall(3);
+        Check(!probe.TechInThisMall(Content.Techs[Content.TechIndex["unlock_cannon"]]) && probe.TechInThisMall(Content.Techs[Content.TechIndex["unlock_carousel"]]),
+              "in Skyport the carousel is for sale and the champagne cannon isn't");
+        probe.DebugJumpToMall(8);   // Aurelia, first remodel
+        Check(probe.TechInThisMall(Content.Techs[Content.TechIndex["unlock_cannon"]]), "the cannon comes back in Aurelia's remodel");
+
+        // Galleria Aurelia: a cannon behind the rim lobbing slabs over it, a pump line at the rim feeding a sorter
+        var a = Mall(2, 11);
+        var cannon = a.Place(D("dig_cannon"), 17, -1, 3, true);
+        Check(a.Place(D("dig_cannon"), 24, 5, 3, true) == null, "a cannon too far from the fountain can't be built");
+        var pumpN = a.Place(D("intake_pump"), 11, -3, 3, true);
+        a.Place(D("proc_sorter"), 12, -3, 1, true);
+        a.Place(D("hopper2"), 14, -3, 1, true);
+        Check(cannon != null && pumpN != null, $"cannon and pump placed ({cannon?.Rot}, {pumpN?.Rot})");
+        double dug0 = a.S.dug;
+        for (int i = 0; i < 1200; i++) a.Tick(0.1);
+        Check(a.S.cannonBlasts > 3 && a.S.dug > dug0, $"the cannon fires ({a.S.cannonBlasts} pops, {a.S.dug - dug0:0} scoops)");
+        Check(a.Loose.Exists(l => Content.Items[l.Type].Id == "rinsed") || a.S.hopperItems > 0, "its slabs land rinsed in the water");
+        Check(a.S.machinePicked > 0 && a.S.sorted > 0 && a.S.hopperCash > 0, $"the pump line sorts and sells them ({a.S.sorted} sorted, {Fmt.Money(a.S.hopperCash)})");
+        Console.WriteLine($"  cannon status: '{cannon?.Status}', loose {a.Loose.Count}");
+
+        // Skyport: a borer at the rim with no line; a carousel feeding a tumbler, a sorter and a hopper
+        var s3 = Mall(3, 12);
+        var borer = s3.Place(D("dig_borer"), -13, 0, 1, true);
+        var car = s3.Place(D("carousel"), -24, 10, 0, true);
+        s3.Place(D("proc_tumbler"), -24, 13, 0, true);
+        s3.Place(D("proc_sorter"), -24, 15, 0, true);
+        s3.Place(D("hopper2"), -24, 17, 0, true);
+        Check(borer != null && car != null, "a lineless borer and a carousel line placed");
+        for (int i = 0; i < 1200; i++) s3.Tick(0.1);
+        Check(s3.S.droneTrips > 0 && s3.S.hopperItems > 0, $"drones fly the borer's chunks to the carousel line ({s3.S.droneTrips} trips, {s3.S.hopperItems} sold, borer '{borer?.Status}')");
+
+        // the Lucky Lagoon: rig → slot machine → hopper
+        var s4 = Mall(4, 13);
+        s4.Place(D("dig_rig"), 11, -1, 3, true);
+        var slots = s4.Place(D("proc_slots"), 12, 0, 1, true);
+        s4.Place(D("hopper2"), 14, 0, 1, true);
+        Check(slots != null, "a slot-machine line placed");
+        for (int i = 0; i < 1200; i++) s4.Tick(0.1);
+        Check(s4.S.slotSpins > 0 && s4.S.hopperCash > 0, $"the slots spin raw gunk into cash ({s4.S.slotSpins} spins, {s4.S.jackpots} jackpots, {Fmt.Money(s4.S.hopperCash)})");
+
+        // Eternity Plaza: the Old Well grants wishes nobody catches
+        var s5 = Mall(5, 14);
+        var well = s5.Place(D("wishing_well"), -12, 1, 1, true);
+        Check(well != null && s5.Place(D("wishing_well"), 11, -1, 3, true) == null, "one Old Well, and only one");
+        double dug5 = s5.S.dug;
+        var w = s5.DebugSpawnWish(2, 2);
+        for (int i = 0; i < 40; i++) s5.Tick(0.1);
+        Check(w != null && s5.S.wellWishes >= 1 && s5.S.dug > dug5, $"an uncaught wish falls in and crust vanishes ({s5.S.wellWishes} granted, {s5.S.dug - dug5:0} scoops)");
+        Console.WriteLine(ok ? "all machines OK" : "SOME MACHINES FAILED");
+        return ok ? 0 : 1;
+    }
 
     /// <summary>Watch the crowd for two minutes at a given wishability and print what shoppers are doing.</summary>
     static int Crowd(double wish)

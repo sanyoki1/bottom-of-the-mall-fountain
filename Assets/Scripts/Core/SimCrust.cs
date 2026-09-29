@@ -215,6 +215,7 @@ namespace WishExtractor.Core
             ["pallet"] = t => t.Cat == ItemCat.Bag,
             ["melt"] = t => (t.Cat == ItemCat.Coin && t.Tier >= 7) || t.Id == "ring" || t.Id == "tiara" || t.Id == "trophy" || t.Id == "goldbar",
             ["compress"] = t => false,
+            ["slots"] = t => t.Cat == ItemCat.Gunk || t.Cat == ItemCat.Washed,   // the Lucky Lagoon's slot machine gambles it all
         };
 
         public static bool ProcessAccepts(string process, ItemType t) => process != null && Accepts.TryGetValue(process, out var f) && f(t);
@@ -273,6 +274,9 @@ namespace WishExtractor.Core
                 case "pallet": Bundle(b, type, value, Balance.PalletSize, "pallet", Balance.PalletMult); break;
                 case "melt":
                     AddTo(b.Out, ref b.OutCount, Content.Type("bar"), value * Balance.MeltMult);
+                    break;
+                case "slots":
+                    SpinSlots(b, value);
                     break;
                 default:
                     AddTo(b.Out, ref b.OutCount, type, value);

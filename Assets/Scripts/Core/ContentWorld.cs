@@ -117,6 +117,11 @@ namespace WishExtractor.Core
             AddType("pallet", "Coin Pallet", ItemCat.Pallet, ItemShape.Cube, 0xA87A48, 0, 5f, "Forty bags shrink-wrapped to a pallet. Forklift not included.").Units = 40000;
             AddType("bar", "Melted Gold Bar", ItemCat.Bar, ItemShape.Bar, 0xF2C230, 0, 1f, "Everything shiny, melted into something shinier.");
             AddType("brick", "Wish Brick", ItemCat.Brick, ItemShape.Brick, 0x9A5CF7, 0, 1f, "Compressed nostalgia. Billionaires buy these to feel things.");
+            // the mall-only machines' goods
+            AddType("rinsed", "Champagne-Rinsed Chunk", ItemCat.Washed, ItemShape.Chunk, 0xE8D9A8, 0, 1f,
+                "Blasted out of the crust by a champagne cork and rinsed in 1996 Dom on the way down. The sorter will take it from here.");
+            AddType("jackpot", "Jackpot Token", ItemCat.Coin, ItemShape.Coin, 0xFFC83A, 0, 0.62f,
+                "Sprayed across the fountain by a slot machine hitting 7-7-7. Worth a small fortune. Please don't bite it.");
         }
 
         public static readonly Dictionary<string, int> ItemIndex = new Dictionary<string, int>();

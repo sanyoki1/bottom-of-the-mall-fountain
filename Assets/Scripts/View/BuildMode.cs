@@ -138,7 +138,7 @@ namespace WishExtractor.View
             var d = Selected;
             if (d == null || !FloorPoint(ray, wallDist, out var p)) { HideGhost(); if (!input.Primary) dragging = false; return; }
 
-            int rot = d.RimOnly ? Sim.FacingRotation(p.x, p.z) : Rot;
+            int rot = d.RimOnly || d.MaxRange > 0 ? Sim.FacingRotation(p.x, p.z) : Rot;
             var (ax, az) = AnchorFor(d, p, rot);
             if (d.IsBelt && dragging) { ax = Mathf.FloorToInt(p.x); az = Mathf.FloorToInt(p.z); }
             AX = ax; AZ = az; ARot = rot;

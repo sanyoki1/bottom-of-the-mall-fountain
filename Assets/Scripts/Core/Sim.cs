@@ -238,8 +238,9 @@ namespace WishExtractor.Core
 
         public void Recalc()
         {
-            int carry = 0, grab = 0, dig = 0;
+            int carry = 0, grab = 0, dig = 0, cannonChunks = 0, drones = 0;
             double value = 1, wish = 0, toss = 1, walk = 1, reach = 0, grabRate = 1, wishLife = 1, carryBonus = 1, digMult = 1, relicMult = 1, chunk = 1;
+            double slotCut = 0, well = 1;
             for (int i = 0; i < techLevel.Length; i++)
             {
                 int L = techLevel[i];
@@ -263,6 +264,10 @@ namespace WishExtractor.Core
                     case TechKind.RelicRate: relicMult *= Math.Pow(1 + t.Value, L); break;
                     case TechKind.ChunkSize: chunk += t.Value * L; break;
                     case TechKind.StartCarry: carry = Math.Max(carry, L); break;
+                    case TechKind.CannonSlab: cannonChunks += (int)Math.Round(t.Value * L); break;
+                    case TechKind.DroneCount: drones += (int)Math.Round(t.Value * L); break;
+                    case TechKind.SlotOdds: slotCut += t.Value * L; break;
+                    case TechKind.WellDepth: well += t.Value * L; break;
                 }
             }
             CarryTier = Math.Min(carry, Content.Carry.Length - 1);
@@ -291,6 +296,10 @@ namespace WishExtractor.Core
             DigMult = digMult;
             ChunkMult = chunk;
             RelicMult = relicMult;
+            CannonBonusChunks = cannonChunks;
+            DroneBonus = drones;
+            SlotLoseCut = slotCut;
+            WellMult = well;
             RecalcFactory();
             OnRecalc?.Invoke();
         }
@@ -508,9 +517,13 @@ namespace WishExtractor.Core
 
         public double TechCost(int i) => Content.Techs[i].CostAt(techLevel[i], Scale);
         public bool TechMaxed(int i) => techLevel[i] >= Content.Techs[i].MaxLevel;
+        /// <summary>Is this tech sold in the current mall at all (mall-only techs live in their own mall)?</summary>
+        public bool TechInThisMall(TechDef t) => !t.MallOnly || t.UnlockMall == MallDefIndex;
+
         public bool TechUnlocked(int i)
         {
             var t = Content.Techs[i];
+            if (!TechInThisMall(t)) return false;
             if (t.UnlockMall > MallDefIndex && S.maxMallCleared < t.UnlockMall - 1) return false;
             foreach (var r in t.Requires)
                 if (!Content.TechIndex.TryGetValue(r, out int ri) || techLevel[ri] <= 0) return false;

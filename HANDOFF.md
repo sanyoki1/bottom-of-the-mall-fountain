@@ -1,31 +1,104 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-28 (session 5, a cloud session on Linux with no Unity license: M6 compile-checked
-against the real Unity 6000.4.2f1 assemblies, three hazard bugs and the overflowing build catalogue fixed,
-re-fitted; still not built or run in Unity)._
+_Last updated 2026-09-29 (session 5, a cloud session on Linux with no Unity license: M6 compile-checked
+against the real Unity 6000.4.2f1 assemblies, fixed and re-fitted; then M7, one machine of their own for
+each of the four later malls, written, compile-checked, taught to the balance bot and re-fitted. Neither
+M6 nor M7 has been built or run in Unity yet)._
 
-## NEXT: verify M6 in Unity on Windows, then commit it as a milestone
+## NEXT: verify M6 and M7 in Unity on Windows, then commit them as milestones
 
 Sessions 4 and 5 ran in cloud containers where the Unity editor can't start (it needs an activated
 license, even in batch mode), so the checks that need Unity are still open:
 
-1. Build (CLAUDE.md step 1). Session 5 compiled every script with Unity 6000.4.2f1's own compiler and
-   assemblies (`Tools/UnityCompileCheck/unity6_compile.sh`: 0 errors, 0 warnings, editor and player
-   defines, `Assets/Editor` included), so the build should compile cleanly.
-2. Run `-autotour` and look at every screenshot, especially the new ones: `30_terminal_security`,
-   `31_guard_warning`, `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish` (the prompt should read
-   "Put the goldfish back in the water"), `36_goldfish_returned`, and `18_build_catalogue` (new six-column
-   layout, see below).
-3. Run `-uitest`: expect `[UITEST] done: 96 passed, 0 failed` (85 old checks + 11 new: the goldfish,
-   Officer Doug's whistle and fine and "step out to avoid it", Chad chased by wading up and by E). Then
-   `-loadtest`.
+1. Build (CLAUDE.md step 1). Every script compiles with Unity 6000.4.2f1's own compiler and assemblies
+   (`Tools/UnityCompileCheck/unity6_compile.sh`: 0 errors, editor and player defines, `Assets/Editor`
+   included), so the build should compile cleanly.
+2. Run `-autotour` (60 shots now) and look at every screenshot, especially the ones nobody has seen yet:
+   - M6: `18_build_catalogue` (six-column layout, see below), `30_terminal_security`, `31_guard_warning`,
+     `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish` (the prompt should read "Put the goldfish
+     back in the water"), `36_goldfish_returned`.
+   - M7: `40_aurelia_cannon` (a cork in flight over the rim, smoke at the muzzle), `41_aurelia_splash`
+     (rinsed chunks and a champagne geyser in the water), `42_skyport_carousel` (drones between the borer at
+     the rim and the carousel at the back), `43_lagoon_slots` (reels spinning), `44_lagoon_jackpot` (confetti,
+     tokens flying into the fountain), `45_eternity_well` (a wish orb flying into the well, windlass turning),
+     `46_terminal_mall_only` (Priority Tags marked "SKYPORT TERMINAL C ONLY · NOT KEPT"),
+     `47_catalogue_skyport` (the carousel listed, the cannon not). The four models have never been rendered:
+     check their scale and orientation (the cannon and the well face the fountain; the slot machine shows its
+     reels on the sides of its line), what glows (vertex alpha), and that the carousel sign reads correctly
+     from both sides.
+3. Run `-uitest`: expect `[UITEST] done: 121 passed, 0 failed` (85 from M5, 11 from M6, 25 from M7: see
+   "M7" below). Then `-loadtest`: the uitest now ends in Eternity Plaza with the Old Well built.
 4. Play the first 20 minutes and the start of a dig by hand: session 4 changed the early economy and
-   digging (see below), and only the bot has played it.
+   digging (see below), and only the bot has played it. With `-dev` (F6 finishes a mall, F5 adds cash),
+   reach the later malls and try each machine by hand.
 5. Refresh `Docs/Screenshots` from the tour (they are still v1's overhead shots; the README no longer uses them).
 
 **Git:** branch `master` holds M1–M5 and the M6 WIP commit `4a99037`. Session 4's M6 work is commit
 `93cae22` on `claude/upbeat-dijkstra-ypw7nn`; session 5 continued on `claude/wish-extractor-m6-verify-m6ww7w`
-(fast-forwarded to `93cae22`). Unverified in Unity: review before merging into `master`.
+(M6 verification pass `0360e0d`, then M7 on top). Unverified in Unity: review before merging into `master`.
+
+## M7: the later malls' own machines (session 5, continued)
+
+Nico's brief: malls 3–6 each get one thing to build that exists only there (not carried into other malls),
+with a procedural model and animation, a tech node or two and jokes in the mall's theme, and it has to change
+how you build or dig there, not just add a multiplier. The four (rules and numbers in DESIGN.md, "The mall
+machines"):
+
+- **Galleria Aurelia: the Champagne Cork Cannon.** Stands anywhere within 20 m of the fountain, facing it,
+  and lobs slabs of crust into the water, already rinsed. The rim goes to pumps and claws feeding sorters
+  directly (no tumbler); the cannons stand in the second row. Vintage Reserve makes the slabs bigger.
+- **Skyport Terminal C: the Baggage Claim Carousel.** Cargo drones empty every rim intake that has no belt
+  behind it and fly the loads to the carousel, where the line starts. The rim fills with bare borers; the
+  processing moves to the back of the hall. Priority Tags add drones.
+- **The Lucky Lagoon: the Slot-Machine Sorter.** Raw gunk in, sorted loot out (×1, ×2, ×5) or nothing;
+  7-7-7 sprays jackpot tokens over the fountain and drops a relic. Replaces tumbler + sorter at the house's
+  price. Loosen the Reels shaves the house edge.
+- **Eternity Plaza: the Old Well.** One per mall, at the rim. Wishes nobody catches within 3 s fall in, and
+  24 chunks × the wish's token value of crust stop existing. Deeper Wishes is an endless polynomial sink.
+
+How it's built:
+- Core: `TechDef.MallOnly` (with `UnlockMall`); `Sim.TechInThisMall` / `BuildInThisMall` hide a mall's machine
+  everywhere else (`TechUnlocked`, `BuildUnlocked`, `CanPlace`, the terminal, the catalogue), and it returns on
+  that mall's remodel laps. `BuildDef.MaxRange` (the cannon; build mode turns it to face the fountain),
+  `Unique` (the well), `IsCarousel`. New `TechKind`s `CannonSlab`, `DroneCount`, `SlotOdds`, `WellDepth`
+  (with effect lines in `TerminalPanel.EffectText`), items "Champagne-Rinsed Chunk" and "Jackpot Token", save
+  counters `cannonBlasts`, `droneTrips`, `slotSpins`, `jackpots`, `wellWishes`; a drone's cargo is saved into
+  its carousel. All in `Core/SimMallMachines.cs` plus small hooks in `SimFactory` / `SimCrust` / `SimCrowd`.
+- The terminal marks these nodes "<MALL> ONLY · NOT KEPT"; the catalogue lists only this mall's machine (the
+  cannon and the well sit under DIGGING).
+- View: `View/MallMachines.cs` builds the four models and animates them (recoil and a flying cork with a
+  champagne geyser where it lands; the carousel's belt, bags and flip-sign plus its drones; reels that stop on
+  the spin's symbols, lever and siren; the well's windlass and bucket). Wish orbs fly into the well. HUD hover
+  text for each. Sounds (`Synth`): pop, reels, jackpot, drone whirr, well chime; speech lines for the
+  sommelier, Elvis (the Lagoon's floor host) and the well.
+- Fixed in passing: `FactoryView.Clear()` left the old mall's skimmer bots, pump arms and claw heads in the
+  scene after a contract.
+
+The bot (`Tools/BalanceSim/Bot.cs`):
+- Aurelia: once two cannons stand, dig slots become pump → coin sorter → hopper lines, with 2 + (pump lines / 2)
+  cannons (up to 10) on rings 14–18.5 m out. The Lagoon: slot lines (rig → slot machine → hopper). Skyport:
+  bare borers where a whole line doesn't fit, the whole rim once four carousel lines run, and up to three
+  carousel lines per bare intake at the back of the hall. Eternity: the Old Well takes a rim slot as soon as it's
+  affordable, and the bot stops chasing common wishes it has already found.
+- The report's "lines at the end" marks bare intakes `*` and slot lines `$` and counts cannons, carousel lines
+  and the well's wishes; a new "this mall's machine" line says when each was researched and first built.
+- `dotnet run -c Release --project Tools/BalanceSim -- machines` checks all four in the Core: sold only in their
+  own mall (and back on its remodel), placement rules (range, facing, one well), and that each one works.
+
+Balance: `fit --apply` with the machine-aware bot was still running when this was first committed; the fitted
+crusts and the seed checks follow in the next commit. Unfitted (session 5's crusts, seed 1234) the machines
+made Aurelia 3.18 h, Skyport 2.41 h, the Lagoon 2.10 h and Eternity 4.62 h: 19.4 h in all, so the re-fit is needed.
+
+Tour and uitest (written, compile-checked, not run):
+- Tour: 8 new shots (`40`–`47`, see NEXT), taken in each mall right after its overview shot
+  (`GameRoot.MallMachineShots`). Watchdog 720 s.
+- uitest: +25 checks after Head Office (`GameRoot.MallMachineChecks`): Neon Galaxy's terminal has no cannon;
+  in Aurelia, Champagne Blasting is bought through the terminal, a cannon 23 m out is refused, one 16 m out is
+  built through build mode facing the fountain, and it fires rinsed chunks; in Skyport the cannon is gone and
+  the carousel is in the catalogue, built through build mode, and a drone flies a lineless borer's chunks to
+  it; in the Lagoon a slot machine spins a rig's gunk and a jackpot sprays tokens; in Eternity the Old Well is
+  built at the rim facing the fountain, a second one is refused, and an uncaught wish falls in and dissolves
+  crust. Watchdog 780 s.
 
 ## Session 5 (cloud, no Unity license)
 
@@ -139,9 +212,11 @@ license, even in batch mode), so the checks that need Unity are still open:
   profiles build identically. A sloppier casual builder would make the casual numbers more meaningful.
 - Late-mall money reaches tens of billions (Eternity). Fine for an incremental game, but if Nico wants
   smaller numbers, trim the permanent value bonuses (coin polish, Seniority, treasures) and re-fit.
-- Late malls re-buy the early tree in minutes; more mall-specific content (new machines per mall) would make
-  their first half more interesting than Bigger Chunks levels.
-- Remodel laps (after mall 6) aren't fitted; they reuse each mall's fitted shape with crust ×1.6 per lap.
+- Late malls still re-buy the early tree in minutes. M7 gives malls 3–6 a machine each; Neon Galaxy (mall 2)
+  could get one too (an arcade claw that plays itself?), and the machines could get a second tech each once
+  they've been played by hand.
+- Remodel laps (after mall 6) aren't fitted; they reuse each mall's fitted shape with crust ×1.6 per lap. The
+  mall machines come back on their mall's laps, so a lap plays like its mall did.
 
 ## Milestone notes (M1–M5, verified and committed on Windows)
 

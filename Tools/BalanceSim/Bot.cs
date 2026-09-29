@@ -84,10 +84,13 @@ sealed class Bot
             Sim.Tick(step);
             seconds -= step;
             if (Curve != null && Sim.Time >= nextCurve) { Curve.Add((Sim.Time - mallStart, Sim.S.dug)); nextCurve = Sim.Time + 5; }
+            bool well = WellBuilt;
             foreach (var w in Sim.Wishes.ToArray())
             {
                 if (w.Age < reaction || wishDecided.Contains(w.Uid)) continue;
                 wishDecided.Add(w.Uid);
+                // with the Old Well dug in, only new wishes (the journal) and big ones are worth more caught than granted
+                if (well && Sim.WishFound(w.Def.Id) && w.Def.Rarity < Rarity.Epic) continue;
                 if (rng.NextDouble() < catchChance) Sim.CatchWish(w.Uid);
             }
             if (Sim.Rival.State == RivalState.Stealing && Sim.Rival.Timer > (engaged ? 6 : 25)) Sim.ChaseRival();
@@ -323,7 +326,8 @@ sealed class Bot
             plan.Add((D(s), nx, nz, dir));
             nx += fx * D(s).D; nz += fz * D(s).D;
         }
-        plan.Add((D(hopper), nx, nz, dir));
+        // no hopper: a bare intake for Skyport's baggage drones to empty
+        if (hopper != null) plan.Add((D(hopper), nx, nz, dir));
         return plan;
     }
 
@@ -368,8 +372,10 @@ sealed class Bot
     /// </summary>
     List<(BuildDef d, int x, int z, int rot)> FindPlan(int slot, string intake, string[] stages, string hopper)
     {
+        // a bare intake (nothing behind it) can squeeze into narrower gaps
+        var nudges = hopper == null ? new[] { 0f, 3f, -3f, 6f, -6f } : new[] { 0f, 4f, -4f };
         foreach (float dr in new[] { 0f, 0.5f, 1f })
-            foreach (float da in new[] { 0f, 4f, -4f })
+            foreach (float da in nudges)
             {
                 var plan = PlanLine(SlotAngles[slot] + da, 10.6f + dr, intake, stages, hopper);
                 if (plan.All(p => Sim.CanPlace(p.d, p.x, p.z, p.rot, out _, true))) return plan;
@@ -404,11 +410,13 @@ sealed class Bot
     readonly (string intake, string[] stages, string hopper)[] linePlan = new (string, string[], string)[SlotAngles.Length];
 
     /// <summary>(Re)build the line in a slot if its planned machines beat what's there. False = can't afford it yet.</summary>
+    static string Sig(string intake, string[] stages, string hopper) => intake + "|" + string.Join(",", stages) + "|" + hopper;
+
     bool UpgradeLine(int s, string intake, string[] stages, string hopper)
     {
-        string sig = intake + "|" + string.Join(",", stages) + "|" + hopper;
+        string sig = Sig(intake, stages, hopper);
         if (lineSig[s] == sig || failed.Contains(s + sig)) return true;
-        double cost = (D(intake).Cost + stages.Sum(st => D(st).Cost) + D(hopper).Cost + (D(intake).W == 1 ? D("belt").Cost : 0)) * Sim.Scale;
+        double cost = (D(intake).Cost + stages.Sum(st => D(st).Cost) + (hopper != null ? D(hopper).Cost : 0) + (D(intake).W == 1 ? D("belt").Cost : 0)) * Sim.Scale;
         double need = cost * (lineSig[s] == null ? 1.05 : 1.3);
         if (Sim.S.cash < need)
         {
@@ -432,11 +440,132 @@ sealed class Bot
         {
             // put the old line back (the upgrade didn't fit here)
             lineIntake[s] = old.intake;
-            lineSig[s] = old.intake + "|" + string.Join(",", old.stages) + "|" + old.hopper;
+            lineSig[s] = Sig(old.intake, old.stages, old.hopper);
             linePlan[s] = old;
         }
         return true;
     }
+
+    bool Unlocked(string id) => Sim.BuildUnlocked(D(id));
+
+    // ── the mall-only machines ──
+
+    readonly List<int> cannons = new List<int>();
+    readonly List<List<int>> parks = new List<List<int>>();
+    bool parksFull, cannonsFull;
+    int wellUid;
+
+    /// <summary>
+    /// Galleria Aurelia: champagne cannons stand behind the rim (they lob over it), about one for every two
+    /// pump lines; the first ring of spots that fits, starting close in.
+    /// </summary>
+    void ManageCannons(int pumpLines)
+    {
+        int want = Math.Min(10, 2 + pumpLines / 2);
+        while (cannons.Count < want && !cannonsFull)
+        {
+            var d = D("dig_cannon");
+            double need = d.Cost * Sim.Scale * 1.05;
+            if (Sim.S.cash < need) { if (factoryWant <= 0 || need < factoryWant) factoryWant = need; return; }
+            Building placed = null;
+            foreach (float r in new[] { 14f, 15.5f, 17f, 18.5f })
+            {
+                for (float a = 20; a < 380 && placed == null; a += 7.5f)
+                {
+                    float x = (float)Math.Cos(a * Math.PI / 180) * r, z = (float)Math.Sin(a * Math.PI / 180) * r;
+                    int rot = Sim.FacingRotation(x, z);
+                    var (ax, az) = AnchorFor(d, x, z, rot);
+                    if (Sim.CanPlace(d, ax, az, rot, out _)) placed = Sim.Place(d, ax, az, rot);
+                }
+                if (placed != null) break;
+            }
+            if (placed == null) { cannonsFull = true; return; }
+            cannons.Add(placed.Uid);
+            Mark("cannon");
+            Advance(3);
+        }
+    }
+
+    /// <summary>Candidate spots for Skyport's carousel parks: away from the fountain, the entrance path and the generator corner.</summary>
+    static readonly (int x, int z)[] ParkSpots = MakeParkSpots();
+    static (int x, int z)[] MakeParkSpots()
+    {
+        var list = new List<(int x, int z, float r)>();
+        for (int x = -34; x <= 33; x++)
+            for (int z = -28; z <= 29; z++)
+            {
+                float r = (float)Math.Sqrt((x + 0.5) * (x + 0.5) + (z + 0.5) * (z + 0.5));
+                if (r < 14.5f || (x >= 16 && z <= -15)) continue;
+                list.Add((x, z, r));
+            }
+        return list.OrderBy(p => p.r).Select(p => (p.x, p.z)).ToArray();
+    }
+
+    /// <summary>A carousel at a spot, facing away from the fountain, with its line (stages, hopper) running on from its back.</summary>
+    List<(BuildDef d, int x, int z, int rot)> PlanPark(int x, int z, string[] stages, string hopper)
+    {
+        var c = D("carousel");
+        int rot = (Sim.FacingRotation(x + 0.5f, z + 0.5f) + 2) & 3;
+        int fx = Building.DX[rot], fz = Building.DZ[rot], rx = Building.DX[(rot + 1) & 3], rz = Building.DZ[(rot + 1) & 3];
+        var plan = new List<(BuildDef, int, int, int)> { (c, x, z, rot) };
+        // the carousel's exit is local cell (1, 2); the line's first stage starts right behind it
+        int nx = x + rx + fx * 3, nz = z + rz + fz * 3;
+        foreach (var s in stages) { plan.Add((D(s), nx, nz, rot)); nx += fx * D(s).D; nz += fz * D(s).D; }
+        plan.Add((D(hopper), nx, nz, rot));
+        return plan;
+    }
+
+    /// <summary>Skyport: carousel lines at the back of the hall, a few per bare rim intake the drones empty.</summary>
+    void ManageParks(int bare, string[] stages, string hopper)
+    {
+        int want = Math.Min(30, bare * 3);
+        while (parks.Count < want && !parksFull)
+        {
+            double cost = (D("carousel").Cost + stages.Sum(s => D(s).Cost) + D(hopper).Cost) * Sim.Scale;
+            if (Sim.S.cash < cost * 1.05) { if (factoryWant <= 0 || cost * 1.05 < factoryWant) factoryWant = cost * 1.05; return; }
+            List<(BuildDef d, int x, int z, int rot)> found = null;
+            foreach (var (x, z) in ParkSpots)
+            {
+                var plan = PlanPark(x, z, stages, hopper);
+                if (plan.All(p => Sim.CanPlace(p.d, p.x, p.z, p.rot, out _, true))) { found = plan; break; }
+            }
+            var into = new List<int>();
+            if (found == null || !TryBuild(found, into)) { parksFull = found == null; return; }
+            parks.Add(into);
+            Mark("park");
+        }
+    }
+
+    /// <summary>Eternity Plaza: the Old Well goes in the first rim spot with room (giving up a dig line if it must).</summary>
+    void EnsureWell()
+    {
+        if (wellUid != 0 && Sim.FindBuilding(wellUid) != null) return;
+        var d = D("wishing_well");
+        double need = d.Cost * Sim.Scale * 1.05;
+        if (Sim.S.cash < need) { if (factoryWant <= 0 || need < factoryWant) factoryWant = need; return; }
+        for (int pass = 0; pass < 2; pass++)
+        {
+            for (int s = 0; s < SlotAngles.Length; s++)
+                foreach (float dr in new[] { 0f, 0.5f, 1f })
+                    foreach (float da in new[] { 0f, 4f, -4f, 8f, -8f })
+                    {
+                        var plan = PlanLine(SlotAngles[s] + da, 10.6f + dr, "wishing_well", new string[0], null);
+                        var p = plan[0];
+                        if (!Sim.CanPlace(p.d, p.x, p.z, p.rot, out _)) continue;
+                        var b = Sim.Place(p.d, p.x, p.z, p.rot);
+                        if (b == null) continue;
+                        wellUid = b.Uid;
+                        Mark("well");
+                        Advance(3);
+                        return;
+                    }
+            // the rim is full: give up the last dig line for it
+            for (int s = SlotAngles.Length - 1; s >= CoinSlots; s--)
+                if (lineSig[s] != null) { ClearLine(s); failed.Add(s + "reserved for the well"); break; }
+        }
+    }
+
+    bool WellBuilt => wellUid != 0 && Sim.FindBuilding(wellUid) != null;
 
     void ManageFactory()
     {
@@ -456,9 +585,36 @@ sealed class Bot
         // coins, so there's no roller on these
         string dig = BestUnlocked(DigLadder);
         string sorter = BestUnlocked("proc_pigeons", "proc_sorter");
-        if (dig != null && sorter != null && Sim.BuildUnlocked(D("proc_tumbler")) && !Sim.MallCleared)
+        if (dig != null && sorter != null && Unlocked("proc_tumbler") && !Sim.MallCleared)
+        {
+            // the mall-only machines change what a dig slot holds:
+            // Aurelia: pump lines straight to a sorter, fed by champagne cannons standing behind the rim;
+            // the Lucky Lagoon: the slot machine replaces tumbler and sorter;
+            // Skyport: where a whole line won't fit, a bare intake the carousels' drones empty;
+            // Eternity: the Old Well takes a rim spot first.
+            bool cannon = Unlocked("dig_cannon") && Unlocked("intake_pump") && Unlocked("proc_sorter");
+            bool carousel = Unlocked("carousel");
+            if (Unlocked("wishing_well")) EnsureWell();
+            if (cannon) ManageCannons(lineIntake.Count(i => i == "intake_pump"));
+            string intake = cannon && cannons.Count >= 2 ? "intake_pump" : dig;
+            string[] stages = Unlocked("proc_slots") ? new[] { "proc_slots" }
+                : intake == "intake_pump" ? new[] { "proc_sorter" }
+                : new[] { "proc_tumbler", sorter };
+            string full = Sig(intake, stages, hopper);
+            // Skyport, once a few carousel lines run: the whole rim goes over to bare intakes (they pack tighter)
+            bool bareRim = carousel && parks.Count >= 4;
             for (int s = CoinSlots; s < SlotAngles.Length; s++)
-                if (!UpgradeLine(s, dig, new[] { "proc_tumbler", sorter }, hopper)) break;
+            {
+                if (bareRim) { if (!UpgradeLine(s, dig, new string[0], null)) break; continue; }
+                if (!UpgradeLine(s, intake, stages, hopper)) break;
+                if (carousel && lineSig[s] == null && failed.Contains(s + full) && !UpgradeLine(s, dig, new string[0], null)) break;
+            }
+            if (carousel)
+            {
+                int bare = lineSig.Count(g => g != null && g.EndsWith("||"));
+                if (bare > 0) ManageParks(bare, new[] { "proc_tumbler", sorter }, hopper);
+            }
+        }
         EnsurePower();
     }
 
@@ -491,6 +647,10 @@ sealed class Bot
         firsts.Clear();
         for (int i = 0; i < lines.Length; i++) { lines[i].Clear(); lineIntake[i] = null; lineSig[i] = null; linePlan[i] = default; }
         failed.Clear();
+        cannons.Clear();
+        parks.Clear();
+        parksFull = cannonsFull = false;
+        wellUid = 0;
         bigHoppers = false;
         factoryWant = 0;
         lastBuy = mallStart; maxGap = 0; maxGapAt = 0; buys = 0;
@@ -524,11 +684,19 @@ sealed class Bot
                        $"income: kiosk {Fmt.Money(income[0])}, hoppers {Fmt.Money(income[1])}, wishes {Fmt.Money(income[2])}, objectives {Fmt.Money(income[3])}, fines -{Fmt.Money(income[4])}; " +
                        $"value ×{Sim.ValueMult:0.0}, wishability {Sim.Wishability:0}, crust {Sim.TotalScoops:0} scoops, loot EV {Fmt.Money(mall.BaseEV)}/scoop");
         Log.AppendLine($"  [{mall.Id}] layers reached at " + string.Join(", ", layerTimes.Select(t => Fmt.Time(t))) + $"; bare concrete {Fmt.Time(Sim.Time - mallStart)}");
-        Log.AppendLine($"  [{mall.Id}] lines at the end: " + string.Join(" ", Enumerable.Range(0, SlotAngles.Length).Select(s => lineSig[s] == null ? "-" : lineSig[s].Split('|')[0].Replace("intake_", "").Replace("dig_", ""))) +
-                       $"; plans that didn't fit: {failed.Count}");
+        // (a bare intake for the baggage drones shows with a *; slot lines with a $)
+        Log.AppendLine($"  [{mall.Id}] lines at the end: " + string.Join(" ", Enumerable.Range(0, SlotAngles.Length).Select(s => lineSig[s] == null ? "-"
+                           : lineSig[s].Split('|')[0].Replace("intake_", "").Replace("dig_", "") + (lineSig[s].EndsWith("||") ? "*" : lineSig[s].Contains("proc_slots") ? "$" : ""))) +
+                       $"; plans that didn't fit: {failed.Count}" +
+                       (cannons.Count > 0 ? $"; champagne cannons {cannons.Count}" : "") + (parks.Count > 0 ? $"; carousel lines {parks.Count}" : "") +
+                       (WellBuilt ? $"; the Old Well granted {Sim.S.wellWishes:0} wishes" : ""));
         string firstsLine = string.Join(", ", firsts.Where(kv => kv.Key.StartsWith("carry_") || kv.Key.StartsWith("line ") || kv.Key.StartsWith("unlock_") || kv.Key.StartsWith("fountain_") && !kv.Key.Contains("polish") && !kv.Key.Contains("mints") || kv.Key.StartsWith("dig_"))
             .OrderBy(kv => kv.Value).Take(24).Select(kv => $"{kv.Key} {Fmt.Time(kv.Value)}"));
         Log.AppendLine($"  [{mall.Id}] firsts: {firstsLine}");
+        // the mall-only machines (unlock, first build, first levelled upgrade)
+        var own = firsts.Where(kv => Content.TechIndex.TryGetValue(kv.Key, out int ti) && Content.Techs[ti].MallOnly || kv.Key == "cannon" || kv.Key == "park" || kv.Key == "well")
+            .OrderBy(kv => kv.Value).Select(kv => $"{kv.Key} {Fmt.Time(kv.Value)}").ToList();
+        if (own.Count > 0) Log.AppendLine($"  [{mall.Id}] this mall's machine: {string.Join(", ", own)}");
         if (!Sim.MallCleared) return -1;
         MallTimes.Add((mall.Name, hours));
         return hours;

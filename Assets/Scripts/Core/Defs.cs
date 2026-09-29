@@ -218,6 +218,11 @@ namespace WishExtractor.Core
         StartUnlocks,   // Head Office: start every mall with the basic factory researched
         RivalRepel,     // × (1 - Value) rival diver visits per level
         ChunkSize,      // + Value × the base chunk per level (linear): more crust and loot per gunk chunk, so swings and rigs dig faster
+        // the mall-only machines (Galleria Aurelia, Skyport, the Lucky Lagoon, Eternity Plaza)
+        CannonSlab,     // + Value chunks per champagne-cannon blast per level
+        DroneCount,     // + Value cargo drones per baggage carousel per level
+        SlotOdds,       // - Value chance that a slot-machine spin loses, per level
+        WellDepth,      // + Value × the well's bite per granted wish, per level
     }
 
     public enum TechBranch { Carry, Tools, Fountain, Power, Intake, Logistics, Processing, Security, HeadOffice }
@@ -241,6 +246,7 @@ namespace WishExtractor.Core
         public bool Persistent => LuckyPennies;
         public string[] Requires = Array.Empty<string>();
         public int UnlockMall;          // first mall where it can appear
+        public bool MallOnly;           // sold only in mall UnlockMall (and its remodels), never carried into other malls
         public int Col, Row;            // layout position in the tree view
         public int Index;
         public double CostAt(int level, double scale)
@@ -271,9 +277,12 @@ namespace WishExtractor.Core
         public int Capacity = 20;       // buffer size
         public float BeltSpeed;         // belts: cells per second at belt tier 1
         public bool IsBelt, IsSplitter;
+        public bool IsCarousel;         // Skyport's baggage carousel: cargo drones fill it from rim intakes that have no line
+        public bool Unique;             // only one may stand at a time (Eternity's Old Well)
         public bool RimOnly;            // intakes: must stand at the fountain's edge
+        public float MaxRange;          // > 0: must stand within this many metres of the fountain's centre, facing it (the champagne cannon)
         public float Reach;             // intakes: how far into the basin they work (metres from the rim)
-        public string Intake;           // "skimmer", "pump", "claw"
+        public string Intake;           // "skimmer", "pump", "claw", "dig", "cannon" (Aurelia), "well" (Eternity)
         public bool AnySideInput;       // hoppers take items from any side
         public (int x, int z, int side)[] Inputs = Array.Empty<(int, int, int)>();
         public (int x, int z, int side)[] Outputs = Array.Empty<(int, int, int)>();

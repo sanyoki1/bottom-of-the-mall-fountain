@@ -25,16 +25,18 @@ namespace WishExtractor.UI
         }
 
         static bool Bundles(BuildDef d) => d.Process == "roll" || d.Process == "bag" || d.Process == "pallet";
+        static bool Digs(BuildDef d) => d.Intake == "dig" || d.Intake == "cannon" || d.Intake == "well";
 
         /// <summary>
         /// Catalogue columns. Processing is split in two and output shares a column with logistics, so no
         /// column holds more than six cards (eight processors in one column ran off the bottom of the panel).
+        /// Another mall's own machine isn't listed at all (see Sim.BuildInThisMall).
         /// </summary>
         static readonly (string title, Func<BuildDef, bool> has)[] Columns =
         {
             ("POWER", d => d.Cat == BuildCat.Power),
-            ("COIN INTAKES", d => d.Cat == BuildCat.Intake && d.Intake != "dig"),
-            ("DIGGING", d => d.Cat == BuildCat.Intake && d.Intake == "dig"),
+            ("COIN INTAKES", d => d.Cat == BuildCat.Intake && !Digs(d)),
+            ("DIGGING", d => d.Cat == BuildCat.Intake && Digs(d)),
             ("WASH & SORT", d => d.Cat == BuildCat.Processing && !Bundles(d)),
             ("BUNDLING", d => d.Cat == BuildCat.Processing && Bundles(d)),
             ("LOGISTICS & OUTPUT", d => d.Cat == BuildCat.Logistics || d.Cat == BuildCat.Output),
@@ -65,7 +67,7 @@ namespace WishExtractor.UI
                 int shown = 0;
                 foreach (var d in Content.Buildables)
                 {
-                    if (!Columns[c].has(d)) continue;
+                    if (!Columns[c].has(d) || !sim.BuildInThisMall(d)) continue;
                     bool unlocked = sim.BuildUnlocked(d);
                     var def = d;
                     var btn = UIKit.Button(panel, "Build:" + d.Id, "", unlocked ? new Color(0.12f, 0.2f, 0.22f) : new Color(0.07f, 0.09f, 0.1f), Color.white, 14, () => { if (unlocked) { OnPick?.Invoke(def); Close(); } }, 12);

@@ -133,7 +133,7 @@ namespace WishExtractor.Game
             {
                 modals.OpenIntro(true);
                 StartCoroutine(UiTest());
-                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 600));
+                StartCoroutine(Watchdog(Time.realtimeSinceStartup + 780));
                 return;
             }
             if (pendingFirstIntro) modals.OpenIntro(true);
@@ -272,6 +272,65 @@ namespace WishExtractor.Game
                 else sfx.Play("step", 0.35f, 0.12f, 0.12f);
             };
 
+            // the mall-only machines: the sommelier's cannon, the baggage drones, the slot machine, the Old Well
+            sim.OnCannonBlast += (b, n) =>
+            {
+                sfx.PlayAt("pop", FactoryView.WorldCenter(b) + Vector3.up, 0.9f, 0.08f, 0.1f);
+                if (sim.S.cannonBlasts <= 1)
+                    pops.Toast("Pop!", "The Champagne Cork Cannon blasts whole slabs into the water, already rinsed. Pumps and claws by the splash can feed them straight to a sorter.", Pal.Gold, "!", 5.5f);
+                else if (Time.time - lastSommelierLine > 20 && UnityEngine.Random.value < 0.25f)
+                {
+                    lastSommelierLine = Time.time;
+                    pops.Say(view.Factory.Voice(b.Uid), Pick(SommelierLines), false, Rarity.Common);
+                }
+            };
+            sim.OnDroneUnloaded += b =>
+            {
+                sfx.PlayAt("drone", FactoryView.WorldCenter(b) + Vector3.up * 1.5f, 0.45f, 0.1f, 0.4f);
+                if (sim.S.droneTrips <= 1)
+                    pops.Toast("Now arriving at Carousel 4", "Cargo drones empty every rim intake with no belt behind it and fly the loads here. Start your line at the carousel's back.", Pal.Accent, "!", 5.5f);
+                else if (Time.time - lastPaLine > 30 && UnityEngine.Random.value < 0.2f)
+                {
+                    lastPaLine = Time.time;
+                    pops.Say(view.Factory.Voice(b.Uid), Pick(PaLines), false, Rarity.Common);
+                }
+            };
+            sim.OnJackpot += (b, v) =>
+            {
+                sfx.PlayAt("jackpot", FactoryView.WorldCenter(b) + Vector3.up * 2, 1f, 0.02f, 0.5f);
+                pops.Say(view.Factory.Voice(b.Uid), Pick(ElvisLines), false, Rarity.Common);
+                if (Time.time - lastJackpotBanner > 45)
+                {
+                    lastJackpotBanner = Time.time;
+                    pops.Banner("Jackpot!", "7 · 7 · 7", $"{Fmt.Money(v * sim.ValueMult)} in tokens just hit the fountain. Claws and pumps will find them (so will Chad).", Pal.Gold, 4f);
+                }
+            };
+            sim.OnSlotSpin += (b, r) =>
+            {
+                sfx.PlayAt("reels", FactoryView.WorldCenter(b) + Vector3.up * 1.4f, 0.3f, 0.12f, 0.9f);
+                if (sim.S.slotSpins <= 1)
+                {
+                    pops.Toast("Spin to win", "The Slot-Machine Sorter spins every chunk of raw gunk: cherries pay it out sorted, BAR double, sevens five times, 7-7-7 sprays the fountain. The house keeps the rest.", Pal.Gold, "!", 5.5f);
+                    return;
+                }
+                // Elvis works the floor: a word on a big win, now and then a word on the house's
+                if ((r != SlotResult.Sevens && r != SlotResult.Lose) || Time.time - lastElvisLine < 40) return;
+                if (r == SlotResult.Lose && UnityEngine.Random.value > 0.02f) return;
+                lastElvisLine = Time.time;
+                pops.Say(view.Factory.Voice(b.Uid), Pick(r == SlotResult.Sevens ? SevensLines : HouseLines), false, Rarity.Common);
+            };
+            sim.OnWellGranted += (b, w, scoops) =>
+            {
+                sfx.PlayAt("well", FactoryView.WorldCenter(b) + Vector3.up, 0.7f, 0.04f, 0.3f);
+                if (sim.S.wellWishes <= 1)
+                    pops.Toast("The Old Well granted a wish", "Wishes nobody catches in a few seconds fall in, and that much crust stops existing. Catch the ones you want first.", Pal.Accent, "✦", 5.5f);
+                else if (Time.time - lastWellLine > 10)
+                {
+                    lastWellLine = Time.time;
+                    pops.Say(view.Factory.Voice(b.Uid), w.Def.Rarity >= Rarity.Epic ? "Now THAT is a wish." : Pick(WellLines), false, Rarity.Common);
+                }
+            };
+
             modals.OnSign = () =>
             {
                 if (!sim.MallCleared) return;
@@ -279,6 +338,45 @@ namespace WishExtractor.Game
                 modals.OpenIntro(false);
             };
         }
+
+        float lastJackpotBanner = -999, lastWellLine = -999, lastSommelierLine = -999, lastPaLine = -999, lastElvisLine = -999;
+        static string Pick(string[] lines) => lines[UnityEngine.Random.Range(0, lines.Length)];
+
+        static readonly string[] SommelierLines =
+        {
+            "Santé!", "Notes of Cinnabon, and a finish of regret.", "An impertinent little crust. Pairs well with a pump.",
+            "The '96. It opens like a jackhammer.", "Please, no photos of the cannon.", "Do not drink the fountain. I am serious this time.",
+            "Forty years in the cellar. The crust, I mean.", "Chilled to exactly fountain temperature.", "The cork is complimentary. The skylight is not.",
+            "A bold vintage. Hints of penny, a whisper of pretzel.", "One does not shake the magnum. One aims it.",
+        };
+        static readonly string[] PaLines =
+        {
+            "Would the owner of a 1987 penny please report to Carousel 7.", "Carousel 4 is now Carousel 7. Carousel 7 is now closed.",
+            "Unattended coins will be collected, and sold. Thank you.", "Now boarding: Group Gunk.",
+            "Your baggage may have shifted in flight. It was coins. It's still coins.", "The fountain is not a moving walkway. Please stop wading on it.",
+            "Delayed: the 14:05 from the rim. Reason: rubble.", "Drones are not a lounge. Please don't ride the drones.",
+        };
+        static readonly string[] ElvisLines =
+        {
+            "Thank you. Thank you very much.", "Viva Lost Wages!", "Uh-huh-huh. JACKPOT, baby.", "The King has left the building. With your coins.",
+            "A little less conversation, a little more digging.",
+        };
+        static readonly string[] SevensLines =
+        {
+            "Seven, seven, BAR. Close enough, darlin'.", "Five times the gunk! Somebody call the gaming commission. Actually, don't.",
+            "Lucky sevens. The house is all shook up.", "Well, bless my rhinestones.",
+        };
+        static readonly string[] HouseLines =
+        {
+            "The house thanks you for your generous donation.", "Don't be cruel. Spin again.", "Return to sender. Address unknown.",
+            "It's now or never. It's usually never.",
+        };
+        static readonly string[] WellLines =
+        {
+            "Granted.", "Wish received. Crust dissolved. Next!", "Your wish is... under review. Approved.", "Glub. (That means yes.)",
+            "One small wish for a man, one giant hole for the fountain.", "Filed under 'mostly harmless'. Granted.",
+            "I have been down here since 1971. You are my favourite.", "No refunds. Also no crust.", "Wish noted. Crust deleted.",
+        };
 
         IEnumerator AfterClear()
         {
@@ -597,7 +695,7 @@ namespace WishExtractor.Game
 
         IEnumerator Tour()
         {
-            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 660));
+            StartCoroutine(Watchdog(Time.realtimeSinceStartup + 720));
             scripted = default(FPInput);
             yield return new WaitForSeconds(2.0f);
             modals.OpenIntro(true);
@@ -844,8 +942,94 @@ namespace WishExtractor.Game
                 view.Player.Place(new Vector3(0, 0.05f, -18), 0, -4);
                 yield return new WaitForSeconds(1.2f);
                 yield return Shot($"2{m}_mall{m + 1}");
+                yield return MallMachineShots(m);
             }
+            Debug.Log($"[TOUR] mall machines: cannon pops {sim.S.cannonBlasts}, drone trips {sim.S.droneTrips}, slot spins {sim.S.slotSpins} ({sim.S.jackpots} jackpots), wishes granted by the well {sim.S.wellWishes}");
             Application.Quit();
+        }
+
+        /// <summary>The tour: each late mall's own machine (TechDef.MallOnly), built in its mall and caught at work.</summary>
+        IEnumerator MallMachineShots(int m)
+        {
+            if (m < 2 || m > 5) yield break;
+            BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+            foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock && sim.TechInThisMall(t)) sim.DebugSetTech(t.Id, 1);
+            sim.DebugSetDepth(0.25);
+            for (int i = 0; i < 6; i++) sim.Place(D("gen_solar"), 20 + (i % 3) * 3, -27 + (i / 3) * 3, 0, true);
+            if (m == 2)
+            {
+                // Galleria Aurelia: a cork cannon behind the rim lobs slabs over a pump line
+                sim.Place(D("dig_cannon"), 17, -1, 3, true);
+                sim.Place(D("intake_pump"), 11, -3, 3, true);
+                sim.Place(D("proc_sorter"), 12, -3, 1, true);
+                sim.Place(D("hopper2"), 14, -3, 1, true);
+                view.Player.Place(new Vector3(15f, 0.05f, -10f), -20, 0);
+                yield return LookAtSmooth(new Vector3(11.5f, 2.2f, 0));
+                yield return new WaitForSeconds(2.5f);
+                sim.DebugFireCannons();
+                yield return null;
+                yield return Shot("40_aurelia_cannon");
+                view.Player.Place(new Vector3(8.7f, 0.95f, 2.2f), -110, -25);
+                yield return LookAtSmooth(view.Fountain.SurfacePoint(4.6f, 0.4f));
+                yield return new WaitForSeconds(0.8f);
+                sim.DebugFireCannons();
+                yield return new WaitForSeconds(0.45f);
+                yield return Shot("41_aurelia_splash");
+            }
+            else if (m == 3)
+            {
+                // Skyport: a borer at the rim with no line; drones fly its chunks to a carousel line at the back
+                sim.Place(D("dig_borer"), -13, 0, 1, true);
+                sim.Place(D("carousel"), -24, 10, 0, true);
+                sim.Place(D("proc_tumbler"), -24, 13, 0, true);
+                sim.Place(D("proc_sorter"), -24, 15, 0, true);
+                sim.Place(D("hopper2"), -24, 17, 0, true);
+                sim.DebugSetTech("carousel_tags", 2);
+                view.Player.Place(new Vector3(-26f, 0.05f, -3f), 45, 0);
+                yield return LookAtSmooth(new Vector3(-17.5f, 2.4f, 5f));
+                double trips0 = sim.S.droneTrips;
+                for (float w = 0; w < 15 && sim.S.droneTrips <= trips0; w += Time.deltaTime) yield return null;
+                yield return new WaitForSeconds(1.5f);
+                yield return Shot("42_skyport_carousel");
+                terminal.Open();
+                terminal.SelectTech("carousel_tags");
+                yield return Shot("46_terminal_mall_only");
+                terminal.Close();
+                view.Build.SetActive(true);
+                buildMenu.Open();
+                yield return Shot("47_catalogue_skyport");
+                buildMenu.Close();
+                view.Build.SetActive(false);
+            }
+            else if (m == 4)
+            {
+                // the Lucky Lagoon: rig → slot machine → hopper, then 7-7-7
+                sim.Place(D("dig_rig"), 11, -1, 3, true);
+                var slots = sim.Place(D("proc_slots"), 12, 0, 1, true);
+                sim.Place(D("hopper2"), 14, 0, 1, true);
+                view.Player.Place(new Vector3(13.2f, 0.05f, -5f), 0, 0);
+                yield return LookAtSmooth(new Vector3(12.6f, 1.5f, 0));
+                double spins0 = sim.S.slotSpins;
+                for (float w = 0; w < 20 && sim.S.slotSpins < spins0 + 2; w += Time.deltaTime) yield return null;
+                yield return Shot("43_lagoon_slots");
+                yield return LookAtSmooth(new Vector3(10.5f, 2.3f, 0), 0.2f);
+                if (slots != null) sim.DebugJackpot(slots);
+                yield return new WaitForSeconds(0.35f);
+                yield return Shot("44_lagoon_jackpot");
+            }
+            else
+            {
+                // Eternity Plaza: the Old Well pulls in a wish nobody caught
+                sim.Place(D("wishing_well"), -12, 1, 1, true);
+                view.Player.Place(new Vector3(-11f, 0.05f, -6f), 20, 0);
+                yield return LookAtSmooth(new Vector3(-8.2f, 1.8f, 1f));
+                yield return new WaitForSeconds(0.5f);
+                double granted = sim.S.wellWishes;
+                sim.DebugSpawnWish(-4.5f, 1.5f);
+                for (float w = 0; w < 8 && sim.S.wellWishes <= granted; w += Time.deltaTime) yield return null;
+                yield return new WaitForSeconds(0.2f);
+                yield return Shot("45_eternity_well");
+            }
         }
 
         IEnumerator Watchdog(float deadline)
@@ -1267,6 +1451,9 @@ namespace WishExtractor.Game
             ClickSelectable(FindButton("Close"));
             yield return null;
 
+            // ── the late malls' own machines: sold in their own mall only, and each one works ──
+            yield return MallMachineChecks();
+
             // menus
             modals.OpenSettings();
             yield return new WaitForSeconds(0.3f);
@@ -1302,6 +1489,145 @@ namespace WishExtractor.Game
             Debug.Log($"[UITEST] done: {uiPass} passed, {uiFail} failed");
             Save();
             Application.Quit();
+        }
+
+        /// <summary>Jump to a late mall (tests only) with its regular and mall-only buildings researched and the lights on.</summary>
+        IEnumerator JumpToMall(int m)
+        {
+            sim.DebugJumpToMall(m);
+            view.RebuildMall();
+            sfx.PlayMusicFor(sim.Mall, sim.Remodel);
+            foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock && !t.MallOnly) sim.DebugSetTech(t.Id, 1);
+            var solar = Content.Buildables[Content.BuildIndex["gen_solar"]];
+            for (int i = 0; i < 6; i++) sim.Place(solar, 20 + (i % 3) * 3, -27 + (i / 3) * 3, 0, true);
+            yield return new WaitForSeconds(0.6f);
+        }
+
+        /// <summary>uitest: Galleria Aurelia's cannon (bought and built through the UI), Skyport's carousel, the Lagoon's
+        /// slot machine and Eternity's Old Well; none of them is for sale anywhere else.</summary>
+        IEnumerator MallMachineChecks()
+        {
+            BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
+
+            // Neon Galaxy doesn't sell Galleria Aurelia's cannon
+            terminal.Open(TechBranch.Intake);
+            yield return new WaitForSeconds(0.3f);
+            Check(FindButton("Node:unlock_pump") != null && FindButton("Node:unlock_cannon") == null, "the champagne cannon isn't sold outside Galleria Aurelia");
+            terminal.Close();
+            yield return null;
+
+            // Galleria Aurelia: buy Champagne Blasting at the terminal, build a cannon behind the rim, fire it
+            yield return JumpToMall(2);
+            sim.DebugSetDepth(0.25);
+            int ci = Content.TechIndex["unlock_cannon"];
+            sim.DebugAddCash(sim.TechCost(ci) + D("dig_cannon").Cost * sim.Scale * 3);
+            terminal.Open(TechBranch.Intake);
+            yield return new WaitForSeconds(0.3f);
+            Check(ClickSelectable(FindButton("Node:unlock_cannon")), "Galleria Aurelia's terminal sells Champagne Blasting");
+            yield return null;
+            Check(ClickSelectable(FindButton("Buy", b => b.interactable)), "install Champagne Blasting");
+            yield return null;
+            Check(sim.TechLevel(ci) == 1 && sim.BuildUnlocked(D("dig_cannon")), "the champagne cork cannon is researched");
+            yield return Shot("ui_mall_only_tech");
+            ClickSelectable(FindButton("Close"));
+            yield return null;
+            view.Player.Place(new Vector3(13.5f, 0.05f, -3.5f), 0, 0);
+            yield return PickFromCatalogue("dig_cannon");
+            yield return AimAt(new Vector3(22.1f, 0, 5.9f));
+            Check(!view.Build.Valid && view.Build.Reason != null && view.Build.Reason.StartsWith("Too far"), $"a cannon 23 m out is out of range ({view.Build.Reason})");
+            yield return AimAt(new Vector3(16.1f, 0, 0.9f));
+            Check(view.Build.Valid && view.Build.ARot == 3 && view.Build.AX == 16 && view.Build.AZ == 0,
+                  $"the cannon stands back from the rim, aimed at the fountain ({view.Build.AX},{view.Build.AZ}) rot {view.Build.ARot} {view.Build.Reason}");
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("dig_cannon") == 1, "click builds a champagne cork cannon");
+            SetFlag(i => i.Hotbar = 1);
+            double pops0 = sim.S.cannonBlasts;
+            sim.DebugFireCannons();
+            yield return new WaitForSeconds(1.5f);
+            Check(sim.S.cannonBlasts > pops0 && sim.Loose.Exists(l => Content.Items[l.Type].Id == "rinsed"),
+                  $"pop: the cannon blasts a slab into the water, already rinsed ({sim.S.cannonBlasts - pops0} pops)");
+            yield return AimAt(new Vector3(10f, 1f, 0.5f));
+            yield return Shot("ui_cannon");
+
+            // Skyport: the carousel is in the catalogue (the cannon isn't), and its drones empty a lineless borer
+            yield return JumpToMall(3);
+            sim.DebugSetDepth(0.25);
+            sim.DebugSetTech("unlock_carousel", 1);
+            sim.DebugAddCash(D("carousel").Cost * sim.Scale * 3);
+            Check(!sim.BuildUnlocked(D("dig_cannon")) && sim.BuildUnlocked(D("carousel")), "the cannon stayed in Aurelia; Skyport builds carousels");
+            view.Player.Place(new Vector3(-20f, 0.05f, 6f), 0, 0);
+            view.Build.Rot = 0;
+            SetFlag(i => i.Catalogue = true);
+            yield return null;
+            yield return new WaitForSeconds(0.15f);
+            Check(buildMenu.IsOpen && FindButton("Build:carousel") != null && FindButton("Build:dig_cannon") == null, "Skyport's catalogue lists the carousel and not the cannon");
+            yield return Shot("ui_catalogue_skyport");
+            Check(ClickSelectable(FindButton("Build:carousel")), "pick carousel from the build catalogue");
+            yield return null;
+            Check(!buildMenu.IsOpen && view.Build.Selected?.Id == "carousel", "holding carousel");
+            yield return AimAt(new Vector3(-22.4f, 0, 11.6f));
+            Check(view.Build.Valid && view.Build.AX == -24 && view.Build.AZ == 10, $"the carousel ghost fits at the back ({view.Build.AX},{view.Build.AZ}) {view.Build.Reason}");
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("carousel") == 1 && sim.At(-24, 10)?.Def.Id == "carousel", "click builds a baggage claim carousel");
+            SetFlag(i => i.Hotbar = 1);
+            sim.Place(D("proc_tumbler"), -24, 13, 0, true);
+            sim.Place(D("proc_sorter"), -24, 15, 0, true);
+            sim.Place(D("hopper2"), -24, 17, 0, true);
+            var borer = sim.Place(D("dig_borer"), -13, 0, 1, true);
+            float waitDrone = 0;
+            while (sim.S.droneTrips < 1 && waitDrone < 30) { waitDrone += Time.deltaTime; yield return null; }
+            Check(borer != null && sim.S.droneTrips >= 1 && GameObject.Find("Baggage Drone") != null,
+                  $"a baggage drone flies the borer's chunks to the carousel ({sim.S.droneTrips} trips, {waitDrone:0}s)");
+            yield return LookAtSmooth(new Vector3(-18f, 2.5f, 5f));
+            yield return Shot("ui_carousel");
+
+            // the Lucky Lagoon: a jackhammer rig feeds a slot machine, which spins gunk into loot, then hits 7-7-7
+            yield return JumpToMall(4);
+            sim.DebugSetDepth(0.25);
+            sim.DebugSetTech("unlock_slots", 1);
+            sim.Place(D("dig_rig"), 11, -1, 3, true);
+            var slots = sim.Place(D("proc_slots"), 12, 0, 1, true);
+            sim.Place(D("hopper2"), 14, 0, 1, true);
+            view.Player.Place(new Vector3(13.2f, 0.05f, -5f), 0, 0);
+            yield return LookAtSmooth(new Vector3(12.6f, 1.5f, 0));
+            float waitSpin = 0;
+            while (sim.S.slotSpins < 1 && waitSpin < 40) { waitSpin += Time.deltaTime; yield return null; }
+            Check(slots != null && sim.S.slotSpins >= 1, $"the slot machine spins the rig's gunk ({sim.S.slotSpins} spins, {waitSpin:0}s)");
+            double jackpots0 = sim.S.jackpots;
+            if (slots != null) sim.DebugJackpot(slots);
+            yield return new WaitForSeconds(0.4f);
+            Check(sim.S.jackpots > jackpots0 && sim.Loose.Exists(l => Content.Items[l.Type].Id == "jackpot"), "7-7-7 sprays jackpot tokens over the fountain");
+            yield return Shot("ui_jackpot");
+
+            // Eternity Plaza: one Old Well at the rim, which grants the wishes nobody catches
+            yield return JumpToMall(5);
+            sim.DebugSetTech("unlock_well", 1);
+            sim.DebugAddCash(D("wishing_well").Cost * sim.Scale * 3);
+            view.Player.Place(new Vector3(-14f, 0.05f, -3f), 0, 0);
+            yield return PickFromCatalogue("wishing_well");
+            yield return AimAt(new Vector3(-10.9f, 0, 0.9f));
+            Check(view.Build.Valid && view.Build.ARot == 1 && view.Build.AX == -12 && view.Build.AZ == 1,
+                  $"the well faces the fountain at the rim ({view.Build.AX},{view.Build.AZ}) rot {view.Build.ARot} {view.Build.Reason}");
+            Press(false, true);
+            yield return null;
+            yield return null;
+            Check(sim.CountBuilt("wishing_well") == 1, "click builds the Old Well");
+            yield return AimAt(new Vector3(-12.5f, 0, -1.6f));
+            Check(!view.Build.Valid && view.Build.Reason != null && view.Build.Reason.Contains("only one Old Well"), $"there's only one Old Well ({view.Build.Reason})");
+            SetFlag(i => i.Hotbar = 1);
+            yield return LookAtSmooth(new Vector3(-8f, 1.2f, 1f));
+            double dugW = sim.S.dug, grantedW = sim.S.wellWishes;
+            var wish = sim.DebugSpawnWish(-4.5f, 1.5f);
+            float waitWish = 0;
+            while (sim.S.wellWishes <= grantedW && waitWish < 8) { waitWish += Time.deltaTime; yield return null; }
+            Check(wish != null && sim.S.wellWishes > grantedW && sim.S.dug > dugW,
+                  $"an uncaught wish falls into the well and crust dissolves ({sim.S.dug - dugW:0} scoops, {waitWish:0.0}s)");
+            yield return new WaitForSeconds(0.3f);
+            yield return Shot("ui_well");
         }
     }
 }

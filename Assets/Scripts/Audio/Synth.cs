@@ -340,6 +340,117 @@ namespace WishExtractor.Audio
             return b;
         }
 
+        // ── the mall-only machines ─────────────────────────────────────────
+
+        /// <summary>A champagne cork: a hollow pop, then the fizz.</summary>
+        public static float[] Pop()
+        {
+            var b = Buffer(1.1f);
+            var r = new Random(21);
+            double ph = 0;
+            float lp = 0, hp = 0, prev = 0;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                // the pop: a falling "thoonk" and a short burst of filtered noise
+                ph += (520 * Math.Exp(-t * 18) + 140) / Rate;
+                float n = (float)(r.NextDouble() * 2 - 1);
+                lp += (n - lp) * 0.35f;
+                float pop = Sin(ph) * Env(t, 0.001f, 0.035f) * 0.9f + lp * Env(t, 0.0005f, 0.012f) * 1.4f;
+                // the fizz: high hiss with little crackles, fading away
+                hp = 0.92f * (hp + n - prev);
+                prev = n;
+                float crackle = r.NextDouble() < 0.004 ? (float)(r.NextDouble() * 2 - 1) * 0.6f : 0;
+                float fizz = t > 0.04f ? (hp * 0.22f + crackle) * Env(t - 0.04f, 0.05f, 0.35f) : 0;
+                b[i] = pop + fizz;
+            }
+            Normalize(b, 0.8f);
+            Fade(b, 0.05f);
+            return b;
+        }
+
+        /// <summary>Slot reels: a rattle of clicks slowing down, then a ding.</summary>
+        public static float[] Reels()
+        {
+            var b = Buffer(0.7f);
+            float at = 0, gap = 0.028f;
+            int k = 0;
+            while (at < 0.5f)
+            {
+                AddClink(b, at, 2400 + (k % 3) * 300, 0.25f, 0.01f);
+                at += gap;
+                gap *= 1.07f;
+                k++;
+            }
+            Tone(b, 0.52f, Midi(88), 0.35f, 0.002f, 0.12f, 1.5f, 3.5);
+            Normalize(b, 0.45f);
+            Fade(b);
+            return b;
+        }
+
+        /// <summary>7-7-7: a tumbling bell arpeggio over a whooping siren.</summary>
+        public static float[] Jackpot()
+        {
+            var b = Buffer(2.4f);
+            int[] notes = { 84, 88, 91, 96, 91, 96, 100, 103, 100, 103, 108 };
+            for (int i = 0; i < notes.Length; i++) Tone(b, i * 0.09f, Midi(notes[i]), 0.35f, 0.002f, 0.28f, 1.8f, 3.5);
+            double ph = 0;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                double f = 700 + 350 * Math.Sin(t * Math.PI * 5);
+                ph += f / Rate;
+                b[i] += Sin(ph) * 0.12f * Env(t, 0.05f, 1.2f);
+            }
+            for (int k = 0; k < 14; k++) AddClink(b, 0.6f + k * 0.08f, 2800 + (k % 4) * 350, 0.12f, 0.06f);
+            Normalize(b, 0.8f);
+            Fade(b, 0.1f);
+            return b;
+        }
+
+        /// <summary>A cargo drone setting down: rotor whirr rising then settling.</summary>
+        public static float[] DroneWhirr()
+        {
+            var b = Buffer(0.8f);
+            var r = new Random(33);
+            double ph = 0;
+            float lp = 0;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                double f = 150 + 60 * Math.Sin(t * 5) - t * 40;
+                ph += f / Rate;
+                float saw = (float)(ph % 1) * 2 - 1;
+                lp += ((float)(r.NextDouble() * 2 - 1) - lp) * 0.1f;
+                float trem = 0.7f + 0.3f * (float)Math.Sin(t * 2 * Math.PI * 38);
+                float env = t < 0.15f ? t / 0.15f : Math.Max(0, 1 - (t - 0.15f) / 0.65f);
+                b[i] = (saw * 0.3f + lp * 0.5f) * trem * env;
+            }
+            Normalize(b, 0.35f);
+            Fade(b);
+            return b;
+        }
+
+        /// <summary>The Old Well: a deep bronze bell, a drip, and a long ringing tail.</summary>
+        public static float[] WellChime()
+        {
+            var b = Buffer(2.6f);
+            Tone(b, 0, Midi(43), 0.5f, 0.004f, 1.2f, 2.2f, 1.41);
+            Tone(b, 0, Midi(55), 0.3f, 0.004f, 1.6f, 1.2f, 2.76);
+            Tone(b, 0.02f, Midi(74), 0.18f, 0.003f, 0.9f, 0.8f, 3.1);
+            // a drop hits the water somewhere far below
+            double ph = 0;
+            for (int i = (int)(0.35f * Rate); i < b.Length; i++)
+            {
+                float t = i / (float)Rate - 0.35f;
+                ph += (1200 + 1600 * t) / Rate;
+                b[i] += Sin(ph) * Env(t, 0.002f, 0.05f) * 0.25f;
+            }
+            Normalize(b, 0.6f);
+            Fade(b, 0.2f);
+            return b;
+        }
+
         public static float[] Rumble()
         {
             var b = Buffer(1.8f);

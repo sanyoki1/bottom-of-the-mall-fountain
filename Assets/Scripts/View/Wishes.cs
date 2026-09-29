@@ -17,7 +17,8 @@ namespace WishExtractor.View
             public Transform T, Halo, Core;
             public Vector3 From, Hover;
             public float Seed, Out;
-            public int Mode;   // 0 alive, 1 caught, 2 escaped
+            public int Mode;   // 0 alive, 1 caught, 2 escaped, 3 pulled into a compressor or the Old Well
+            public Color Sparks;
         }
 
         readonly Dictionary<int, Orb> orbs = new Dictionary<int, Orb>();
@@ -112,8 +113,8 @@ namespace WishExtractor.View
             dying.Add(o);
         }
 
-        /// <summary>A wish nobody caught gets sucked into a Wish Compressor at dest.</summary>
-        public void Compressed(ActiveWish w, Vector3 dest)
+        /// <summary>A wish nobody caught gets sucked into a Wish Compressor (or the Old Well) at dest.</summary>
+        public void Compressed(ActiveWish w, Vector3 dest, Color? sparks = null)
         {
             if (!orbs.TryGetValue(w.Uid, out var o)) return;
             orbs.Remove(w.Uid);
@@ -121,6 +122,7 @@ namespace WishExtractor.View
             o.Out = 0;
             o.From = o.T.position;
             o.Hover = dest;
+            o.Sparks = sparks ?? new Color(0.8f, 0.6f, 1f);
             Object.Destroy(o.T.GetComponent<SphereCollider>());
             dying.Add(o);
         }
@@ -172,7 +174,7 @@ namespace WishExtractor.View
                     float e = t * t;
                     o.T.position = Vector3.Lerp(o.From, o.Hover, e) + Vector3.up * Mathf.Sin(t * Mathf.PI) * 2.5f;
                     o.T.localScale = Vector3.one * Mathf.Max(0.05f, 1 - e * 0.8f);
-                    if (t >= 1) { ctx.Fx.Sparks(o.T.position, new Color(0.8f, 0.6f, 1f), 12, 3f, 0.1f, 0.5f); Object.Destroy(o.T.gameObject); dying.RemoveAt(i); continue; }
+                    if (t >= 1) { ctx.Fx.Sparks(o.T.position, o.Sparks, 12, 3f, 0.1f, 0.5f); Object.Destroy(o.T.gameObject); dying.RemoveAt(i); continue; }
                 }
                 else
                 {

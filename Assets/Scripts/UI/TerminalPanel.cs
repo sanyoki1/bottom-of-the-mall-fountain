@@ -167,13 +167,14 @@ namespace WishExtractor.UI
             cards.Clear();
             int maxCol = 0, maxRow = 0;
             var inBranch = new List<TechDef>();
-            foreach (var t in Content.Techs) if (t.Branch == branch) { inBranch.Add(t); maxCol = Math.Max(maxCol, t.Col); maxRow = Math.Max(maxRow, t.Row); }
+            // another mall's own machines don't exist here (TechDef.MallOnly)
+            foreach (var t in Content.Techs) if (t.Branch == branch && sim.TechInThisMall(t)) { inBranch.Add(t); maxCol = Math.Max(maxCol, t.Col); maxRow = Math.Max(maxRow, t.Row); }
             graph.sizeDelta = new Vector2(Pad * 2 + maxCol * StepX + CardW, Pad * 2 + maxRow * StepY + CardH);
             // connection lines first, so cards draw over them
             foreach (var t in inBranch)
                 foreach (var r in t.Requires)
                 {
-                    if (!Content.TechIndex.TryGetValue(r, out int ri) || Content.Techs[ri].Branch != branch) continue;
+                    if (!Content.TechIndex.TryGetValue(r, out int ri) || Content.Techs[ri].Branch != branch || !sim.TechInThisMall(Content.Techs[ri])) continue;
                     var a = NodePos(Content.Techs[ri]) + new Vector2(CardW / 2, -CardH / 2);
                     var b = NodePos(t) + new Vector2(CardW / 2, -CardH / 2);
                     var line = UIKit.Image(graph, "Line", null, sim.TechLevel(ri) > 0 ? Pal.A(Green, 0.55f) : Pal.A(Faint, 0.8f));
@@ -219,6 +220,14 @@ namespace WishExtractor.UI
         {
             selected = i;
             Refresh();
+        }
+
+        /// <summary>Opens a tech's branch with it selected (the tour's screenshots).</summary>
+        public void SelectTech(string id)
+        {
+            if (!Content.TechIndex.TryGetValue(id, out int i)) return;
+            SetBranch(Content.Techs[i].Branch);
+            if (cards.ContainsKey(i)) Select(i);
         }
 
         void BuySelected()
@@ -271,6 +280,10 @@ namespace WishExtractor.UI
                 case TechKind.DigPower: return $"+{t.Value * 100:0}% scoops per swing and per dig rig, per level";
                 case TechKind.RelicRate: return $"+{t.Value * 100:0}% relic chance per level";
                 case TechKind.ChunkSize: return $"Gunk chunks grow by {t.Value * 100:0}% of their original size per level (more crust and loot in each): swings and dig rigs get through the crust that much faster";
+                case TechKind.CannonSlab: return $"+{t.Value:0} chunks in every champagne-cannon blast, per level (it starts at {Balance.CannonChunks})";
+                case TechKind.DroneCount: return $"+{t.Value:0} cargo drone for every baggage carousel, per level";
+                case TechKind.SlotOdds: return $"Slot spins lose {t.Value * 100:0}% less often per level (the cherries get it)";
+                case TechKind.WellDepth: return $"Every granted wish dissolves {t.Value * 100:0}% more crust, per level";
                 case TechKind.StartCash: return $"Start every contract with ${t.Value:0} per level (× the mall's prices)";
                 case TechKind.StartCarry: return "Start every contract already owning container tier = level";
                 case TechKind.StartUnlocks: return "Start every contract with the basic kit researched";
@@ -339,6 +352,7 @@ namespace WishExtractor.UI
             buyBtn.Interactable = can;
             buyBtn.Label.text = !sim.TechUnlocked(selected) ? "LOCKED" : !sim.CanAfford(selected) ? (st.LuckyPennies ? "NEED MORE LUCKY PENNIES" : st.WishTokens ? "NEED MORE WISH TOKENS" : "NEED MORE CASH") : L > 0 ? "UPGRADE" : "INSTALL";
             if (st.Persistent) dKind.text = "HEAD OFFICE PERK  ·  KEPT FOREVER";
+            if (st.MallOnly) dKind.text = $"{sim.Mall.Name.ToUpperInvariant()} ONLY  ·  NOT KEPT";
         }
     }
 }
