@@ -85,9 +85,22 @@ The bot (`Tools/BalanceSim/Bot.cs`):
 - `dotnet run -c Release --project Tools/BalanceSim -- machines` checks all four in the Core: sold only in their
   own mall (and back on its remodel), placement rules (range, facing, one well), and that each one works.
 
-Balance: `fit --apply` with the machine-aware bot was still running when this was first committed; the fitted
-crusts and the seed checks follow in the next commit. Unfitted (session 5's crusts, seed 1234) the machines
-made Aurelia 3.18 h, Skyport 2.41 h, the Lagoon 2.10 h and Eternity 4.62 h: 19.4 h in all, so the re-fit is needed.
+Balance:
+- On session 5's M6 crusts the machines cut the campaign to 19.4 h (seed 1234: Aurelia 3.18 h, Skyport 2.41 h, the
+  Lagoon 2.10 h, Eternity 4.62 h), so `fit --apply` ran again with the machine-aware bot. Crusts now 175,300 /
+  24.8M / 166.3M / 658.9M / 1.45B / 592.5M scoops (M6: 175,300 / 24.8M / 93.7M / 206.3M / 330.2M / 488.1M); fit
+  passes 3.35, 3.73, 4.20, 4.71, 5.29, 5.29 h.
+- Full runs on it: engaged seed 1234 **26.55 h** (3.18 · 3.95 · 4.21 · 4.68 · 5.23 · 5.30), seeds 1–5 26.47,
+  27.01, 26.28, 26.28, 26.49 h; casual seed 1234 **27.91 h** (3.75 · 4.10 · 4.55 · 4.81 · 5.35 · 5.34).
+- When the machines arrive (engaged, six seeds; casual in brackets): the cannon 58–63 min into Aurelia (70), the
+  carousel 34–37 min into Skyport (41), the slot machine 25–29 min into the Lagoon (32), the Old Well 24–26 min
+  into Eternity (28). Each mall's levelled machine tech follows within 3–10 minutes.
+- Lines at the end (every seed): Aurelia 2 claws, 12 pump → coin sorter lines and 8 cannons; Skyport 2 claws,
+  12 bare borers at the rim and 30 carousel lines at the back; the Lagoon 2 claws and 12 borer → slot machine
+  lines; Eternity 2 claws, 12 borer lines and the Old Well, which granted ~12,000 wishes (9,900 casual).
+- Longest gap between purchases (engaged, six seeds): Crestview 20–24 min, Neon Galaxy 13–14.5, Aurelia 6–7.5,
+  Skyport 5.5, the Lagoon 3–3.5, Eternity 3–3.7; casual 26, 14, 9, 5.5, 4 and 3 min. Crestview and Neon Galaxy
+  are unchanged from M6 (no machines there).
 
 Tour and uitest (written, compile-checked, not run):
 - Tour: 8 new shots (`40`–`47`, see NEXT), taken in each mall right after its overview shot
@@ -184,8 +197,8 @@ Tour and uitest (written, compile-checked, not run):
   seeds, casual 27.5–28.1 h over three. Longest gap between purchases 12 min (Crestview), 10.5 min (Neon),
   under 5 min from Aurelia on; a new layer every ~20 min in Crestview up to ~45 min in Eternity; late-mall
   income tens of $M per minute.
-- Session 5 ran the seed and casual checks and re-fitted after its fixes: see "Session 5" above for the
-  current numbers.
+- Session 5 ran the seed and casual checks and re-fitted after its fixes (see "Session 5" above), then re-fitted
+  again for the mall machines: "M7" above has the current numbers.
 - **Early game** (Crestview; unaffected by the final bot and fit changes). Engaged, six seeds: cup and scrub
   in under 30 s, pail by ~1 min, bucket median ~7 min (40 s–15 min), hamster wheel ~10 min (40 s–17 min),
   skimmer ~21 min, first line ~37 min (24–45). Casual, four seeds: bucket 7–15 min, hamster 10–21, skimmer
