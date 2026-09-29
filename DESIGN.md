@@ -128,11 +128,11 @@ Rules in `Core/SimMallMachines.cs`, models and animation in `View/MallMachines.c
   capped by rubble, and the factory ticks at a fixed step, so a mall takes as long as its factory needs.
 - **Something to buy all the way down.** Bigger Chunks (polynomial price, linear effect) keeps cash useful
   after the rest of the tree is bought, without the runaway growth an exponential sink causes in rich malls.
-- **Measured pacing** (engaged bot, seed 1234, a full run on the current fit, mall machines included):
-  Crestview 3.18 h · Neon Galaxy 3.95 h · Galleria 4.21 h · Skyport 4.68 h · Lucky Lagoon 5.23 h · Eternity
-  5.30 h = **26.55 h**. Seeds 1–5 spread 26.28–27.01 h; the casual bot took 27.91 h. Longest gap between
-  purchases: 20–24 min in Crestview (around 2h15), 13–14.5 min in Neon Galaxy, under 7.5 min from the third
-  mall on. The machines arrive 25–60 minutes into their malls.
+- **Measured pacing** (engaged bot, seed 1234, a full run on the current fit, mall machines and Doug's statue
+  check included): Crestview 3.35 h · Neon Galaxy 3.75 h · Galleria 4.21 h · Skyport 4.79 h · Lucky Lagoon
+  5.21 h · Eternity 5.24 h = **26.55 h**. Seeds 1–5 spread 26.11–26.61 h; the casual bot took 28.40 h.
+  Longest gap between purchases: 21–24 min in Crestview (around 2h20), 13–14.5 min in Neon Galaxy, under
+  7.5 min from the third mall on. The machines arrive 25–60 minutes into their malls.
 - **Early game** (Crestview, engaged bot, median of six seeds): cup and first beautification in under 30 s,
   bucket ~7 min, hamster wheel ~10 min, skimmer ~21 min, first skimmer line ~37 min.
 

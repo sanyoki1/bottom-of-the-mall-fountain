@@ -47,8 +47,8 @@ Measured with the balance simulator (a bot playing the real game rules, see belo
 
 | Player profile | Six malls (the campaign) |
 |---|---|
-| Engaged bot (sprints, catches 80% of wishes, saves for the next big upgrade, fills the rim with lines, builds each mall's own machine) | **26h 33m** (seed 1234; 26.3–27.0 h over seeds 1–5) |
-| Casual bot (walks, reacts slower, catches 45% of wishes, idles now and then; builds the same factory) | 27h 55m (seed 1234) |
+| Engaged bot (sprints, catches 80% of wishes, saves for the next big upgrade, fills the rim with lines, builds each mall's own machine) | **26h 33m** (seed 1234; 26.1–26.6 h over seeds 1–5) |
+| Casual bot (walks, reacts slower, catches 45% of wishes, idles now and then, misses some of Doug's looks; builds the same factory) | 28h 24m (seed 1234) |
 
 After the sixth mall the game continues with Remodel contracts (every mall again, deeper and richer).
 

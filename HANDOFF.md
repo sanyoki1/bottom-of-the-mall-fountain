@@ -90,9 +90,15 @@ also have some kind of minigame."
 
 ### Balance
 - On session 6's crusts, with the statue check: engaged seed 1234 26.40 h, seeds 1–5 25.92–26.47 h, casual
-  28.09 h (all ≥ 24 h). The engaged bot got a little faster: it now freezes and is rarely fined, where before it
-  was fined whenever Doug caught it wading. `fit --apply` was still running when this was first committed; the
-  re-fitted crusts and the seed checks follow in the next commit.
+  28.09 h. The engaged bot got a little faster (Crestview down to 2.75–3.20 h): it now freezes and is rarely
+  fined, where before it was fined whenever Doug caught it wading. So `fit --apply` ran again: crusts 258,100 /
+  22.1M / 171.3M / 681.9M / 1.44B / 587.9M scoops (Crestview +47%), fit passes 3.28, 3.71, 4.25, 4.79, 5.23,
+  5.25 h.
+- Full runs on it: engaged seed 1234 **26.55 h** (3.35 · 3.75 · 4.21 · 4.79 · 5.21 · 5.24), seeds 1–5 26.11,
+  26.52, 26.32, 26.11, 26.61 h; casual seed 1234 **28.40 h** (4.07 · 4.26 · 4.58 · 4.91 · 5.30 · 5.28). `machines`
+  and `guard` pass. Lines at the end are unchanged from M7.
+- Longest gap between purchases (engaged, six seeds): Crestview 21–24 min, Neon Galaxy 13–14.5, Aurelia 5.5–7.5,
+  Skyport 5.5, the Lagoon 3–3.5, Eternity 3–3.3; casual 25, 15, 7, 5.5, 3.5 and 3 min.
 
 ### Tour and uitest (written, compile-checked, not run)
 - Tour: `31_guard_warning` became `31_guard_look`; `32_guard_fine` now catches you moving; new `37_statue_tip`
