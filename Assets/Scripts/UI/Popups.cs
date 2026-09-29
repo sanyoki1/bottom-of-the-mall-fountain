@@ -19,7 +19,7 @@ namespace WishExtractor.UI
         readonly Stack<Floater> floaterPool = new Stack<Floater>();
 
         // toasts
-        sealed class ToastCard { public RectTransform Rt; public CanvasGroup G; public float Age, Life; public float Y; }
+        sealed class ToastCard { public RectTransform Rt; public CanvasGroup G; public float Age, Life; public float Y, H; }
         readonly List<ToastCard> toasts = new List<ToastCard>();
         readonly Queue<(string title, string detail, Color color, string glyph, float life)> toastQueue = new Queue<(string, string, Color, string, float)>();
 
@@ -99,7 +99,11 @@ namespace WishExtractor.UI
             t.rectTransform.TL(64, 9, 406, 24);
             var s = UIKit.Label(rt, "Detail", d.detail, 14, Pal.Ink2, TextAnchor.UpperLeft, UIKit.Regular, true);
             s.rectTransform.TL(64, 33, 406, 30);
-            toasts.Add(new ToastCard { Rt = rt, G = g, Life = d.life, Y = 120 });
+            // grow the card to fit a detail that wraps (a fine, a mall machine's how-to) instead of spilling out of it
+            float h = Mathf.Max(66, 33 + s.preferredHeight + 12);
+            s.rectTransform.sizeDelta = new Vector2(406, h - 36);
+            rt.sizeDelta = new Vector2(480, h);
+            toasts.Add(new ToastCard { Rt = rt, G = g, Life = d.life, Y = 120, H = h });
         }
 
         // ── banner ────────────────────────────────────────────────────────
@@ -255,7 +259,7 @@ namespace WishExtractor.UI
                 t.G.alpha = a;
                 t.Y = Mathf.Lerp(t.Y, y, 1 - Mathf.Exp(-dt * 12));
                 t.Rt.anchoredPosition = new Vector2(20 - (1 - Mathf.Clamp01(t.Age / 0.25f)) * 30, t.Y);
-                y += 74;
+                y += t.H + 8;
             }
             for (int i = toasts.Count - 1; i >= 0; i--)
                 if (toasts[i].Age >= toasts[i].Life) { Object.Destroy(toasts[i].Rt.gameObject); toasts.RemoveAt(i); }

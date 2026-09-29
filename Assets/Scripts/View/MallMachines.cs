@@ -157,16 +157,26 @@ namespace WishExtractor.View
         {
             Color carpet = C(0x5A0A18), red = C(0xD8283A), gold = C(0xFFC83A), goldDk = C(0xC9A64A), chrome = C(0xD8DCE0), dark = C(0x14060A);
             k.Box(new Vector3(0, 0.1f, 0), new Vector3(1.9f, 0.2f, 1.9f), carpet);
-            // the cabinet: reels on both long sides (±x), so a line shows its luck to either aisle
-            k.Box(new Vector3(0, 1.15f, 0), new Vector3(1.3f, 1.9f, 1.6f), red);
+            // the cabinet: reels on both long sides (±x), so a line shows its luck to either aisle. Each side has
+            // an open bay (y 1.14..1.76, z ±0.6) the reels turn in, backed by a dark core that also hides the
+            // lower half of the dome; a solid cabinet box would bury the reels.
+            k.Box(new Vector3(0, 0.67f, 0), new Vector3(1.3f, 0.94f, 1.6f), red);
+            k.Box(new Vector3(0, 1.93f, 0), new Vector3(1.3f, 0.34f, 1.6f), red);
+            k.Box(new Vector3(0, 1.45f, 0), new Vector3(1.04f, 0.62f, 1.2f), dark);
+            for (int end = -1; end <= 1; end += 2)
+                k.Box(new Vector3(0, 1.45f, end * 0.7f), new Vector3(1.3f, 0.62f, 0.2f), red);
             k.Box(new Vector3(0, 0.23f, 0), new Vector3(1.34f, 0.06f, 1.64f), goldDk);
             k.Box(new Vector3(0, 2.1f, 0), new Vector3(1.34f, 0.06f, 1.64f), goldDk);
             k.Cylinder(new Vector3(0, 2.12f, 0), Quaternion.Euler(90, 0, 0), 0.62f, 1.6f, 20, gold);
             for (int side = -1; side <= 1; side += 2)
             {
                 float x = side * 0.66f;
-                k.Box(new Vector3(x, 1.45f, 0), new Vector3(0.03f, 0.62f, 1.2f), chrome);
-                k.Box(new Vector3(x + side * 0.005f, 1.45f, 0), new Vector3(0.02f, 0.5f, 1.08f), dark);
+                // a chrome frame round the reel bay
+                for (int e = -1; e <= 1; e += 2)
+                {
+                    k.Box(new Vector3(x, 1.45f + e * 0.31f, 0), new Vector3(0.03f, 0.03f, 1.24f), chrome);
+                    k.Box(new Vector3(x, 1.45f, e * 0.61f), new Vector3(0.03f, 0.62f, 0.03f), chrome);
+                }
                 k.Box(new Vector3(x, 0.95f, 0), new Vector3(0.03f, 0.26f, 1.0f), C(0x3FA0FF, 0.6f));
                 k.Box(new Vector3(x + side * 0.06f, 0.55f, 0), new Vector3(0.12f, 0.08f, 0.7f), chrome);
                 k.Box(new Vector3(x, 1.86f, 0), new Vector3(0.03f, 0.12f, 1.3f), C(0xFFF0A0, 0.9f));

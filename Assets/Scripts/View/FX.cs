@@ -59,16 +59,33 @@ namespace WishExtractor.View
             gr.enabled = true;
             gr.z = new ParticleSystem.MinMaxCurve(1.5f);
 
-            var coinMesh = new MeshKit().Cylinder(Vector3.zero, 0.12f, 0.024f, 12, Color.white).ToMesh("particle coin");
-            coins = MakePS("Coin Shower", Loot.LitNoEmit, true, coinMesh, 1.6f, 1500);
+            // Coins and confetti are mesh particles in WE/Lit, coloured per particle through the vertex colour. Not
+            // instanced: WE/Lit has no particle-instancing setup to read the colour from (Mats.Lit is instanced, for
+            // the item renderer). A little self-light keeps them readable from below, where only ambient light
+            // reaches (particle alpha is the emission mask; matte colours, alpha 0, like the dig spray's dirt, don't glow).
+            var partyMat = new Material(Loot.LitNoEmit) { name = "WE Lit (coins and confetti)", enableInstancing = false };
+            partyMat.SetFloat("_EmissionBoost", 0.3f);
+            var coinMesh = ByteColours(new MeshKit().Cylinder(Vector3.zero, 0.12f, 0.024f, 12, Color.white).ToMesh("particle coin"));
+            coins = MakePS("Coin Shower", partyMat, true, coinMesh, 1.6f, 1500);
             Fade(coins, 0.85f, true);
 
             bubbles = MakePS("Bubbles", Mats.NewGlow(TexKit.Ring, 1.4f, Color.white), false, null, -0.25f, 1500);
             Fade(bubbles, 1f);
-            confetti = MakePS("Confetti", Loot.LitNoEmit, true, new MeshKit().Box(Vector3.zero, new Vector3(0.12f, 0.01f, 0.07f), Color.white).ToMesh("confetti"), 0.35f, 1500);
+            confetti = MakePS("Confetti", partyMat, true, ByteColours(new MeshKit().Box(Vector3.zero, new Vector3(0.12f, 0.01f, 0.07f), Color.white).ToMesh("confetti")), 0.35f, 1500);
             Fade(confetti, 0.9f, true);
 
             rippleMat = Mats.NewGlow(TexKit.Ring, 2.2f, Color.white);
+        }
+
+        /// <summary>
+        /// A particle mesh's vertex colours must be 8-bit: the mesh-particle renderer reads them as bytes and multiplies
+        /// them into each particle's colour. MeshKit stores floats, and white (1.0 = bytes 00 00 80 3F) came out as
+        /// (0, 0, 0.5, 0.25): every coin in a shower was navy, every confetti flake blue, and nothing could glow.
+        /// </summary>
+        static Mesh ByteColours(Mesh m)
+        {
+            m.colors32 = m.colors32;
+            return m;
         }
 
         ParticleSystem MakePS(string name, Material mat, bool mesh, Mesh m, float gravity, int max)
@@ -98,6 +115,7 @@ namespace WishExtractor.View
             if (mesh)
             {
                 r.renderMode = ParticleSystemRenderMode.Mesh;
+                r.enableGPUInstancing = false;   // per-particle colours only reach WE/Lit through vertex colours
                 r.mesh = m;
                 r.alignment = ParticleSystemRenderSpace.Local;
                 main.startRotation3D = true;

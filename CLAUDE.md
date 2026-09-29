@@ -27,7 +27,12 @@ Ask Nico before any git commit.
 5. Balance: `dotnet run -c Release --project Tools/BalanceSim -- 40 1234 engaged` (and `casual`, and a few other seeds): every engaged total must stay ≥ 24 h.
 
 Players and editor runs block the shell until they exit; the tour and uitest quit on their own (watchdogs at 720 s / 780 s).
-Never kill processes; close a stray player window gracefully (WM_CLOSE).
+Never kill processes; close a stray player window gracefully (WM_CLOSE). Never start a build while a player from the
+same `Builds/` folder is still running.
+
+If Nico has the project open in the Unity Editor, batch builds fail ("another Unity instance is running with this
+project open"). Don't touch the Editor: build in a worktree (`git worktree add --detach ../wish-extractor-verify HEAD`,
+copy the changed files over, pass that folder as `-projectPath`; the first import takes about a minute).
 
 No Unity (cloud or Linux sessions): `bash Tools/UnityCompileCheck/unity6_compile.sh <extracted editor>` compiles every
 script (editor and player defines, `Assets/Editor` too) with Unity 6000.4.2f1's own compiler and assemblies, taken from
@@ -49,6 +54,9 @@ steps 1–4 on Windows.
 - The player is on the Ignore Raycast layer; wishes and Chad are triggers on layer 4 (Water), so they never block
   movement but the aim ray (SphereCast) finds them.
 - Additive `WE/Glow` multiplies by vertex alpha, so it can't draw matte (alpha 0) meshes; build ghosts use `WE/Ghost`.
+- **Mesh particles read vertex colours as bytes.** A MeshKit mesh (float colours) used as a particle mesh must go through
+  `FX.ByteColours`, and the particle renderer must not be GPU-instanced (WE/Lit has no particle-instancing setup).
+  Float white came out as (0, 0, 0.5, 0.25): every coin shower was navy and every confetti flake blue, from M1 to M7.
 - The tour and uitest drive input through the scripted `FPInput` (`Press`, `SetFlag`, `WalkTo`, `AimAt`); relative
   `-shots` paths must be made absolute.
 - **After changing any price, rate or multiplier, re-fit:** `dotnet run -c Release --project Tools/BalanceSim -- fit --apply`

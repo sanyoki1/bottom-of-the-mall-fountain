@@ -1,41 +1,80 @@
 # HANDOFF — Wish Extractor
 
-_Last updated 2026-09-29 (session 5, a cloud session on Linux with no Unity license: M6 compile-checked
-against the real Unity 6000.4.2f1 assemblies, fixed and re-fitted; then M7, one machine of their own for
-each of the four later malls, written, compile-checked, taught to the balance bot and re-fitted. Neither
-M6 nor M7 has been built or run in Unity yet)._
+_Last updated 2026-09-28 (session 6, on Nico's Windows PC with Unity 6000.4.2f1: M6 and M7 built and run
+in Unity for the first time; four problems found in the screenshots and fixed; build, tour, uitest and
+loadtest all pass)._
 
-## NEXT: verify M6 and M7 in Unity on Windows, then commit them as milestones
+## NEXT
 
-Sessions 4 and 5 ran in cloud containers where the Unity editor can't start (it needs an activated
-license, even in batch mode), so the checks that need Unity are still open:
+1. **Play it by hand.** Nobody has yet: the first 20 minutes and the start of a dig (session 4 changed the
+   early economy and digging, and only the bot and the scripted tour/uitest have played it), then `-dev` (F6
+   finishes a mall, F5 adds cash) to reach the later malls and use each machine. The new sounds (pop, reels,
+   jackpot, drone whirr, well chime, whistle, footsteps) have never been listened to.
+2. **Merge into `master`** (Nico's call): this branch now holds M6 and M7, verified in Unity.
+3. **Decide about the other line.** A separate cloud session left `claude/gracious-feynman-izvxcg`: M6 done
+   its own way, then a Core-only late-game redesign (mall Wonders, buried finds, frenzies, income-scaled
+   wishes) with no view yet. It branched from `master` in parallel with this branch, and the two diverge in
+   `Balance`, `ContentMalls`, `SimCrust`, `SimFactory` and the bot. Bringing its ideas here would mean
+   re-implementing them on this branch's economy and re-fitting. Port, park or delete it.
+4. Ideas and later work: see "Ideas / later" below (unchanged from session 5).
 
-1. Build (CLAUDE.md step 1). Every script compiles with Unity 6000.4.2f1's own compiler and assemblies
-   (`Tools/UnityCompileCheck/unity6_compile.sh`: 0 errors, editor and player defines, `Assets/Editor`
-   included), so the build should compile cleanly.
-2. Run `-autotour` (60 shots now) and look at every screenshot, especially the ones nobody has seen yet:
-   - M6: `18_build_catalogue` (six-column layout, see below), `30_terminal_security`, `31_guard_warning`,
-     `32_guard_fine`, `33_chad`, `34_chad_chased`, `35_goldfish` (the prompt should read "Put the goldfish
-     back in the water"), `36_goldfish_returned`.
-   - M7: `40_aurelia_cannon` (a cork in flight over the rim, smoke at the muzzle), `41_aurelia_splash`
-     (rinsed chunks and a champagne geyser in the water), `42_skyport_carousel` (drones between the borer at
-     the rim and the carousel at the back), `43_lagoon_slots` (reels spinning), `44_lagoon_jackpot` (confetti,
-     tokens flying into the fountain), `45_eternity_well` (a wish orb flying into the well, windlass turning),
-     `46_terminal_mall_only` (Priority Tags marked "SKYPORT TERMINAL C ONLY · NOT KEPT"),
-     `47_catalogue_skyport` (the carousel listed, the cannon not). The four models have never been rendered:
-     check their scale and orientation (the cannon and the well face the fountain; the slot machine shows its
-     reels on the sides of its line), what glows (vertex alpha), and that the carousel sign reads correctly
-     from both sides.
-3. Run `-uitest`: expect `[UITEST] done: 121 passed, 0 failed` (85 from M5, 11 from M6, 25 from M7: see
-   "M7" below). Then `-loadtest`: the uitest now ends in Eternity Plaza with the Old Well built.
-4. Play the first 20 minutes and the start of a dig by hand: session 4 changed the early economy and
-   digging (see below), and only the bot has played it. With `-dev` (F6 finishes a mall, F5 adds cash),
-   reach the later malls and try each machine by hand.
-5. Refresh `Docs/Screenshots` from the tour (they are still v1's overhead shots; the README no longer uses them).
+**Git:** `master` holds M1–M5 and the M6 WIP commit `4a99037`. This branch,
+`claude/wish-extractor-m6-verify-m6ww7w`, adds session 4's M6 (`93cae22`, first pushed as
+`claude/upbeat-dijkstra-ypw7nn`), session 5's verification pass (`0360e0d`) and M7 (`d495008`, `12e70ac`),
+then session 6's Unity fixes.
 
-**Git:** branch `master` holds M1–M5 and the M6 WIP commit `4a99037`. Session 4's M6 work is commit
-`93cae22` on `claude/upbeat-dijkstra-ypw7nn`; session 5 continued on `claude/wish-extractor-m6-verify-m6ww7w`
-(M6 verification pass `0360e0d`, then M7 on top). Unverified in Unity: review before merging into `master`.
+## Session 6 (Windows, Unity 6000.4.2f1)
+
+### Verified in Unity
+- Build: 0 errors, no script warnings, 85 MB. The cloud compile check was right: M6 and M7 compiled first time.
+- `-autotour`: 60 shots, no exceptions, 164.8 FPS in the busiest Crestview scene (RX 7800 XT). Every shot was
+  looked at, before and after the fixes. The tour's machine line: 2 cannon pops, 1 drone trip, 3 spins
+  (1 jackpot), 2 wishes granted by the well.
+- `-uitest`: **121 passed, 0 failed**, before and after the fixes.
+- `-loadtest`: the uitest's save comes back in Eternity Plaza with $16.6M, 401 loose items, 7 buildings (the Old
+  Well and six solar collectors), the pose, the objective and the achievements.
+- Balance on this PC (.NET 10): `machines` all OK; engaged seed 1234 **26.55 h**, casual **27.91 h**, identical
+  to the cloud runs (the Core is deterministic by seed).
+
+### Fixed (found in the first tour's screenshots)
+- **The slot machine's reels were buried.** The cabinet was one solid box with an opaque "window" box in front
+  of the reels, so no reel ever showed (`43_lagoon_slots` was a red box with a dark screen). The cabinet is now
+  built around an open, chrome-framed reel bay on each side, with a dark core behind the reels that also hides
+  the dome's lower half. Three reels a side show their symbols, spin while the line runs and land on 7-7-7
+  for a jackpot.
+- **Coin showers and confetti were navy and blue in every mall, probably since M1.** The mesh-particle renderer
+  reads a mesh's vertex colours as bytes and multiplies them into each particle's colour. MeshKit stores
+  floats, so white (1.0 = bytes `00 00 80 3F`) became (0, 0, 0.5, 0.25): gold coins came out navy, every
+  confetti flake a shade of blue, and nothing could glow. `FX.ByteColours` re-stores the two particle meshes as
+  `Color32`. The particle material is also no longer instanced (WE/Lit has no particle-instancing setup) and has
+  a small emission boost (0.3), so coins stay readable from below and in the dark Lucky Lagoon. A jackpot is now
+  a burst of gold coins and five-colour confetti.
+- **Toasts spilled out of their cards** whenever the detail wrapped (Doug's fine, the mall machines' how-to
+  toasts, several oddities and achievements). Each card now grows to fit its text, and the stack spaces cards
+  by height.
+- **Tour and uitest shots:** banners queued by the debug jumps (a new layer, the last mall's jackpot) covered
+  the machine shots and leaked into the next mall (Eternity's overview showed the Lagoon's "Comp Drink Crust").
+  The tour and the uitest's `JumpToMall` now clear banners after a jump. The cannon shot is now framed from
+  behind the cannon, down its line of fire. Real play already clears banners on a new contract (`OnPrestige`).
+
+### Looked at and left alone
+- The terminal draws prerequisite lines behind the cards everywhere (Baggage Claim's line passes behind Express
+  Belts, as Belt Splitter's passes behind Wired Deposit); the Carry ladder scrolls sideways past Wheelbarrow.
+- Officer Doug sometimes walks through a tour shot (`13_factory_east`, `17_build_invalid`); he patrols r = 13.5.
+- Speech bubbles can overlap when two shoppers talk at once (`21_mall2`), and a bubble can draw over a HUD card
+  (`20_crust_deep`: a wish quote over the crust card); bubbles sit in `Popups`, above the HUD.
+
+### Also done
+- `Docs/Screenshots` refreshed: 14 first-person shots from the final tour (`01_intro` … `14_eternity_well`)
+  replace v1's ten overhead ones. The README doesn't link them.
+
+### Working on this PC
+- If the project is open in the Unity Editor, batch builds are refused ("another Unity instance is running with
+  this project open"). Session 6 built in a git worktree instead: `git worktree add --detach
+  ../wish-extractor-verify HEAD`, copy the changed files over, build and run the players there. The first
+  import takes about a minute, and the Editor is never touched.
+- Unity needs 3–5 GB of free commit memory. At the start of session 6 the PC had 0.6 GB (ComfyUI held 24 GB;
+  unloading its models through its `/free` API gave back 9 GB).
 
 ## M7: the later malls' own machines (session 5, continued)
 
@@ -102,7 +141,7 @@ Balance:
   Skyport 5.5, the Lagoon 3–3.5, Eternity 3–3.7; casual 26, 14, 9, 5.5, 4 and 3 min. Crestview and Neon Galaxy
   are unchanged from M6 (no machines there).
 
-Tour and uitest (written, compile-checked, not run):
+Tour and uitest (first run in Unity in session 6: all pass):
 - Tour: 8 new shots (`40`–`47`, see NEXT), taken in each mall right after its overview shot
   (`GameRoot.MallMachineShots`). Watchdog 720 s.
 - uitest: +25 checks after Head Office (`GameRoot.MallMachineChecks`): Neon Galaxy's terminal has no cannon;
@@ -205,7 +244,7 @@ Tour and uitest (written, compile-checked, not run):
   19–37, first line 36–61. PIVOT_FPS's targets: bucket within 10 min, generator + skimmer by 15–20, first line
   by ~45.
 
-### Tour and uitest (written, compile-checked, not run)
+### Tour and uitest (first run in Unity in session 6: all pass)
 - Tour: the Security tab, Doug's whistle and his fine (wading on purpose), Chad walked up to and chased off
   with E, a goldfish returned. Helpers `ApproachRival`, `SummonRival`, `DropGoldfishNearby` in `GameRoot`.
 - uitest: +11 checks after the wish catch (see NEXT). Watchdog raised to 600 s (Chad walks in twice).

@@ -938,6 +938,7 @@ namespace WishExtractor.Game
             {
                 sim.DebugJumpToMall(m);
                 view.RebuildMall();
+                pops.ClearBanners();   // the last mall's banners (a layer, a jackpot) would show up in this one
                 sfx.PlayMusicFor(sim.Mall, sim.Remodel);
                 view.Player.Place(new Vector3(0, 0.05f, -18), 0, -4);
                 yield return new WaitForSeconds(1.2f);
@@ -955,6 +956,7 @@ namespace WishExtractor.Game
             BuildDef D(string id) => Content.Buildables[Content.BuildIndex[id]];
             foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock && sim.TechInThisMall(t)) sim.DebugSetTech(t.Id, 1);
             sim.DebugSetDepth(0.25);
+            pops.ClearBanners();   // the jump down announces a new layer, which would cover the machine
             for (int i = 0; i < 6; i++) sim.Place(D("gen_solar"), 20 + (i % 3) * 3, -27 + (i / 3) * 3, 0, true);
             if (m == 2)
             {
@@ -963,8 +965,9 @@ namespace WishExtractor.Game
                 sim.Place(D("intake_pump"), 11, -3, 3, true);
                 sim.Place(D("proc_sorter"), 12, -3, 1, true);
                 sim.Place(D("hopper2"), 14, -3, 1, true);
-                view.Player.Place(new Vector3(15f, 0.05f, -10f), -20, 0);
-                yield return LookAtSmooth(new Vector3(11.5f, 2.2f, 0));
+                // from behind the cannon, down its line of fire: the cork flies away toward the water
+                view.Player.Place(new Vector3(21.5f, 0.05f, -3.2f), -70, 0);
+                yield return LookAtSmooth(new Vector3(11f, 2.0f, 0.5f));
                 yield return new WaitForSeconds(2.5f);
                 sim.DebugFireCannons();
                 yield return null;
@@ -1491,11 +1494,14 @@ namespace WishExtractor.Game
             Application.Quit();
         }
 
-        /// <summary>Jump to a late mall (tests only) with its regular and mall-only buildings researched and the lights on.</summary>
-        IEnumerator JumpToMall(int m)
+        /// <summary>Jump to a late mall (tests only) with its regular and mall-only buildings researched and the lights on,
+        /// dug down to depth; the banners the jump raises (the last mall's, a new layer) are dropped.</summary>
+        IEnumerator JumpToMall(int m, double depth = 0)
         {
             sim.DebugJumpToMall(m);
             view.RebuildMall();
+            if (depth > 0) sim.DebugSetDepth(depth);
+            pops.ClearBanners();
             sfx.PlayMusicFor(sim.Mall, sim.Remodel);
             foreach (var t in Content.Techs) if (t.Kind == TechKind.Unlock && !t.MallOnly) sim.DebugSetTech(t.Id, 1);
             var solar = Content.Buildables[Content.BuildIndex["gen_solar"]];
@@ -1517,8 +1523,7 @@ namespace WishExtractor.Game
             yield return null;
 
             // Galleria Aurelia: buy Champagne Blasting at the terminal, build a cannon behind the rim, fire it
-            yield return JumpToMall(2);
-            sim.DebugSetDepth(0.25);
+            yield return JumpToMall(2, 0.25);
             int ci = Content.TechIndex["unlock_cannon"];
             sim.DebugAddCash(sim.TechCost(ci) + D("dig_cannon").Cost * sim.Scale * 3);
             terminal.Open(TechBranch.Intake);
@@ -1552,8 +1557,7 @@ namespace WishExtractor.Game
             yield return Shot("ui_cannon");
 
             // Skyport: the carousel is in the catalogue (the cannon isn't), and its drones empty a lineless borer
-            yield return JumpToMall(3);
-            sim.DebugSetDepth(0.25);
+            yield return JumpToMall(3, 0.25);
             sim.DebugSetTech("unlock_carousel", 1);
             sim.DebugAddCash(D("carousel").Cost * sim.Scale * 3);
             Check(!sim.BuildUnlocked(D("dig_cannon")) && sim.BuildUnlocked(D("carousel")), "the cannon stayed in Aurelia; Skyport builds carousels");
@@ -1586,8 +1590,7 @@ namespace WishExtractor.Game
             yield return Shot("ui_carousel");
 
             // the Lucky Lagoon: a jackhammer rig feeds a slot machine, which spins gunk into loot, then hits 7-7-7
-            yield return JumpToMall(4);
-            sim.DebugSetDepth(0.25);
+            yield return JumpToMall(4, 0.25);
             sim.DebugSetTech("unlock_slots", 1);
             sim.Place(D("dig_rig"), 11, -1, 3, true);
             var slots = sim.Place(D("proc_slots"), 12, 0, 1, true);
